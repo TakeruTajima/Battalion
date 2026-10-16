@@ -109,7 +109,7 @@ namespace Battalion.Sim.Tests
 
     public class GeometryTests
     {
-        static Simulation Empty() => new Simulation(TestUtil.Params, 1, new MapBounds(-5000, -5000, 5000, 5000));
+        static Simulation Empty() => new Simulation(TestUtil.Params, 1, TerrainMap.FlatCovering(-5000, -5000, 5000, 5000));
 
         [TestCase(0, 0, Aspect.Front)]      // 真正面
         [TestCase(60, 0, Aspect.Front)]     // 60° ちょうどは正面
@@ -144,7 +144,7 @@ namespace Battalion.Sim.Tests
     /// <summary>退路の見積もり（v3 の包囲判定と壊走の方向）。</summary>
     public class EscapeEstimateTests
     {
-        static Simulation Empty() => new Simulation(TestUtil.Params, 1, new MapBounds(-5000, -5000, 5000, 5000));
+        static Simulation Empty() => new Simulation(TestUtil.Params, 1, TerrainMap.FlatCovering(-5000, -5000, 5000, 5000));
 
         static Simulation Build(Scenario sc) => sc.Build(TestUtil.Params, 1);
 
@@ -222,7 +222,7 @@ namespace Battalion.Sim.Tests
 
     public class TargetSelectionTests
     {
-        static Simulation Empty() => new Simulation(TestUtil.Params, 1, new MapBounds(-5000, -5000, 5000, 5000));
+        static Simulation Empty() => new Simulation(TestUtil.Params, 1, TerrainMap.FlatCovering(-5000, -5000, 5000, 5000));
 
         [Test]
         public void PrefersNearestInFrontArc()

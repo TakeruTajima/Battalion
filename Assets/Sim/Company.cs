@@ -31,14 +31,37 @@ namespace Battalion.Sim
         public double EscapeLoss;
         /// <summary>絶望（退路がないと分かった瞬間の −15）を受けたか。会戦中に一度だけ。</summary>
         public bool DespairTaken;
-        /// <summary>塹壕・村の中にいる（籠城。包囲の毎分の低下が半分）。P0 には地形がないので常に false。P1a で地形から決める。</summary>
+        /// <summary>
+        /// 塹壕・村の中にいる（籠城。包囲の毎分の低下が半分）。毎刻み、中心のマスが村か塹壕（基本の地形・構築した塹壕）かで決める。
+        /// 塹壕の被弾倍率と違い、動いているかどうかは問わない。
+        /// </summary>
         public bool Fortified;
         /// <summary>拘束中に後退を始めた（離脱中）。後退の命令が終わるまで被弾×1.3。</summary>
         public bool Disengaging;
 
         public Order CurrentOrder;
-        /// <summary>前進・後退の目的地に着いたか。</summary>
+        /// <summary>前進・後退の目的地（攻撃では発起点）に着いたか。</summary>
         public bool Arrived;
+
+        /// <summary>移動に使う点の列（最後が目的地）と、次に向かう点の添字。</summary>
+        public System.Collections.Generic.List<Vec2> Path;
+        public int PathIndex;
+        /// <summary>今の移動の目的地（目的地が近すぎてずらした後の点。攻撃では発起点）。</summary>
+        public Vec2 MoveGoal;
+        /// <summary>次に経路を引き直す時刻（秒）。</summary>
+        public double NextReplanTime;
+        /// <summary>後退で、向きを変えずに後ろ向きに下がっているか。</summary>
+        public bool Backward;
+        /// <summary>攻撃で選んだ方向と側（+1 は目標の左、−1 は右、0 は正面・背面）。</summary>
+        public AttackAspect AttackChosenAspect;
+        public int AttackSide;
+        /// <summary>経路の脅威の重みを性格の値から置き換える（予備隊の台本で 0）。null なら性格の値。</summary>
+        public double? ThreatWeightOverride;
+
+        /// <summary>その刻みに位置が変わったか（塹壕の被弾倍率と陣地構築に使う）。</summary>
+        public bool MovedThisTick;
+        /// <summary>陣地構築の進捗（秒）。動くと 0 に戻る。</summary>
+        public double EntrenchProgress;
 
         /// <summary>直前の刻みで狙った目標の ID（-1 はなし）。</summary>
         public int TargetId = -1;

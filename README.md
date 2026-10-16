@@ -2,7 +2,7 @@
 
 大隊規模の部隊を指揮するRTSの試作。仕様は [`docs/spec.md`](docs/spec.md)。
 
-現在の段階：**P0.2（包囲判定を「逃げ道があるか」に変更）まで完了**。報告は [`docs/reports/`](docs/reports/)（P0・P0.1 は `P0_report.md`、P0.2 は `P0.2_report.md`）。
+現在の段階：**P1a（地図のロジック：地形、視線、経路探索、命令の挙動）まで完了**。報告は [`docs/reports/`](docs/reports/)（P0・P0.1 は `P0_report.md`、P0.2 は `P0.2_report.md`、P1a は `P1a_report.md`）。
 
 ## 構成
 

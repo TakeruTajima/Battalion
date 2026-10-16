@@ -33,6 +33,22 @@ namespace Battalion.Sim.Tests
             Assert.That(h2, Is.EqualTo(h1));
         }
 
+        /// <summary>
+        /// S1〜S6 を平地の地図に載せても、P0.2（地図なし）とログが1バイトも変わらないこと。
+        /// ハッシュは P0.2（proto-p0.2-sim）のテスト出力。60分まで流すので、壊走後の逃走・再集結も含む。
+        /// </summary>
+        [TestCase("S1_1v1_front", 1UL, 729, "033ca5315b4486887dbc3cc6ce79bf7e11cc4c73af037ad43d32131a68f0f864")]
+        [TestCase("S3_2v1_front_flank", 7UL, 1089, "d43ba4adddca308c5f0b7bd9a6b9264cde73d8435943d6c226d895485379eba0")]
+        [TestCase("S4_2v1_front_rear", 42UL, 1089, "79e8ab8f03f191e58bb28f7413b57327aa9beb3a4000e4a5dc999eb7be8179bc")]
+        [TestCase("CC_1v1_front_50m", 300UL, 730, "28c69ead1ef4f2c04effc8af599dcee60ce82fc7bc53b74e7460e6fe7913f9f4")]
+        [TestCase("S6_4v1_surrounded", 5UL, 1456, "524946e32798113c9e00a6d2183f12cacd2a73ff25403a7e84e59bfa0c840367")]
+        public void FlatMapLogMatchesP02(string scenario, ulong seed, int expectedLines, string expectedHash)
+        {
+            string h = RunAndHash(scenario, seed, out int n);
+            Assert.That(n, Is.EqualTo(expectedLines));
+            Assert.That(h, Is.EqualTo(expectedHash));
+        }
+
         [Test]
         public void DifferentSeedsDiffer()
         {

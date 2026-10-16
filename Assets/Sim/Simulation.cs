@@ -3,37 +3,33 @@ using System.Collections.Generic;
 
 namespace Battalion.Sim
 {
-    /// <summary>地図の範囲。壊走した中隊がこの外に出ると会戦から離脱する。</summary>
-    public readonly struct MapBounds
+    /// <summary>
+    /// 1刻みごとに、命令の適用の前に呼ばれる台本（予備隊の台本など）。命令は <see cref="Simulation.Issue"/> で渡す。
+    /// </summary>
+    public interface ISimScript
     {
-        public readonly double MinX, MinY, MaxX, MaxY;
-
-        public MapBounds(double minX, double minY, double maxX, double maxY)
-        {
-            MinX = minX;
-            MinY = minY;
-            MaxX = maxX;
-            MaxY = maxY;
-        }
-
-        public bool Contains(Vec2 p) => p.X >= MinX && p.X <= MaxX && p.Y >= MinY && p.Y <= MaxY;
+        void Update(Simulation sim, double tickStart);
     }
 
     /// <summary>
     /// 戦闘シミュレーションの核。固定刻み（既定 0.5 秒）。
-    /// 1刻みの処理順：命令の適用 → 移動と旋回 → 目標選択 → 損害と士気（同時解決） → 状態遷移 → ログ。
+    /// 1刻みの処理順：（見える範囲の作り直し・台本）→ 命令の適用 → 移動と旋回（重なりの禁止、陣地構築） → 目標選択
+    /// → 損害と士気（同時解決） → 状態遷移 → ログ。
     /// </summary>
-    public sealed class Simulation
+    public sealed partial class Simulation
     {
         readonly SimParams _p;
         readonly Pcg32 _rng;
         readonly IEventSink _log;
-        readonly MapBounds _bounds;
+        readonly TerrainMap _map;
         readonly List<Company> _companies = new List<Company>();
         readonly List<Order> _pending = new List<Order>();
+        readonly List<ISimScript> _scripts = new List<ISimScript>();
         readonly int _snapshotEveryTicks;
+        readonly int _exposureEveryTicks;
 
         public SimParams Params => _p;
+        public TerrainMap Map => _map;
         public IReadOnlyList<Company> Companies => _companies;
         public long Tick { get; private set; }
         /// <summary>経過したゲーム内時間（秒）。直前に終わった刻みの終了時刻。</summary>
@@ -43,14 +39,17 @@ namespace Battalion.Sim
 
         public const double SnapshotIntervalSec = 10.0;
 
-        public Simulation(SimParams p, ulong seed, MapBounds bounds, IEventSink log = null)
+        public Simulation(SimParams p, ulong seed, TerrainMap map, IEventSink log = null)
         {
             _p = p;
             _rng = new Pcg32(seed);
-            _bounds = bounds;
+            _map = map;
             _log = log ?? NullEventSink.Instance;
             _snapshotEveryTicks = (int)Math.Round(SnapshotIntervalSec / p.TickSec);
+            _exposureEveryTicks = (int)Math.Round(MapRules.ExposureRebuildSec / p.TickSec);
         }
+
+        public void AddScript(ISimScript script) => _scripts.Add(script);
 
         public Company AddCompany(string name, Side side, Training training, Personality personality,
             Vec2 position, double facingDeg, int? strength = null, double? morale = null)
@@ -71,18 +70,23 @@ namespace Battalion.Sim
             return null;
         }
 
-        /// <summary>命令を渡す。次の刻みの最初に即時適用される（P0）。</summary>
+        /// <summary>命令を渡す。次の刻みの最初に即時適用される（伝令の遅延は P2）。</summary>
         public void Issue(Order order) => _pending.Add(order);
 
         public void Step()
         {
             Tick++;
             double t = Time;
+            double tickStart = t - _p.TickSec;
 
-            ApplyOrders(t);
-            Move(t);
+            if ((Tick - 1) % _exposureEveryTicks == 0) RebuildVisibility();
+            foreach (var s in _scripts) s.Update(this, tickStart);
+
+            ApplyOrders(t, tickStart);
+            Move(t, tickStart);
+            UpdateFortified();
             var shots = SelectTargets();
-            Resolve(shots, t, t - _p.TickSec);
+            Resolve(shots, t, tickStart);
             Transitions(t);
 
             if (_log.Enabled && Tick % _snapshotEveryTicks == 0)
@@ -92,18 +96,20 @@ namespace Battalion.Sim
 
         // ---------------------------------------------------------------- 1. 命令
 
-        void ApplyOrders(double t)
+        void ApplyOrders(double t, double tickStart)
         {
             if (_pending.Count == 0) return;
-            foreach (var o in _pending)
+            var orders = _pending.ToArray();
+            _pending.Clear();
+            foreach (var o in orders)
             {
                 var c = _companies[o.CompanyId];
                 // 壊走・再集結中は命令を受け付けない（破棄する）
                 if (!c.UnderCommand) continue;
 
                 var order = o;
-                // 動揺中は前進を拒み、その場で保持する
-                if (order.Type == OrderType.Advance && c.State == CompanyState.Shaken)
+                // 動揺中は前進・攻撃を拒み、その場で保持する
+                if (c.State == CompanyState.Shaken && (order.Type == OrderType.Advance || order.Type == OrderType.Attack))
                     order = Order.Hold(c.Id, order.FacingRad);
 
                 if (order.Type == OrderType.Retreat)
@@ -121,21 +127,20 @@ namespace Battalion.Sim
                     c.Disengaging = false;
                 }
 
-                c.CurrentOrder = order;
-                c.Arrived = order.Type == OrderType.Hold;
+                StartOrder(c, order, t, tickStart);
             }
-            _pending.Clear();
         }
 
         // ---------------------------------------------------------------- 2. 移動と旋回
 
-        void Move(double t)
+        void Move(double t, double tickStart)
         {
             double dt = _p.TickSec;
             double maxTurn = _p.Movement.TurnDegPerSec * Angles.DegToRad * dt;
 
             foreach (var c in _companies)
             {
+                c.MovedThisTick = false;
                 if (!c.OnBoard) continue;
 
                 if (c.State == CompanyState.Routed)
@@ -145,48 +150,13 @@ namespace Battalion.Sim
                 }
                 if (c.State == CompanyState.Rallying) continue;
 
-                var o = c.CurrentOrder;
-                if (o.Type == OrderType.Hold || c.Arrived)
-                {
-                    if (o.FacingRad.HasValue) c.Facing = TurnToward(c.Facing, o.FacingRad.Value, maxTurn);
-                    continue;
-                }
-
-                var to = o.Destination.Value - c.Position;
-                double dist = to.Length;
-                if (dist < 1e-9)
-                {
-                    ArriveAt(c);
-                    if (o.FacingRad.HasValue) c.Facing = TurnToward(c.Facing, o.FacingRad.Value, maxTurn);
-                    continue;
-                }
-
-                double speed = _p.Movement.SpeedMps * (c.Pinned ? _p.Pinning.MoveMult : 1.0);
-                if (o.Type == OrderType.Retreat)
-                {
-                    // 後退は向きを変えずに後ろ向きに下がる（速度×0.6）。背を向けて逃げるのは壊走だけ
-                    speed *= _p.Movement.RetreatSpeedMult;
-                }
-                else
-                {
-                    // 前進は進行方向を向いてから進む（旋回が終わるまでは動かない）
-                    double heading = Math.Atan2(to.Y, to.X);
-                    c.Facing = TurnToward(c.Facing, heading, maxTurn);
-                    if (Math.Abs(Angles.Wrap(heading - c.Facing)) > 1e-9) continue;
-                }
-
-                double step = speed * dt;
-                // 浮動小数点の誤差で残ったごく僅かな距離のために、到着が1刻み遅れないようにする
-                if (step >= dist - 1e-9)
-                {
-                    c.Position = o.Destination.Value;
-                    ArriveAt(c);
-                }
-                else
-                {
-                    c.Position = c.Position + to * (step / dist);
-                }
+                var before = c.Position;
+                MoveUnderCommand(c, t, tickStart, dt, maxTurn);
+                c.MovedThisTick = c.Position.X != before.X || c.Position.Y != before.Y;
             }
+
+            KeepFriendlySpacing();
+            UpdateEntrenchment(t);
         }
 
         static void ArriveAt(Company c)
@@ -203,9 +173,13 @@ namespace Battalion.Sim
 
             double heading = c.FleeDirection.Value;
             c.Facing = Angles.Wrap(heading);
-            c.Position = c.Position + Vec2.FromAngle(heading) * (_p.Rout.FleeSpeedMps * dt);
+            var next = c.Position + Vec2.FromAngle(heading) * (_p.Rout.FleeSpeedMps * dt);
+            // 川に突き当たったら、その刻みは動かない（5秒ごとの見積もりで方位が変わる）
+            if (_map.Contains(next) && !_map.Passable(next)) return;
+            c.Position = next;
+            c.MovedThisTick = true;
 
-            if (!_bounds.Contains(c.Position))
+            if (!_map.Contains(c.Position))
             {
                 var prev = c.State;
                 c.State = CompanyState.LeftBattle;
@@ -252,12 +226,16 @@ namespace Battalion.Sim
         }
 
         /// <summary>
-        /// 目標選択：射程内の敵のうち、正面の弧（±60°）にいる最も近い敵。いなければそれ以外で最も近い敵。
+        /// 目標選択：射程内で視線が通る敵のうち、正面の弧（±60°）にいる最も近い敵。いなければそれ以外で最も近い敵。
         /// 距離が同じなら ID の小さい方。壊走中・再集結中の中隊は撃たない。
+        /// 拘束の命令中と、攻撃で発起点に着いた後は、命令の目標が射程内で見えていればその敵を撃つ。
         /// </summary>
         public Company SelectTarget(Company shooter)
         {
             if (!shooter.UnderCommand || shooter.Strength <= 0) return null;
+            var forced = OrderTarget(shooter);
+            if (forced != null && CanFireAt(shooter, forced)) return forced;
+
             Company bestFront = null, bestAny = null;
             double dFront = double.MaxValue, dAny = double.MaxValue;
             foreach (var e in _companies)
@@ -265,6 +243,7 @@ namespace Battalion.Sim
                 if (!e.OnBoard || e.Side == shooter.Side || e.Strength <= 0) continue;
                 double d = Vec2.Distance(shooter.Position, e.Position);
                 if (d > _p.Fire.RangeMaxM) continue;
+                if (!LineOfSight.Visible(_map, shooter.Position, e.Position)) continue;
                 // 走査は ID 昇順なので、厳密に小さいときだけ更新すれば同距離は ID の小さい方が残る
                 if (d < dAny) { dAny = d; bestAny = e; }
                 if (AspectOf(shooter, e.Position) == Aspect.Front && d < dFront) { dFront = d; bestFront = e; }
@@ -341,7 +320,7 @@ namespace Battalion.Sim
                 double fQuality = _p.Of(u.Training).FireMult;
                 bool close = s.Distance <= _p.CloseCombat.RadiusM;
                 double fRange = RangeMultiplier(s.Distance);
-                double fTerrain = 1.0; // P0 は平地のみ
+                double fTerrain = TerrainDamageMult(tg);
                 double fAspect = _p.Fire.AspectCasualtyMult[a];
                 double fState = 1.0;
                 if (u.State == CompanyState.Shaken) fState *= _p.Fire.ShakenMult;
@@ -493,7 +472,9 @@ namespace Battalion.Sim
 
         /// <summary>
         /// 退路の見積もり。各方位について、壊走の速さで 500m 逃げる間（1秒刻み、1刻み目の位置から）、
-        /// その時点で 400m 以内にいる指揮下の敵すべてから背面を撃たれ続けたときに失う兵の割合の期待値を積算する。
+        /// その時点で 400m 以内にいて視線が通る指揮下の敵すべてから背面を撃たれ続けたときに失う兵の割合の期待値を積算する。
+        /// 視線は、敵ごとに10秒ごとに作る「各マスの中心が見えるか」を、その点のマスで引く。
+        /// 川に突き当たる方位は逃げられない（損害 1.0）。地図の外へ出られる方位は、出るまでの損害で打ち切る。
         /// 射撃の基本の式（k・兵力・練度・距離倍率・背面倍率）だけを使い、射手の動揺・非正面・接近戦の補正は入れない。
         /// 敵は動かないものとし、乱数は使わない。
         /// </summary>
@@ -511,22 +492,31 @@ namespace Battalion.Sim
             int steps = (int)(ep.EscapeLenM / ep.EscapeSpeedMps / ep.EscapeStepSec);
             double stride = ep.EscapeSpeedMps * ep.EscapeStepSec;
             double aspectMult = _p.Fire.AspectCasualtyMult[(int)ep.EscapeFireAspect];
+            var sight = new bool[foes.Count][];
+            for (int f = 0; f < foes.Count; f++) sight[f] = VisibleCellsFrom(foes[f]);
+
             var loss = new double[ep.EscapeDirs];
             for (int k = 0; k < ep.EscapeDirs; k++)
             {
                 var u = Vec2.FromAngle(EscapeDirection(k));
                 double sum = 0;
+                bool blocked = false;
                 for (int s = 1; s <= steps; s++)
                 {
                     var p = c.Position + u * (s * stride);
+                    // 地図の外へ出られれば、そこで逃げ切り（出るまでの損害で打ち切る）
+                    if (!_map.Contains(p)) break;
+                    // 川に突き当たる方位は逃げられない
+                    if (!_map.Passable(p)) { blocked = true; break; }
+                    int cell = _map.IndexOf(p);
                     for (int f = 0; f < foes.Count; f++)
                     {
                         double d = Vec2.Distance(p, foes[f].Position);
-                        if (d > _p.Fire.RangeMaxM) continue;
+                        if (d > _p.Fire.RangeMaxM || !sight[f][cell]) continue;
                         sum += rate[f] * (d <= _p.Fire.RangeCloseM ? _p.Fire.RangeCloseMult : 1.0);
                     }
                 }
-                loss[k] = sum * aspectMult * ep.EscapeStepSec / Math.Max(1, c.Strength);
+                loss[k] = blocked ? MapRules.BlockedEscapeLoss : sum * aspectMult * ep.EscapeStepSec / Math.Max(1, c.Strength);
             }
 
             // 最小の方位。同点が複数あれば、600m 以内の敵の平均位置から最も遠ざかる方位（それも同じなら添字の小さい方）
@@ -663,6 +653,8 @@ namespace Battalion.Sim
             c.Disengaging = false;
             c.RallyClearSec = 0;
             c.TargetId = -1;
+            c.EntrenchProgress = 0;
+            c.Path = null;
             if (!FirstRoutTime.HasValue) FirstRoutTime = t;
             // 士気50超から一度に壊走した場合など、見積もりがない（または古い）ときはその場で見積もって逃げる方向を決める
             if (!surrender && t - _p.TickSec >= c.NextEscapeCheckTime) RefreshEscape(c, t);

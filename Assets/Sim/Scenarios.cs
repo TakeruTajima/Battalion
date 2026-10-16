@@ -27,9 +27,10 @@ namespace Battalion.Sim
         public string Name;
         public readonly List<CompanySetup> Companies = new List<CompanySetup>();
         /// <summary>
-        /// 地図の範囲。P0 には地図がないので、仕様の 3km×2km を配置の中心付近に置く。
+        /// 全て平地の地図（60×40マス、3km×2km）。原点を (−1200, −850) にずらして配置の中心付近に置く。
+        /// 壊走した中隊が会戦から離脱する範囲は P0 と同じ（x −1200〜1800、y −850〜1150）。
         /// </summary>
-        public MapBounds Bounds = new MapBounds(-1200, -850, 1800, 1150);
+        public static TerrainMap FlatMap() => TerrainMap.Flat(-1200, -850, 60, 40);
 
         public Scenario(string name, params CompanySetup[] companies)
         {
@@ -39,7 +40,7 @@ namespace Battalion.Sim
 
         public Simulation Build(SimParams p, ulong seed, IEventSink log = null)
         {
-            var sim = new Simulation(p, seed, Bounds, log);
+            var sim = new Simulation(p, seed, FlatMap(), log);
             foreach (var s in Companies)
                 sim.AddCompany(s.Name, s.Side, s.Training, s.Personality, new Vec2(s.X, s.Y), s.FacingDeg);
             return sim;

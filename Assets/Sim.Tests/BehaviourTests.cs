@@ -8,7 +8,7 @@ namespace Battalion.Sim.Tests
     public class BehaviourTests
     {
         static Simulation Empty(IEventSink log = null) =>
-            new Simulation(TestUtil.Params, 1, new MapBounds(-1500, -1000, 1500, 1000), log);
+            new Simulation(TestUtil.Params, 1, TerrainMap.FlatCovering(-1500, -1000, 1500, 1000), log);
 
         /// <summary>直前に狙われた扱いにして、射程外での回復（+1/分）がしきい値の確認に混ざらないようにする。</summary>
         static void SuppressRecovery(Simulation sim)
@@ -88,8 +88,14 @@ namespace Battalion.Sim.Tests
                 var r = sim.Find("R");
                 r.Morale = 49;
                 r.FlankShockTaken = r.RearShockTaken = true; // 初回ショックで壊走しないように
-                r.Fortified = fortified;
+                if (fortified)
+                {
+                    // R のマスを塹壕にする（籠城は中心のマスの地形で決まる）
+                    sim.Map.CellOf(r.Position, out int i, out int j);
+                    sim.Map.SetOverlay(i, j, TerrainMap.Trench);
+                }
                 sim.Step();
+                Assert.That(r.Fortified, Is.EqualTo(fortified));
                 Assert.That(r.Encircled, Is.True);
                 double afterFirst = r.Ledger.Encircled;
                 sim.Step();
@@ -141,7 +147,7 @@ namespace Battalion.Sim.Tests
         public void RoutedUnitLeavesBattleAtMapEdge()
         {
             var log = new StringEventSink();
-            var sim = new Simulation(TestUtil.Params, 1, new MapBounds(-100, -1000, 1000, 1000), log);
+            var sim = new Simulation(TestUtil.Params, 1, TerrainMap.FlatCovering(-100, -1000, 1000, 1000), log);
             var a = sim.AddCompany("A", Side.Blue, Training.Regular, Personality.Calm, new Vec2(0, 0), 0, morale: 10);
             sim.AddCompany("E", Side.Red, Training.Regular, Personality.Calm, new Vec2(300, 0), 180);
             for (int i = 0; i < 400; i++) sim.Step();
