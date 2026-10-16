@@ -1,11 +1,17 @@
 {
-  "time": { "tick_sec": 0.5 },
+  "time": {
+    "tick_sec": 0.5
+  },
   "fire": {
     "k_per_min": 0.0133,
     "range_max_m": 400,
     "range_close_m": 150,
     "range_close_mult": 1.3,
-    "aspect_casualty_mult": { "front": 1.0, "flank": 1.5, "rear": 2.0 },
+    "aspect_casualty_mult": {
+      "front": 1.0,
+      "flank": 1.5,
+      "rear": 2.0
+    },
     "front_arc_deg": 60,
     "flank_arc_deg": 120,
     "non_front_target_mult": 0.5,
@@ -15,8 +21,15 @@
   "morale": {
     "initial": 100,
     "per_pct_loss": 1.5,
-    "aspect_morale_mult": { "front": 1.0, "flank": 2.0, "rear": 3.0 },
-    "first_hit_shock": { "flank": 10, "rear": 15 },
+    "aspect_morale_mult": {
+      "front": 1.0,
+      "flank": 2.0,
+      "rear": 3.0
+    },
+    "first_hit_shock": {
+      "flank": 10,
+      "rear": 15
+    },
     "under_fire_per_min": 0.5,
     "neighbor_rout_shock": 10,
     "neighbor_rout_radius_m": 300,
@@ -26,9 +39,30 @@
     "shaken_threshold": 50
   },
   "training": {
-    "green":   { "rout_threshold": 35, "fire_mult": 0.85, "morale_sensitivity": 1.2, "recovery_mult": 0.7, "order_start_sec": 40, "report_error_m": 150 },
-    "regular": { "rout_threshold": 25, "fire_mult": 1.0,  "morale_sensitivity": 1.0, "recovery_mult": 1.0, "order_start_sec": 25, "report_error_m": 100 },
-    "veteran": { "rout_threshold": 15, "fire_mult": 1.2,  "morale_sensitivity": 0.8, "recovery_mult": 1.3, "order_start_sec": 15, "report_error_m": 60 }
+    "green": {
+      "rout_threshold": 35,
+      "fire_mult": 0.85,
+      "morale_sensitivity": 1.2,
+      "recovery_mult": 0.7,
+      "order_start_sec": 40,
+      "report_error_m": 150
+    },
+    "regular": {
+      "rout_threshold": 25,
+      "fire_mult": 1.0,
+      "morale_sensitivity": 1.0,
+      "recovery_mult": 1.0,
+      "order_start_sec": 25,
+      "report_error_m": 100
+    },
+    "veteran": {
+      "rout_threshold": 15,
+      "fire_mult": 1.2,
+      "morale_sensitivity": 0.8,
+      "recovery_mult": 1.3,
+      "order_start_sec": 15,
+      "report_error_m": 60
+    }
   },
   "encirclement": {
     "min_aspects": 2,
@@ -53,15 +87,16 @@
   },
   "close_combat": {
     "radius_m": 50,
-    "casualty_mult": 2.0,
+    "range_mult": 2.0,
     "morale_mult": 1.5,
-    "_note": "未検算。P0 で自動対戦に加えて決める"
+    "_note": "50m以内は fire.range_close_mult(1.3) を置き換える。重ねない"
   },
   "movement": {
     "speed_mps": 1.2,
     "turn_deg_per_sec": 6,
     "frontage_m": 200,
     "depth_m": 50,
-    "company_strength": 150
+    "company_strength": 150,
+    "retreat_speed_mult": 0.6
   }
 }

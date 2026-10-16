@@ -3,46 +3,46 @@
   "runs": 300,
   "rout_time_min": {
    "p05": 28.01,
-   "median": 33.52,
-   "p95": 38.0
+   "median": 35.4,
+   "p95": 40.89
   },
   "routed_count": {
-   "R": 153,
-   "A": 148
+   "R": 142,
+   "A": 160
   },
   "loss_mean": {
-   "A": 0.358,
-   "R": 0.356
+   "A": 0.347,
+   "R": 0.341
   }
  },
  "S2_2v1_front_front": {
   "runs": 300,
   "rout_time_min": {
-   "p05": 14.25,
-   "median": 17.7,
-   "p95": 20.27
+   "p05": 14.28,
+   "median": 17.65,
+   "p95": 20.72
   },
   "routed_count": {
    "R": 300
   },
   "loss_mean": {
-   "A": 0.183,
+   "A": 0.168,
    "B": 0.0,
-   "R": 0.444
+   "R": 0.445
   }
  },
  "S3_2v1_front_flank": {
   "runs": 300,
   "rout_time_min": {
-   "p05": 4.54,
-   "median": 5.77,
+   "p05": 4.45,
+   "median": 5.72,
    "p95": 7.15
   },
   "routed_count": {
    "R": 300
   },
   "loss_mean": {
-   "A": 0.07,
+   "A": 0.062,
    "B": 0.0,
    "R": 0.188
   }
@@ -50,15 +50,15 @@
  "S4_2v1_front_rear": {
   "runs": 300,
   "rout_time_min": {
-   "p05": 2.53,
+   "p05": 2.51,
    "median": 3.43,
-   "p95": 4.71
+   "p95": 4.73
   },
   "routed_count": {
    "R": 300
   },
   "loss_mean": {
-   "A": 0.044,
+   "A": 0.039,
    "B": 0.0,
    "R": 0.138
   }
@@ -66,17 +66,16 @@
  "S5_vet_vs_reg": {
   "runs": 300,
   "rout_time_min": {
-   "p05": 24.84,
+   "p05": 24.16,
    "median": 30.01,
-   "p95": 38.01
+   "p95": 40.69
   },
   "routed_count": {
-   "R": 299,
-   "V": 1
+   "R": 300
   },
   "loss_mean": {
-   "V": 0.327,
-   "R": 0.4
+   "V": 0.299,
+   "R": 0.399
   }
  },
  "_params": {
@@ -97,6 +96,8 @@
    "rear": 15.0
   },
   "fire_at_non_front_target": 0.5,
+  "shaken_threshold": 50,
+  "shaken_fire_mult": 0.7,
   "morale_per_pct_loss": 1.5,
   "under_fire_per_min": 0.5,
   "encircled_per_min": 3.0,

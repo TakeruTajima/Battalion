@@ -93,7 +93,8 @@ namespace Battalion.Sim
         public sealed class CloseCombatParams
         {
             public double RadiusM;
-            public double CasualtyMult;
+            /// <summary>50m 以内の距離倍率。fire.range_close_mult（150m 以内の 1.3）を置き換える。重ねない。</summary>
+            public double RangeMult;
             public double MoraleMult;
         }
 
@@ -104,6 +105,8 @@ namespace Battalion.Sim
             public double FrontageM;
             public double DepthM;
             public int CompanyStrength;
+            /// <summary>後退の命令で、向きを変えずに後ろ向きに下がるときの速度倍率。</summary>
+            public double RetreatSpeedMult;
         }
 
         public static SimParams LoadFile(string path) => FromJson(File.ReadAllText(path));
@@ -169,7 +172,7 @@ namespace Battalion.Sim
 
             var cc = root["close_combat"];
             p.CloseCombat.RadiusM = cc.D("radius_m");
-            p.CloseCombat.CasualtyMult = cc.D("casualty_mult");
+            p.CloseCombat.RangeMult = cc.D("range_mult");
             p.CloseCombat.MoraleMult = cc.D("morale_mult");
 
             var mv = root["movement"];
@@ -178,6 +181,7 @@ namespace Battalion.Sim
             p.Movement.FrontageM = mv.D("frontage_m");
             p.Movement.DepthM = mv.D("depth_m");
             p.Movement.CompanyStrength = (int)mv.D("company_strength");
+            p.Movement.RetreatSpeedMult = mv.D("retreat_speed_mult");
 
             return p;
         }

@@ -6,6 +6,9 @@
   視界無制限の簡易条件で確かめる。P0 の EditMode 検算テストの正解値はこのスクリプトの
   出力（reference_results.json）を使う。
 
+改訂履歴:
+  v2 (2026-10-16): 動揺時の射撃効率 x0.7 を追加（v1 は仕様の f_state を欠いていた）
+
 本実装との違い（意図的に省いたもの）:
   - 移動・地形・視界・接近戦・射程による補正（全シナリオ 300m、f_range=1.0）
   - 壊走後の逃走と再集結（壊走した時点でそのシナリオの決着とする）
@@ -30,6 +33,8 @@ P = {
     "aspect_morale": {"front": 1.0, "flank": 2.0, "rear": 3.0},
     "first_hit_shock": {"flank": 10.0, "rear": 15.0},
     "fire_at_non_front_target": 0.5,  # 正面の弧の外にいる敵を撃つときの効率
+    "shaken_threshold": 50,           # 士気がこれ以下（かつ壊走の閾値より上）なら動揺
+    "shaken_fire_mult": 0.7,          # 動揺中の射撃効率
     "morale_per_pct_loss": 1.5,
     "under_fire_per_min": 0.5,
     "encircled_per_min": 3.0,
@@ -96,6 +101,8 @@ def tick(units, rng, P):
     for u, t, asp in shots:
         tq = P["training"][u.q]
         eff = P["fire_at_non_front_target"] if u.aspect_of(t) != "front" else 1.0
+        if u.m <= P["shaken_threshold"]:
+            eff *= P["shaken_fire_mult"]  # 動揺（v2 で追加。仕様の f_state と一致させる）
         lam = P["k_per_min"] * u.n * tq["fire"] * P["aspect_cas"][asp] * eff * dt_min
         c = int(rng.poisson(lam))
         cas[t.name] += c

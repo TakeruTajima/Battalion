@@ -27,6 +27,9 @@ namespace Battalion.Sim.Tests
             Assert.That(p.Of(Training.Green).MoraleSensitivity, Is.EqualTo(1.2));
             Assert.That(p.Encirclement.MinAspects, Is.EqualTo(2));
             Assert.That(p.Movement.CompanyStrength, Is.EqualTo(150));
+            Assert.That(p.Movement.RetreatSpeedMult, Is.EqualTo(0.6));
+            Assert.That(p.CloseCombat.RangeMult, Is.EqualTo(2.0));
+            Assert.That(p.CloseCombat.MoraleMult, Is.EqualTo(1.5));
         }
     }
 
@@ -111,6 +114,18 @@ namespace Battalion.Sim.Tests
             var t = sim.AddCompany("T", Side.Red, Training.Regular, Personality.Calm, new Vec2(0, 0), targetFacingDeg);
             var from = Vec2.FromAngle(shooterBearingDeg * Angles.DegToRad) * 300;
             Assert.That(sim.AspectOf(t, from), Is.EqualTo(expected));
+        }
+
+        [TestCase(10, 2.0)]    // 接近戦：2.0 で置き換える（×1.3 と重ねない）
+        [TestCase(50, 2.0)]
+        [TestCase(50.01, 1.3)]
+        [TestCase(150, 1.3)]
+        [TestCase(150.01, 1.0)]
+        [TestCase(400, 1.0)]
+        [TestCase(400.01, 0.0)]
+        public void RangeMultiplierDoesNotStack(double distance, double expected)
+        {
+            Assert.That(Empty().RangeMultiplier(distance), Is.EqualTo(expected));
         }
 
         [Test]

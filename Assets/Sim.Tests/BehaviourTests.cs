@@ -114,6 +114,66 @@ namespace Battalion.Sim.Tests
         }
 
         [Test]
+        public void RetreatBacksAwayWithoutTurning()
+        {
+            var sim = Empty();
+            var a = sim.AddCompany("A", Side.Blue, Training.Regular, Personality.Calm, new Vec2(0, 0), 0);
+            sim.AddCompany("Far", Side.Red, Training.Regular, Personality.Calm, new Vec2(1400, 0), 180);
+            // 東を向いたまま西へ 72m 下がる：秒速 1.2m×0.6＝0.72m なので 100 秒（200刻み）
+            sim.Issue(Order.Retreat(a.Id, new Vec2(-72, 0)));
+            sim.Step();
+            Assert.That(a.Facing, Is.EqualTo(0).Within(1e-12), "後退では向きを変えない");
+            Assert.That(a.Position.X, Is.EqualTo(-0.36).Within(1e-9), "初めの刻みから下がり始める");
+            for (int i = 0; i < 198; i++) sim.Step();
+            Assert.That(a.Arrived, Is.False);
+            sim.Step();
+            Assert.That(a.Position.X, Is.EqualTo(-72).Within(1e-9));
+            Assert.That(a.Arrived, Is.True);
+            Assert.That(a.Facing, Is.EqualTo(0).Within(1e-12), "到着後も向きは変わらない（向きの指定なし）");
+        }
+
+        [Test]
+        public void RetreatKeepsFrontToEnemySoHitsStayFrontal()
+        {
+            var log = new StringEventSink();
+            var sim = Empty(log);
+            var a = sim.AddCompany("A", Side.Blue, Training.Regular, Personality.Calm, new Vec2(0, 0), 0);
+            var e = sim.AddCompany("E", Side.Red, Training.Regular, Personality.Calm, new Vec2(300, 0), 180);
+            sim.Issue(Order.Retreat(a.Id, new Vec2(-200, 0)));
+            for (int i = 0; i < 120; i++) sim.Step();
+            Assert.That(sim.AspectOf(a, e.Position), Is.EqualTo(Aspect.Front));
+            Assert.That(a.RearShockTaken, Is.False);
+            StringAssert.DoesNotContain("first_rear_hit", log.ToString());
+        }
+
+        [Test]
+        public void PinnedRetreatSpeedStacksBothMultipliers()
+        {
+            var sim = Empty();
+            var a = sim.AddCompany("A", Side.Blue, Training.Regular, Personality.Calm, new Vec2(0, 0), 0);
+            sim.AddCompany("E", Side.Red, Training.Regular, Personality.Calm, new Vec2(140, 0), 180);
+            sim.Step();
+            Assert.That(a.Pinned, Is.True);
+            sim.Issue(Order.Retreat(a.Id, new Vec2(-100, 0)));
+            sim.Step();
+            Assert.That(a.Position.X, Is.EqualTo(-1.2 * 0.6 * 0.5 * 0.5).Within(1e-9));
+            Assert.That(a.Facing, Is.EqualTo(0).Within(1e-12));
+        }
+
+        [Test]
+        public void RoutedUnitTurnsItsBackWhenFleeing()
+        {
+            var sim = Empty();
+            var a = sim.AddCompany("A", Side.Blue, Training.Regular, Personality.Calm, new Vec2(0, 0), 0, morale: 10);
+            sim.AddCompany("E", Side.Red, Training.Regular, Personality.Calm, new Vec2(300, 0), 180);
+            sim.Step(); // 壊走
+            sim.Step(); // 逃走
+            Assert.That(a.State, Is.EqualTo(CompanyState.Routed));
+            Assert.That(Math.Abs(a.Facing), Is.EqualTo(Math.PI).Within(1e-9), "敵に背を向けて西へ逃げる");
+            Assert.That(a.Position.X, Is.LessThan(0));
+        }
+
+        [Test]
         public void ShakenRefusesAdvance()
         {
             var sim = Empty();

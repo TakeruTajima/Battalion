@@ -161,14 +161,23 @@ namespace Battalion.Sim
                     continue;
                 }
 
-                // 進行方向を向いてから進む（旋回が終わるまでは動かない）
-                double heading = Math.Atan2(to.Y, to.X);
-                c.Facing = TurnToward(c.Facing, heading, maxTurn);
-                if (Math.Abs(Angles.Wrap(heading - c.Facing)) > 1e-9) continue;
-
                 double speed = _p.Movement.SpeedMps * (c.Pinned ? _p.Pinning.MoveMult : 1.0);
+                if (o.Type == OrderType.Retreat)
+                {
+                    // 後退は向きを変えずに後ろ向きに下がる（速度×0.6）。背を向けて逃げるのは壊走だけ
+                    speed *= _p.Movement.RetreatSpeedMult;
+                }
+                else
+                {
+                    // 前進は進行方向を向いてから進む（旋回が終わるまでは動かない）
+                    double heading = Math.Atan2(to.Y, to.X);
+                    c.Facing = TurnToward(c.Facing, heading, maxTurn);
+                    if (Math.Abs(Angles.Wrap(heading - c.Facing)) > 1e-9) continue;
+                }
+
                 double step = speed * dt;
-                if (step >= dist)
+                // 浮動小数点の誤差で残ったごく僅かな距離のために、到着が1刻み遅れないようにする
+                if (step >= dist - 1e-9)
                 {
                     c.Position = o.Destination.Value;
                     ArriveAt(c);
@@ -274,6 +283,18 @@ namespace Battalion.Sim
             return bestFront ?? bestAny;
         }
 
+        /// <summary>
+        /// 距離倍率 f_range。50m 以内は接近戦の 2.0、150m 以内は 1.3、400m までは 1.0、それ以遠は 0（撃たない）。
+        /// 接近戦の 2.0 は 1.3 を置き換える（重ねない）。
+        /// </summary>
+        public double RangeMultiplier(double distance)
+        {
+            if (distance > _p.Fire.RangeMaxM) return 0.0;
+            if (distance <= _p.CloseCombat.RadiusM) return _p.CloseCombat.RangeMult;
+            if (distance <= _p.Fire.RangeCloseM) return _p.Fire.RangeCloseMult;
+            return 1.0;
+        }
+
         List<Shot> SelectTargets()
         {
             var shots = new List<Shot>(_companies.Count);
@@ -319,7 +340,8 @@ namespace Battalion.Sim
                 int a = (int)s.AspectOnTarget;
 
                 double fQuality = _p.Of(u.Training).FireMult;
-                double fRange = s.Distance <= _p.Fire.RangeCloseM ? _p.Fire.RangeCloseMult : 1.0;
+                bool close = s.Distance <= _p.CloseCombat.RadiusM;
+                double fRange = RangeMultiplier(s.Distance);
                 double fTerrain = 1.0; // P0 は平地のみ
                 double fAspect = _p.Fire.AspectCasualtyMult[a];
                 double fState = 1.0;
@@ -327,11 +349,9 @@ namespace Battalion.Sim
                 if (!s.TargetInFrontArc) fState *= _p.Fire.NonFrontTargetMult;
                 // 砲撃による制圧（×0.5）は P3
 
-                bool close = s.Distance <= _p.CloseCombat.RadiusM;
                 double fExtra = 1.0;
                 if (tg.State == CompanyState.Routed && s.Distance <= _p.Rout.PursuitRadiusM) fExtra *= _p.Rout.PursuitCasualtyMult;
                 if (tg.Disengaging) fExtra *= _p.Pinning.DisengageCasualtyMult;
-                if (close) fExtra *= _p.CloseCombat.CasualtyMult;
 
                 double lambda = _p.Fire.KPerMin * u.Strength * fQuality * fRange * fTerrain * fAspect * fState * fExtra * dtMin;
                 int c = _rng.NextPoisson(lambda);
