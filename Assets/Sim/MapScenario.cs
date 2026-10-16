@@ -128,6 +128,9 @@ namespace Battalion.Sim
         readonly Vec2 _center;
         readonly double _radius;
 
+        public string Unit => _unit;
+        public Vec2 Center => _center;
+        public double Radius => _radius;
         public bool Triggered { get; private set; }
         public double? TriggeredAt { get; private set; }
 

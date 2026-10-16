@@ -51,6 +51,9 @@ namespace Battalion.Sim
 
         public void AddScript(ISimScript script) => _scripts.Add(script);
 
+        /// <summary>載せた台本（表示用。読むだけ）。</summary>
+        public IReadOnlyList<ISimScript> Scripts => _scripts;
+
         public Company AddCompany(string name, Side side, Training training, Personality personality,
             Vec2 position, double facingDeg, int? strength = null, double? morale = null)
         {
@@ -478,7 +481,9 @@ namespace Battalion.Sim
         /// 射撃の基本の式（k・兵力・練度・距離倍率・背面倍率）だけを使い、射手の動揺・非正面・接近戦の補正は入れない。
         /// 敵は動かないものとし、乱数は使わない。
         /// </summary>
-        public EscapeEstimate EstimateEscape(Company c)
+        public EscapeEstimate EstimateEscape(Company c) => EstimateEscape(c, VisibleCellsFrom);
+
+        EscapeEstimate EstimateEscape(Company c, Func<Company, bool[]> visibleCellsFrom)
         {
             var ep = _p.Encirclement;
             var foes = new List<Company>();
@@ -493,7 +498,7 @@ namespace Battalion.Sim
             double stride = ep.EscapeSpeedMps * ep.EscapeStepSec;
             double aspectMult = _p.Fire.AspectCasualtyMult[(int)ep.EscapeFireAspect];
             var sight = new bool[foes.Count][];
-            for (int f = 0; f < foes.Count; f++) sight[f] = VisibleCellsFrom(foes[f]);
+            for (int f = 0; f < foes.Count; f++) sight[f] = visibleCellsFrom(foes[f]);
 
             var loss = new double[ep.EscapeDirs];
             for (int k = 0; k < ep.EscapeDirs; k++)

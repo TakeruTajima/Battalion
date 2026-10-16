@@ -137,6 +137,10 @@ namespace Battalion.Sim
             public readonly Dictionary<char, double> Move = new Dictionary<char, double>();
             public readonly Dictionary<char, double> Damage = new Dictionary<char, double>();
             public readonly Dictionary<char, double> LosWeight = new Dictionary<char, double>();
+            /// <summary>
+            /// 開けた場所（平地・砲撃痕・橋・浅瀬・塹壕のマス）をその刻みに移動している中隊の被弾倍率。1.0 なら効かない。
+            /// </summary>
+            public double MovingOpenDamageMult;
 
             public bool Knows(char c) => Move.ContainsKey(c);
             /// <summary>移動倍率。表にない文字は 0（通れない）。</summary>
@@ -279,6 +283,7 @@ namespace Battalion.Sim
             ReadCharTable(te["move_mult"], p.Terrain.Move);
             ReadCharTable(te["damage_mult"], p.Terrain.Damage);
             ReadCharTable(te["los_weight"], p.Terrain.LosWeight);
+            p.Terrain.MovingOpenDamageMult = te.D("moving_open_damage_mult");
 
             var si = root["sight"];
             p.Sight.BaseRangeM = si.D("base_range_m");

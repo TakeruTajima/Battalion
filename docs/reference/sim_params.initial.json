@@ -130,6 +130,8 @@
       "S": 1.0,
       "W": 1.0
     },
+    "moving_open_damage_mult": 1.0,
+    "_note_moving_open": "平地・砲撃痕・橋・浅瀬を移動中の中隊の被弾倍率。P1b の調整候補（案は 2.0）",
     "los_weight": {
       "F": 1.0,
       "V": 0.5

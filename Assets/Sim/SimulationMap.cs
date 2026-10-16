@@ -106,19 +106,43 @@ namespace Battalion.Sim
         {
             int s = (int)side;
             if (_exposure[s] != null) return _exposure[s];
+            return _exposure[s] = BuildExposure(side, SightOf);
+        }
+
+        bool[] BuildExposure(Side side, Func<Company, SightGrid> sightOf)
+        {
             var exp = new bool[_map.Width * _map.Height];
             foreach (var e in _companies)
             {
                 if (e.Side == side || !IsShooter(e)) continue;
-                var g = SightOf(e);
+                var g = sightOf(e);
                 Visibility.ForCellsWithin(_map, g.From, _p.Fire.RangeMaxM, (i, j, center) =>
                 {
                     int k = j * _map.Width + i;
                     if (g.Cells[k]) exp[k] = true;
                 });
             }
-            return _exposure[s] = exp;
+            return exp;
         }
+
+        // ---------------------------------------------------------------- 表示用の読み取り専用の口
+        // Sim の中の「見える範囲」の使い回し（10秒ごとに作り直す）に触らない。表示から何度呼んでも会戦の結果は変わらない。
+
+        /// <summary>使い回し中の見える範囲があればそれを、なければその場で作ったもの（保存しない）を返す。</summary>
+        SightGrid PeekSight(Company c) => _sight.TryGetValue(c.Id, out var g) ? g : BuildSight(c);
+
+        /// <summary>
+        /// 露出の地図を、Sim の使い回しに触らずに返す（表示用）。<paramref name="side"/> の中隊から見て、敵の射界にあるマスが true。
+        /// 返す配列は書き換えないこと。
+        /// </summary>
+        public bool[] PeekExposure(Side side)
+        {
+            int s = (int)side;
+            return _exposure[s] ?? BuildExposure(side, PeekSight);
+        }
+
+        /// <summary>退路の見積もりを、Sim の使い回しに触らずに行う（表示用）。</summary>
+        public EscapeEstimate PeekEscape(Company c) => EstimateEscape(c, e => PeekSight(e).Cells);
 
         // ---------------------------------------------------------------- 命令の開始
 
@@ -590,6 +614,7 @@ namespace Battalion.Sim
         /// <summary>
         /// 撃たれる側の被弾倍率（中心のマス）。塹壕の 0.3 はその刻みに動いていない中隊にだけ効き、動いていれば 1.0。
         /// 陣地構築の途中は、動いていなければ進捗に応じて地形の値から 0.3 へ近づく。
+        /// 開けた場所（平地・砲撃痕・橋・浅瀬・塹壕）を移動中なら、さらに terrain.moving_open_damage_mult を掛ける。
         /// </summary>
         public double TerrainDamageMult(Company c)
         {
@@ -599,8 +624,13 @@ namespace Battalion.Sim
                 : _map.DamageMult(ch);
             if (!c.MovedThisTick && c.EntrenchProgress > 0 && f > _p.MapRules.EntrenchDamageMult)
                 f += (_p.MapRules.EntrenchDamageMult - f) * Math.Min(1.0, c.EntrenchProgress / _p.MapRules.EntrenchSec);
+            if (c.MovedThisTick && IsOpenGround(ch)) f *= _p.Terrain.MovingOpenDamageMult;
             return f;
         }
+
+        /// <summary>移動中の被弾倍率を掛ける、開けた場所のマス（平地・砲撃痕・橋・浅瀬・塹壕）。</summary>
+        public static bool IsOpenGround(char ch) =>
+            ch == TerrainMap.Plain || ch == TerrainMap.Crater || ch == TerrainMap.Bridge || ch == TerrainMap.Ford || ch == TerrainMap.Trench;
 
         /// <summary>籠城：中心のマスが村か塹壕（基本の地形・構築した塹壕）。動いているかどうかは問わない。</summary>
         void UpdateFortified()
