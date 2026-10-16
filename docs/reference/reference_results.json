@@ -1,0 +1,122 @@
+{
+ "S1_1v1_front": {
+  "runs": 300,
+  "rout_time_min": {
+   "p05": 28.01,
+   "median": 33.52,
+   "p95": 38.0
+  },
+  "routed_count": {
+   "R": 153,
+   "A": 148
+  },
+  "loss_mean": {
+   "A": 0.358,
+   "R": 0.356
+  }
+ },
+ "S2_2v1_front_front": {
+  "runs": 300,
+  "rout_time_min": {
+   "p05": 14.25,
+   "median": 17.7,
+   "p95": 20.27
+  },
+  "routed_count": {
+   "R": 300
+  },
+  "loss_mean": {
+   "A": 0.183,
+   "B": 0.0,
+   "R": 0.444
+  }
+ },
+ "S3_2v1_front_flank": {
+  "runs": 300,
+  "rout_time_min": {
+   "p05": 4.54,
+   "median": 5.77,
+   "p95": 7.15
+  },
+  "routed_count": {
+   "R": 300
+  },
+  "loss_mean": {
+   "A": 0.07,
+   "B": 0.0,
+   "R": 0.188
+  }
+ },
+ "S4_2v1_front_rear": {
+  "runs": 300,
+  "rout_time_min": {
+   "p05": 2.53,
+   "median": 3.43,
+   "p95": 4.71
+  },
+  "routed_count": {
+   "R": 300
+  },
+  "loss_mean": {
+   "A": 0.044,
+   "B": 0.0,
+   "R": 0.138
+  }
+ },
+ "S5_vet_vs_reg": {
+  "runs": 300,
+  "rout_time_min": {
+   "p05": 24.84,
+   "median": 30.01,
+   "p95": 38.01
+  },
+  "routed_count": {
+   "R": 299,
+   "V": 1
+  },
+  "loss_mean": {
+   "V": 0.327,
+   "R": 0.4
+  }
+ },
+ "_params": {
+  "dt_sec": 0.5,
+  "k_per_min": 0.0133,
+  "aspect_cas": {
+   "front": 1.0,
+   "flank": 1.5,
+   "rear": 2.0
+  },
+  "aspect_morale": {
+   "front": 1.0,
+   "flank": 2.0,
+   "rear": 3.0
+  },
+  "first_hit_shock": {
+   "flank": 10.0,
+   "rear": 15.0
+  },
+  "fire_at_non_front_target": 0.5,
+  "morale_per_pct_loss": 1.5,
+  "under_fire_per_min": 0.5,
+  "encircled_per_min": 3.0,
+  "training": {
+   "green": {
+    "rout": 35,
+    "fire": 0.85,
+    "morale_sens": 1.2
+   },
+   "regular": {
+    "rout": 25,
+    "fire": 1.0,
+    "morale_sens": 1.0
+   },
+   "veteran": {
+    "rout": 15,
+    "fire": 1.2,
+    "morale_sens": 0.8
+   }
+  },
+  "cap_min": 60.0
+ }
+}
