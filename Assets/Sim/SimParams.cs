@@ -63,12 +63,26 @@ namespace Battalion.Sim
             public double ReportErrorM;
         }
 
+        /// <summary>
+        /// 包囲（v3）：士気がしきい値以下の中隊は一定間隔で退路を見積もり、どの方位に逃げても
+        /// 逃げる間に <see cref="EscapeLossThreshold"/> 以上を失う見込みなら包囲とする。
+        /// </summary>
         public sealed class EncirclementParams
         {
-            public int MinAspects;
-            public double RearCorridorDepthM;
-            public double RearCorridorHalfWidthM;
+            public double CheckWhenMoraleAtOrBelow;
+            public double CheckIntervalSec;
+            public int EscapeDirs;
+            public double EscapeLenM;
+            public double EscapeSpeedMps;
+            public double EscapeStepSec;
+            /// <summary>逃げる中隊が撃たれる向き（背中を見せるので背面）。</summary>
+            public Aspect EscapeFireAspect;
+            public double EscapeLossThreshold;
+            /// <summary>退路がないと分かった瞬間に一度だけ（会戦中に1回）。</summary>
+            public double DespairShock;
             public double MoralePerMin;
+            /// <summary>塹壕・村の中（籠城）での毎分の低下の倍率。</summary>
+            public double FortifiedMoraleMult;
         }
 
         public sealed class RoutParams
@@ -107,6 +121,8 @@ namespace Battalion.Sim
             public int CompanyStrength;
             /// <summary>後退の命令で、向きを変えずに後ろ向きに下がるときの速度倍率。</summary>
             public double RetreatSpeedMult;
+            /// <summary>味方中隊の中心どうしの最小間隔（P1a で使う）。</summary>
+            public double FriendlyMinSpacingM;
         }
 
         public static SimParams LoadFile(string path) => FromJson(File.ReadAllText(path));
@@ -150,10 +166,17 @@ namespace Battalion.Sim
             p.TrainingTable[Training.Veteran] = ReadTraining(tr["veteran"]);
 
             var e = root["encirclement"];
-            p.Encirclement.MinAspects = (int)e.D("min_aspects");
-            p.Encirclement.RearCorridorDepthM = e.D("rear_corridor_depth_m");
-            p.Encirclement.RearCorridorHalfWidthM = e.D("rear_corridor_half_width_m");
+            p.Encirclement.CheckWhenMoraleAtOrBelow = e.D("check_when_morale_at_or_below");
+            p.Encirclement.CheckIntervalSec = e.D("check_interval_sec");
+            p.Encirclement.EscapeDirs = (int)e.D("escape_dirs");
+            p.Encirclement.EscapeLenM = e.D("escape_len_m");
+            p.Encirclement.EscapeSpeedMps = e.D("escape_speed_mps");
+            p.Encirclement.EscapeStepSec = e.D("escape_step_sec");
+            p.Encirclement.EscapeFireAspect = ParseAspect(e["escape_fire_aspect"].String);
+            p.Encirclement.EscapeLossThreshold = e.D("escape_loss_threshold");
+            p.Encirclement.DespairShock = e.D("despair_shock");
             p.Encirclement.MoralePerMin = e.D("morale_per_min");
+            p.Encirclement.FortifiedMoraleMult = e.D("fortified_morale_mult");
 
             var r = root["rout"];
             p.Rout.FleeSpeedMps = r.D("flee_speed_mps");
@@ -182,8 +205,20 @@ namespace Battalion.Sim
             p.Movement.DepthM = mv.D("depth_m");
             p.Movement.CompanyStrength = (int)mv.D("company_strength");
             p.Movement.RetreatSpeedMult = mv.D("retreat_speed_mult");
+            p.Movement.FriendlyMinSpacingM = mv.D("friendly_min_spacing_m");
 
             return p;
+        }
+
+        static Aspect ParseAspect(string s)
+        {
+            switch (s)
+            {
+                case "front": return Aspect.Front;
+                case "flank": return Aspect.Flank;
+                case "rear": return Aspect.Rear;
+                default: throw new FormatException("向きの名前が不正: " + s);
+            }
         }
 
         static void ReadAspects(JsonValue v, double[] into)

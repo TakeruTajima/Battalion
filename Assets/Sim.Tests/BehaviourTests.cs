@@ -34,12 +34,70 @@ namespace Battalion.Sim.Tests
         [Test]
         public void EncircledRoutSurrenders()
         {
-            // S4（正面＋背面）は R が包囲された状態で壊走するので、降伏になる
-            var r = BattleRunner.RunToFirstRout(Scenarios.S4_2v1_front_rear(), TestUtil.Params, 1);
+            // S6（四方を囲まれる）は R が包囲された状態で壊走するので、降伏になる
+            var log = new StringEventSink();
+            var sim = Scenarios.S6_4v1_surrounded().Build(TestUtil.Params, 1, log);
+            while (!sim.FirstRoutTime.HasValue) sim.Step();
+            var r = sim.Find("R");
+            Assert.That(r.State, Is.EqualTo(CompanyState.Surrendered));
+            Assert.That(r.OnBoard, Is.False);
+            string text = log.ToString();
+            StringAssert.Contains("\"type\":\"encircled_start\",\"unit\":\"R\",\"reason\":\"no_escape\"", text);
+            StringAssert.Contains("\"type\":\"surrender\",\"unit\":\"R\"", text);
+            Assert.That(text.Split('\n').Count(l => l.Contains("\"type\":\"despair\"")), Is.EqualTo(1), "絶望は一度だけ");
+        }
+
+        [Test]
+        public void FrontAndRearWithOpenFlankIsNotEncircled()
+        {
+            // S4（正面＋背面）は側面に逃げ道があるので包囲にならず、壊走しても降伏しない
             var sim = Scenarios.S4_2v1_front_rear().Build(TestUtil.Params, 1);
             while (!sim.FirstRoutTime.HasValue) sim.Step();
-            Assert.That(sim.Find("R").State, Is.EqualTo(CompanyState.Surrendered));
-            Assert.That(r.RoutedUnits, Is.EqualTo(new[] { "R" }));
+            var r = sim.Find("R");
+            Assert.That(r.State, Is.EqualTo(CompanyState.Routed));
+            Assert.That(r.Ledger.Encircled, Is.EqualTo(0));
+        }
+
+        [Test]
+        public void EscapeIsCheckedOnlyAtOrBelowFiftyAndEveryFiveSeconds()
+        {
+            var sim = Scenarios.S6_4v1_surrounded().Build(TestUtil.Params, 1);
+            var r = sim.Find("R");
+            sim.Step();
+            Assert.That(r.Encircled, Is.False, "士気50超では見積もらない（包囲されていない扱い）");
+            Assert.That(r.FleeDirection.HasValue, Is.False);
+
+            r.Morale = 50;
+            double t0 = sim.Time; // 次の刻みの開始時刻
+            sim.Step();
+            Assert.That(r.Encircled, Is.True);
+            Assert.That(r.NextEscapeCheckTime, Is.EqualTo(t0 + 5).Within(1e-9));
+            for (int i = 0; i < 9; i++) sim.Step();
+            Assert.That(r.NextEscapeCheckTime, Is.EqualTo(t0 + 5).Within(1e-9), "5秒の間は結果を保持する");
+            sim.Step();
+            Assert.That(r.NextEscapeCheckTime, Is.EqualTo(t0 + 10).Within(1e-9));
+        }
+
+        [Test]
+        public void DespairOnceThenThreePerMinuteHalvedWhenFortified()
+        {
+            foreach (bool fortified in new[] { false, true })
+            {
+                var sim = Scenarios.S6_4v1_surrounded().Build(TestUtil.Params, 1);
+                // 包囲による減少だけを見る（射撃による減少は要因別累計の別の項目に入る）
+                var r = sim.Find("R");
+                r.Morale = 49;
+                r.FlankShockTaken = r.RearShockTaken = true; // 初回ショックで壊走しないように
+                r.Fortified = fortified;
+                sim.Step();
+                Assert.That(r.Encircled, Is.True);
+                double afterFirst = r.Ledger.Encircled;
+                sim.Step();
+                double perTick = afterFirst - r.Ledger.Encircled;
+                double expectedPerTick = 3.0 / 120 * (fortified ? 0.5 : 1.0);
+                Assert.That(afterFirst, Is.EqualTo(-15 - expectedPerTick).Within(1e-9), "絶望 −15 と最初の刻みの毎分 −3");
+                Assert.That(perTick, Is.EqualTo(expectedPerTick).Within(1e-9));
+            }
         }
 
         [Test]
@@ -174,6 +232,35 @@ namespace Battalion.Sim.Tests
         }
 
         [Test]
+        public void RoutedUnitFleesTowardLeastLossDirection()
+        {
+            // 北と東に敵。見積もり損害が最も少ない方位（南西寄り）へ、背を向けて逃げる
+            var sim = Empty();
+            var a = sim.AddCompany("A", Side.Blue, Training.Regular, Personality.Calm, new Vec2(0, 0), 0, morale: 10);
+            sim.AddCompany("N", Side.Red, Training.Regular, Personality.Calm, new Vec2(0, 300), -90);
+            sim.AddCompany("E", Side.Red, Training.Regular, Personality.Calm, new Vec2(300, 0), 180);
+            sim.Step(); // 壊走（士気50以下なので、この刻みの開始時点の状態で見積もり済み）
+            Assert.That(a.FleeDirection.HasValue, Is.True);
+            sim.Step(); // 逃走
+            Assert.That(a.State, Is.EqualTo(CompanyState.Routed));
+            Assert.That(a.Facing, Is.EqualTo(Angles.Wrap(a.FleeDirection.Value)).Within(1e-9));
+            Assert.That(a.Position.X, Is.LessThan(0));
+            Assert.That(a.Position.Y, Is.LessThan(0));
+        }
+
+        [Test]
+        public void RoutedUnitStaysPutWithNoEnemyWithin600m()
+        {
+            var sim = Empty();
+            var a = sim.AddCompany("A", Side.Blue, Training.Regular, Personality.Calm, new Vec2(0, 0), 0, morale: 10);
+            sim.AddCompany("E", Side.Red, Training.Regular, Personality.Calm, new Vec2(700, 0), 180);
+            for (int i = 0; i < 20; i++) sim.Step();
+            Assert.That(a.State, Is.EqualTo(CompanyState.Routed));
+            Assert.That(a.Position.X, Is.EqualTo(0));
+            Assert.That(a.Position.Y, Is.EqualTo(0));
+        }
+
+        [Test]
         public void ShakenRefusesAdvance()
         {
             var sim = Empty();
@@ -245,7 +332,6 @@ namespace Battalion.Sim.Tests
                          "\"state\":", "\"target\":", "\"morale_causes\":{\"front\":" })
                 StringAssert.Contains(key, snaps[0]);
             StringAssert.Contains("\"type\":\"first_flank_hit\",\"unit\":\"R\",\"by\":\"B\"", log.ToString());
-            StringAssert.Contains("\"type\":\"encircled_start\",\"unit\":\"R\"", log.ToString());
         }
     }
 }

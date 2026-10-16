@@ -7,8 +7,9 @@ using NUnit.Framework;
 namespace Battalion.Sim.Tests
 {
     /// <summary>
-    /// 検算テスト：S1〜S5 をシード 1〜300 で回し、壊走までの時間の中央値と各中隊の平均損害率が
+    /// 検算テスト：S1〜S6 をシード 1〜300 で回し、壊走までの時間の中央値と各中隊の平均損害率が
     /// reference_results.json の ±15% 以内に入ることを確かめる（損害率が 0 の中隊は対象外）。
+    /// 正解値で全回降伏している中隊（S6 の R）は、本実装でも全回降伏することを確かめる。
     /// </summary>
     public class ReferenceVerificationTests
     {
@@ -46,7 +47,14 @@ namespace Battalion.Sim.Tests
                     failures.AppendLine($"  {kv.Key} の損害率が ±15% を外れた: {mine:F3} vs {refLoss:F3}");
             }
             sb.AppendLine("  壊走した側: " + string.Join(", ", st.RoutedCount.OrderBy(k => k.Key).Select(k => $"{k.Key}={k.Value}")) +
+                          "  降伏: " + string.Join(", ", st.SurrenderedCount.OrderBy(k => k.Key).Select(k => $"{k.Key}={k.Value}")) +
                           $"  打ち切り={st.TimedOut}");
+            foreach (var kv in r["surrendered_count"].Object)
+            {
+                int mine = st.SurrenderedCount.TryGetValue(kv.Key, out var n) ? n : 0;
+                if ((int)kv.Value.Number == r.D("runs") && mine != Runs)
+                    failures.AppendLine($"  {kv.Key} の降伏が {Runs} 回中 {mine} 回（正解値では全回）");
+            }
             TestContext.WriteLine(sb.ToString());
 
             Assert.That(failures.Length, Is.EqualTo(0), failures.ToString());

@@ -82,7 +82,7 @@ namespace Battalion.Sim
             ApplyOrders(t);
             Move(t);
             var shots = SelectTargets();
-            Resolve(shots, t);
+            Resolve(shots, t, t - _p.TickSec);
             Transitions(t);
 
             if (_log.Enabled && Tick % _snapshotEveryTicks == 0)
@@ -197,24 +197,13 @@ namespace Battalion.Sim
 
         void MoveRouted(Company c, double t, double dt)
         {
-            // 600m 以内の敵の中心の平均位置から遠ざかる。該当する敵がいなければその場に止まる。
-            double sx = 0, sy = 0;
-            int n = 0;
-            foreach (var e in _companies)
-            {
-                if (!e.OnBoard || e.Side == c.Side) continue;
-                if (Vec2.Distance(c.Position, e.Position) > _p.Rout.FleeFromRadiusM) continue;
-                sx += e.Position.X;
-                sy += e.Position.Y;
-                n++;
-            }
-            if (n == 0) return;
+            // 退路の見積もりで損害が最も少ない方位へ逃げる。600m 以内に敵がいなければその場に止まる。
+            if (!AwayFromNearbyEnemies(c, out _)) return;
+            if (!c.FleeDirection.HasValue) RefreshEscape(c, t - dt);
 
-            var away = c.Position - new Vec2(sx / n, sy / n);
-            double len = away.Length;
-            Vec2 dir = len > 1e-9 ? away * (1.0 / len) : Vec2.FromAngle(c.Facing);
-            c.Facing = Math.Atan2(dir.Y, dir.X);
-            c.Position = c.Position + dir * (_p.Rout.FleeSpeedMps * dt);
+            double heading = c.FleeDirection.Value;
+            c.Facing = Angles.Wrap(heading);
+            c.Position = c.Position + Vec2.FromAngle(heading) * (_p.Rout.FleeSpeedMps * dt);
 
             if (!_bounds.Contains(c.Position))
             {
@@ -318,8 +307,18 @@ namespace Battalion.Sim
 
         // ---------------------------------------------------------------- 4. 損害と士気（同時解決）
 
-        void Resolve(List<Shot> shots, double t)
+        void Resolve(List<Shot> shots, double t, double tickStart)
         {
+            // 退路の見積もり：刻みの開始時点の状態で、全中隊分を先に行う（同時解決）。
+            // 指揮下の中隊は士気がしきい値以下のときだけ（包囲の判定）、壊走中の中隊は逃げる方向のために見積もる
+            foreach (var c in _companies)
+            {
+                if (!c.OnBoard || tickStart < c.NextEscapeCheckTime) continue;
+                bool check = c.State == CompanyState.Routed
+                             || (c.UnderCommand && c.Morale <= _p.Encirclement.CheckWhenMoraleAtOrBelow);
+                if (check) RefreshEscape(c, tickStart);
+            }
+
             int n = _companies.Count;
             double dtMin = _p.TickSec / 60.0;
             var cas = new int[n];
@@ -377,7 +376,7 @@ namespace Battalion.Sim
                 if (c.State == CompanyState.Routed)
                 {
                     // 壊走中は損害だけ受ける。士気・包囲・拘束は扱わない
-                    SetEncircled(c, false, null, t);
+                    SetEncircled(c, false, t);
                     c.Pinned = false;
                     continue;
                 }
@@ -423,14 +422,22 @@ namespace Battalion.Sim
 
                 if (c.UnderCommand)
                 {
-                    int aspects = (hit[i, 0] ? 1 : 0) + (hit[i, 1] ? 1 : 0) + (hit[i, 2] ? 1 : 0);
-                    bool byAspects = aspects >= _p.Encirclement.MinAspects;
-                    bool byCorridor = RearCorridorBlocked(c);
-                    bool enc = byAspects || byCorridor;
-                    SetEncircled(c, enc, enc ? EncirclementReason(byAspects, byCorridor) : null, t);
+                    // 包囲：士気がしきい値以下で、直近の見積もりで逃げ道がない（見積もりは5秒ごと。間は結果を保持）
+                    bool enc = c.Morale <= _p.Encirclement.CheckWhenMoraleAtOrBelow && c.NoEscape;
+                    SetEncircled(c, enc, t);
                     if (enc)
                     {
+                        if (!c.DespairTaken)
+                        {
+                            c.DespairTaken = true;
+                            double shock = _p.Encirclement.DespairShock * sens;
+                            c.Ledger.Encircled -= shock;
+                            total += shock;
+                            if (_log.Enabled)
+                                _log.Write(Ev(t, "despair", c).Add("morale_hit", shock).Add("escape_loss", c.EscapeLoss).ToString());
+                        }
                         double d = _p.Encirclement.MoralePerMin * dtMin * sens;
+                        if (c.Fortified) d *= _p.Encirclement.FortifiedMoraleMult;
                         c.Ledger.Encircled -= d;
                         total += d;
                     }
@@ -438,7 +445,7 @@ namespace Battalion.Sim
                 }
                 else
                 {
-                    SetEncircled(c, false, null, t);
+                    SetEncircled(c, false, t);
                     c.Pinned = false;
                 }
 
@@ -455,36 +462,118 @@ namespace Battalion.Sim
             }
         }
 
-        static string EncirclementReason(bool byAspects, bool byCorridor)
-        {
-            if (byAspects && byCorridor) return "aspects+rear_corridor";
-            return byAspects ? "aspects" : "rear_corridor";
-        }
-
-        void SetEncircled(Company c, bool value, string reason, double t)
+        void SetEncircled(Company c, bool value, double t)
         {
             if (c.Encircled == value) return;
             c.Encircled = value;
             if (!_log.Enabled) return;
             var ev = Ev(t, value ? "encircled_start" : "encircled_end", c);
-            if (value) ev.Add("reason", reason);
+            if (value) ev.Add("reason", "no_escape").Add("escape_loss", c.EscapeLoss);
             _log.Write(ev.ToString());
         }
 
-        /// <summary>背後 500m・左右 ±200m の帯に、壊走していない敵中隊の中心があるか。</summary>
-        public bool RearCorridorBlocked(Company c)
+        /// <summary>退路の見積もりの結果。</summary>
+        public readonly struct EscapeEstimate
         {
-            double fx = Math.Cos(c.Facing), fy = Math.Sin(c.Facing);
+            /// <summary>方位ごとの損害割合の見積もり。添字 k の方位は東から反時計回りに 360°×k÷方位数。</summary>
+            public readonly double[] Loss;
+            /// <summary>損害が最も少ない方位の添字（同点なら 600m 以内の敵の平均位置から最も遠ざかる方位）。</summary>
+            public readonly int Best;
+
+            public EscapeEstimate(double[] loss, int best)
+            {
+                Loss = loss;
+                Best = best;
+            }
+
+            public double MinLoss => Loss[Best];
+        }
+
+        public double EscapeDirection(int k) => 2.0 * Math.PI * k / _p.Encirclement.EscapeDirs;
+
+        /// <summary>
+        /// 退路の見積もり。各方位について、壊走の速さで 500m 逃げる間（1秒刻み、1刻み目の位置から）、
+        /// その時点で 400m 以内にいる指揮下の敵すべてから背面を撃たれ続けたときに失う兵の割合の期待値を積算する。
+        /// 射撃の基本の式（k・兵力・練度・距離倍率・背面倍率）だけを使い、射手の動揺・非正面・接近戦の補正は入れない。
+        /// 敵は動かないものとし、乱数は使わない。
+        /// </summary>
+        public EscapeEstimate EstimateEscape(Company c)
+        {
+            var ep = _p.Encirclement;
+            var foes = new List<Company>();
+            foreach (var e in _companies)
+                if (e.OnBoard && e.Side != c.Side && e.UnderCommand && e.Strength > 0) foes.Add(e);
+
+            var rate = new double[foes.Count];
+            for (int f = 0; f < foes.Count; f++)
+                rate[f] = _p.Fire.KPerMin / 60.0 * foes[f].Strength * _p.Of(foes[f].Training).FireMult;
+
+            int steps = (int)(ep.EscapeLenM / ep.EscapeSpeedMps / ep.EscapeStepSec);
+            double stride = ep.EscapeSpeedMps * ep.EscapeStepSec;
+            double aspectMult = _p.Fire.AspectCasualtyMult[(int)ep.EscapeFireAspect];
+            var loss = new double[ep.EscapeDirs];
+            for (int k = 0; k < ep.EscapeDirs; k++)
+            {
+                var u = Vec2.FromAngle(EscapeDirection(k));
+                double sum = 0;
+                for (int s = 1; s <= steps; s++)
+                {
+                    var p = c.Position + u * (s * stride);
+                    for (int f = 0; f < foes.Count; f++)
+                    {
+                        double d = Vec2.Distance(p, foes[f].Position);
+                        if (d > _p.Fire.RangeMaxM) continue;
+                        sum += rate[f] * (d <= _p.Fire.RangeCloseM ? _p.Fire.RangeCloseMult : 1.0);
+                    }
+                }
+                loss[k] = sum * aspectMult * ep.EscapeStepSec / Math.Max(1, c.Strength);
+            }
+
+            // 最小の方位。同点が複数あれば、600m 以内の敵の平均位置から最も遠ざかる方位（それも同じなら添字の小さい方）
+            double min = double.MaxValue;
+            foreach (double l in loss) min = Math.Min(min, l);
+            const double tieEps = 1e-12;
+            bool hasAway = AwayFromNearbyEnemies(c, out var away);
+            int best = -1;
+            double bestDot = double.NegativeInfinity;
+            for (int k = 0; k < loss.Length; k++)
+            {
+                if (loss[k] > min + tieEps) continue;
+                if (best < 0) { best = k; if (!hasAway) break; }
+                double dot = hasAway ? Vec2.FromAngle(EscapeDirection(k)).Dot(away) : 0;
+                if (dot > bestDot + tieEps) { bestDot = dot; best = k; }
+            }
+            return new EscapeEstimate(loss, best);
+        }
+
+        /// <summary>
+        /// 600m 以内に盤上の敵がいれば true と、その中心の平均位置から自分へ向かう向き（遠ざかる向き）を返す。
+        /// 平均位置と自分が重なるときは向きを零ベクトルにする。
+        /// </summary>
+        bool AwayFromNearbyEnemies(Company c, out Vec2 away)
+        {
+            double sx = 0, sy = 0;
+            int n = 0;
             foreach (var e in _companies)
             {
-                if (!e.OnBoard || e.Side == c.Side || e.State == CompanyState.Routed || e.Strength <= 0) continue;
-                double dx = e.Position.X - c.Position.X, dy = e.Position.Y - c.Position.Y;
-                double along = dx * fx + dy * fy;
-                double side = -dx * fy + dy * fx;
-                if (along >= -_p.Encirclement.RearCorridorDepthM && along < 0 && Math.Abs(side) <= _p.Encirclement.RearCorridorHalfWidthM)
-                    return true;
+                if (!e.OnBoard || e.Side == c.Side) continue;
+                if (Vec2.Distance(c.Position, e.Position) > _p.Rout.FleeFromRadiusM) continue;
+                sx += e.Position.X;
+                sy += e.Position.Y;
+                n++;
             }
-            return false;
+            away = n == 0 ? new Vec2(0, 0) : c.Position - new Vec2(sx / n, sy / n);
+            return n > 0;
+        }
+
+        /// <summary>退路を見積もり直し、包囲の判定と逃げる方向を更新する。次の見積もりは <paramref name="now"/> から5秒後。</summary>
+        void RefreshEscape(Company c, double now)
+        {
+            var est = EstimateEscape(c);
+            c.EscapeLoss = est.MinLoss;
+            c.NoEscape = est.MinLoss >= _p.Encirclement.EscapeLossThreshold;
+            c.FleeDirection = EscapeDirection(est.Best);
+            c.NextEscapeCheckTime = now + _p.Encirclement.CheckIntervalSec;
         }
 
         // ---------------------------------------------------------------- 5. 状態遷移
@@ -544,9 +633,10 @@ namespace Battalion.Sim
                 {
                     if (EnemyWithin(c, _p.Rout.RallyClearRadiusM))
                     {
-                        // 敵が近づいたら再び逃げる（連鎖のショックは与えない）
+                        // 敵が近づいたら再び逃げる（連鎖のショックは与えない）。逃げる方向はその場で見積もり直す
                         c.State = CompanyState.Routed;
                         c.RallyClearSec = 0;
+                        RefreshEscape(c, t);
                         if (_log.Enabled) LogStateChange(c, CompanyState.Rallying, t);
                     }
                     else if (c.Morale >= _p.Rout.RallyReturnMorale)
@@ -574,6 +664,8 @@ namespace Battalion.Sim
             c.RallyClearSec = 0;
             c.TargetId = -1;
             if (!FirstRoutTime.HasValue) FirstRoutTime = t;
+            // 士気50超から一度に壊走した場合など、見積もりがない（または古い）ときはその場で見積もって逃げる方向を決める
+            if (!surrender && t - _p.TickSec >= c.NextEscapeCheckTime) RefreshEscape(c, t);
 
             if (_log.Enabled)
             {

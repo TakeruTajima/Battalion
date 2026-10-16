@@ -25,7 +25,18 @@ namespace Battalion.Sim.Tests
             Assert.That(p.Morale.AspectMoraleMult, Is.EqualTo(new[] { 1.0, 2.0, 3.0 }));
             Assert.That(p.Of(Training.Veteran).RoutThreshold, Is.EqualTo(15));
             Assert.That(p.Of(Training.Green).MoraleSensitivity, Is.EqualTo(1.2));
-            Assert.That(p.Encirclement.MinAspects, Is.EqualTo(2));
+            Assert.That(p.Encirclement.CheckWhenMoraleAtOrBelow, Is.EqualTo(50));
+            Assert.That(p.Encirclement.CheckIntervalSec, Is.EqualTo(5));
+            Assert.That(p.Encirclement.EscapeDirs, Is.EqualTo(16));
+            Assert.That(p.Encirclement.EscapeLenM, Is.EqualTo(500));
+            Assert.That(p.Encirclement.EscapeSpeedMps, Is.EqualTo(1.8));
+            Assert.That(p.Encirclement.EscapeStepSec, Is.EqualTo(1.0));
+            Assert.That(p.Encirclement.EscapeFireAspect, Is.EqualTo(Aspect.Rear));
+            Assert.That(p.Encirclement.EscapeLossThreshold, Is.EqualTo(0.2));
+            Assert.That(p.Encirclement.DespairShock, Is.EqualTo(15));
+            Assert.That(p.Encirclement.MoralePerMin, Is.EqualTo(3.0));
+            Assert.That(p.Encirclement.FortifiedMoraleMult, Is.EqualTo(0.5));
+            Assert.That(p.Movement.FriendlyMinSpacingM, Is.EqualTo(200));
             Assert.That(p.Movement.CompanyStrength, Is.EqualTo(150));
             Assert.That(p.Movement.RetreatSpeedMult, Is.EqualTo(0.6));
             Assert.That(p.CloseCombat.RangeMult, Is.EqualTo(2.0));
@@ -128,22 +139,84 @@ namespace Battalion.Sim.Tests
             Assert.That(Empty().RangeMultiplier(distance), Is.EqualTo(expected));
         }
 
+    }
+
+    /// <summary>退路の見積もり（v3 の包囲判定と壊走の方向）。</summary>
+    public class EscapeEstimateTests
+    {
+        static Simulation Empty() => new Simulation(TestUtil.Params, 1, new MapBounds(-5000, -5000, 5000, 5000));
+
+        static Simulation Build(Scenario sc) => sc.Build(TestUtil.Params, 1);
+
         [Test]
-        public void RearCorridor()
+        public void DirectionsStartEastCounterClockwise()
+        {
+            var sim = Empty();
+            Assert.That(sim.EscapeDirection(0), Is.EqualTo(0));
+            Assert.That(sim.EscapeDirection(4), Is.EqualTo(Math.PI / 2).Within(1e-12)); // 北
+            Assert.That(sim.EscapeDirection(8), Is.EqualTo(Math.PI).Within(1e-12));    // 西
+            Assert.That(sim.EscapeDirection(1), Is.EqualTo(22.5 * Angles.DegToRad).Within(1e-12));
+        }
+
+        [Test]
+        public void LossMatchesHandCalculation()
+        {
+            // 東 300m に敵1個中隊。西へ逃げると、1.8m×55歩＝99m 進むまで（距離 399m）は射程内、56歩目（400.8m）で外れる。
+            // 150m 以内にはならない。1秒あたり k/60×150×1.0、背面×2 → 55×0.0133/60×150×2 ÷ 150
+            var sim = Empty();
+            var c = sim.AddCompany("C", Side.Blue, Training.Regular, Personality.Calm, new Vec2(0, 0), 0);
+            sim.AddCompany("E", Side.Red, Training.Regular, Personality.Calm, new Vec2(300, 0), 180);
+            var est = sim.EstimateEscape(c);
+            Assert.That(est.Best, Is.EqualTo(8), "真西");
+            Assert.That(est.MinLoss, Is.EqualTo(55 * 0.0133 / 60 * 150 * 2 / 150).Within(1e-12));
+            Assert.That(est.Loss.Length, Is.EqualTo(16));
+        }
+
+        [Test]
+        public void SurroundedOnFourSidesHasNoEscape()
+        {
+            var sim = Build(Scenarios.S6_4v1_surrounded());
+            var est = sim.EstimateEscape(sim.Find("R"));
+            TestContext.WriteLine("S6 の R: " + string.Join(", ", est.Loss.Select(l => l.ToString("F3"))));
+            Assert.That(est.MinLoss, Is.GreaterThanOrEqualTo(0.2));
+        }
+
+        [TestCase("S3_2v1_front_flank")]
+        [TestCase("S4_2v1_front_rear")]
+        public void TwoDirectionsLeaveAWayOut(string scenario)
+        {
+            // 正面と側面、正面と背面から撃たれていても、空いている方位に逃げ道があれば包囲ではない
+            var sim = Build(Scenarios.ByName(scenario));
+            var est = sim.EstimateEscape(sim.Find("R"));
+            TestContext.WriteLine($"{scenario} の R: 最小 {est.MinLoss:F3}（方位 {est.Best}）");
+            Assert.That(est.MinLoss, Is.LessThan(0.2));
+        }
+
+        [Test]
+        public void IgnoresRoutedRallyingAndFarEnemies()
         {
             var sim = Empty();
             var c = sim.AddCompany("C", Side.Blue, Training.Regular, Personality.Calm, new Vec2(0, 0), 0);
-            var e = sim.AddCompany("E", Side.Red, Training.Regular, Personality.Calm, new Vec2(-499, 199), 0);
-            Assert.That(sim.RearCorridorBlocked(c), Is.True);
-            e.Position = new Vec2(-501, 0);
-            Assert.That(sim.RearCorridorBlocked(c), Is.False);
-            e.Position = new Vec2(-300, 201);
-            Assert.That(sim.RearCorridorBlocked(c), Is.False);
-            e.Position = new Vec2(10, 0); // 前方
-            Assert.That(sim.RearCorridorBlocked(c), Is.False);
-            e.Position = new Vec2(-300, 0);
-            e.State = CompanyState.Routed; // 壊走中の敵は数えない
-            Assert.That(sim.RearCorridorBlocked(c), Is.False);
+            var r = sim.AddCompany("R", Side.Red, Training.Regular, Personality.Calm, new Vec2(100, 0), 180);
+            var g = sim.AddCompany("G", Side.Red, Training.Regular, Personality.Calm, new Vec2(-100, 0), 0);
+            sim.AddCompany("F", Side.Red, Training.Regular, Personality.Calm, new Vec2(0, 1000), 0); // 500m 逃げても 400m 以内に入らない
+            r.State = CompanyState.Routed;
+            g.State = CompanyState.Rallying;
+            Assert.That(sim.EstimateEscape(c).Loss.Max(), Is.EqualTo(0));
+        }
+
+        [Test]
+        public void TiesPreferMovingAwayFromNearbyEnemies()
+        {
+            // 東 500m の敵。西寄りの多くの方位は損害0で同点になる。参照実装なら最初の同点（67.5°）を選ぶが、
+            // 600m 以内の敵の平均位置から最も遠ざかる真西を選ぶ
+            var sim = Empty();
+            var c = sim.AddCompany("C", Side.Blue, Training.Regular, Personality.Calm, new Vec2(0, 0), 0);
+            sim.AddCompany("E", Side.Red, Training.Regular, Personality.Calm, new Vec2(500, 0), 180);
+            var est = sim.EstimateEscape(c);
+            Assert.That(est.Loss[3], Is.EqualTo(0));
+            Assert.That(est.Loss[2], Is.GreaterThan(0));
+            Assert.That(est.Best, Is.EqualTo(8));
         }
     }
 

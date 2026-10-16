@@ -22,6 +22,7 @@ namespace Battalion.Sim.Tests
         [TestCase("S3_2v1_front_flank", 7UL)]
         [TestCase("S4_2v1_front_rear", 42UL)]
         [TestCase("CC_1v1_front_50m", 300UL)]
+        [TestCase("S6_4v1_surrounded", 5UL)]
         public void SameSeedSameLogHash(string scenario, ulong seed)
         {
             string h1 = RunAndHash(scenario, seed, out int n1);

@@ -61,7 +61,7 @@ namespace Battalion.Sim.Tests
             public double P05, Median, P95;
             public readonly Dictionary<string, double> LossMean = new Dictionary<string, double>();
             public readonly Dictionary<string, int> RoutedCount = new Dictionary<string, int>();
-            public int Surrendered;
+            public readonly Dictionary<string, int> SurrenderedCount = new Dictionary<string, int>();
             public int TimedOut;
         }
 
@@ -78,6 +78,8 @@ namespace Battalion.Sim.Tests
                 if (!r.Routed) st.TimedOut++;
                 foreach (var u in r.RoutedUnits)
                     st.RoutedCount[u] = (st.RoutedCount.TryGetValue(u, out var n) ? n : 0) + 1;
+                foreach (var u in r.SurrenderedUnits)
+                    st.SurrenderedCount[u] = (st.SurrenderedCount.TryGetValue(u, out var n) ? n : 0) + 1;
                 foreach (var kv in r.LossRate)
                 {
                     if (!loss.TryGetValue(kv.Key, out var l)) loss[kv.Key] = l = new List<double>();

@@ -10,6 +10,7 @@
    "R": 142,
    "A": 160
   },
+  "surrendered_count": {},
   "loss_mean": {
    "A": 0.347,
    "R": 0.341
@@ -25,6 +26,7 @@
   "routed_count": {
    "R": 300
   },
+  "surrendered_count": {},
   "loss_mean": {
    "A": 0.168,
    "B": 0.0,
@@ -34,33 +36,35 @@
  "S3_2v1_front_flank": {
   "runs": 300,
   "rout_time_min": {
-   "p05": 4.45,
-   "median": 5.72,
-   "p95": 7.15
+   "p05": 6.05,
+   "median": 7.9,
+   "p95": 10.1
   },
   "routed_count": {
    "R": 300
   },
+  "surrendered_count": {},
   "loss_mean": {
-   "A": 0.062,
+   "A": 0.082,
    "B": 0.0,
-   "R": 0.188
+   "R": 0.256
   }
  },
  "S4_2v1_front_rear": {
   "runs": 300,
   "rout_time_min": {
-   "p05": 2.51,
-   "median": 3.43,
-   "p95": 4.73
+   "p05": 2.97,
+   "median": 4.12,
+   "p95": 5.93
   },
   "routed_count": {
    "R": 300
   },
+  "surrendered_count": {},
   "loss_mean": {
-   "A": 0.039,
+   "A": 0.047,
    "B": 0.0,
-   "R": 0.138
+   "R": 0.168
   }
  },
  "S5_vet_vs_reg": {
@@ -73,9 +77,31 @@
   "routed_count": {
    "R": 300
   },
+  "surrendered_count": {},
   "loss_mean": {
    "V": 0.299,
    "R": 0.399
+  }
+ },
+ "S6_4v1_surrounded": {
+  "runs": 300,
+  "rout_time_min": {
+   "p05": 0.83,
+   "median": 1.32,
+   "p95": 2.0
+  },
+  "routed_count": {
+   "R": 300
+  },
+  "surrendered_count": {
+   "R": 300
+  },
+  "loss_mean": {
+   "A": 0.016,
+   "B": 0.0,
+   "C": 0.0,
+   "D": 0.0,
+   "R": 0.106
   }
  },
  "_params": {
@@ -101,6 +127,13 @@
   "morale_per_pct_loss": 1.5,
   "under_fire_per_min": 0.5,
   "encircled_per_min": 3.0,
+  "encircle_despair_shock": 15.0,
+  "escape_dirs": 16,
+  "escape_len_m": 500.0,
+  "escape_speed_mps": 1.8,
+  "escape_step_sec": 1.0,
+  "escape_loss_threshold": 0.2,
+  "escape_check_sec": 5.0,
   "training": {
    "green": {
     "rout": 35,

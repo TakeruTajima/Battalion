@@ -8,6 +8,8 @@
 
 改訂履歴:
   v2 (2026-10-16): 動揺時の射撃効率 x0.7 を追加（v1 は仕様の f_state を欠いていた）
+  v3 (2026-10-16): 包囲判定を「退路の見積もり」に変更。士気50以下で16方位の逃げ道を調べ、
+                   どの方位でも逃げる間に2割以上を失う見込みなら包囲（絶望 -15、以後毎分 -3、壊走すれば降伏）
 
 本実装との違い（意図的に省いたもの）:
   - 移動・地形・視界・接近戦・射程による補正（全シナリオ 300m、f_range=1.0）
@@ -38,6 +40,13 @@ P = {
     "morale_per_pct_loss": 1.5,
     "under_fire_per_min": 0.5,
     "encircled_per_min": 3.0,
+    "encircle_despair_shock": 15.0,   # 退路がないと分かった瞬間に一度だけ
+    "escape_dirs": 16,               # 退路を調べる方位の数
+    "escape_len_m": 500.0,           # 逃げ切るのに必要な距離
+    "escape_speed_mps": 1.8,         # 壊走の速さ
+    "escape_step_sec": 1.0,          # 見積もりの刻み
+    "escape_loss_threshold": 0.20,   # どの方位でも、逃げる間にこれ以上失う見込みなら包囲（絶望）
+    "escape_check_sec": 5.0,         # 退路の見積もりをやり直す間隔
     "training": {
         "green":   {"rout": 35, "fire": 0.85, "morale_sens": 1.2},
         "regular": {"rout": 25, "fire": 1.00, "morale_sens": 1.0},
@@ -57,6 +66,10 @@ class Unit:
         self.facing = math.radians(facing_deg)
         self.routed = False
         self.shocked = set()
+        self.despaired = False
+        self.surrendered = False
+        self.enc_cache = False
+        self.enc_next = 0.0
 
     def aspect_of(self, other):
         """other から撃たれたときの、自分から見た方向（正面／側面／背面）"""
@@ -83,7 +96,7 @@ def pick_target(u, enemies):
     return min(pool, key=lambda e: (u.dist(e), e.name))
 
 
-def tick(units, rng, P):
+def tick(units, rng, P, now_sec=0.0):
     dt_min = P["dt_sec"] / 60.0
     # 1) 目標選択（刻みの開始時点の状態で）
     shots = []  # (shooter, target, aspect_on_target)
@@ -120,13 +133,54 @@ def tick(units, rng, P):
             if asp != "front" and asp not in u.shocked:
                 u.shocked.add(asp)
                 m += P["first_hit_shock"][asp]
-        encircled = len(hit) >= 2 or rear_corridor_blocked(u, units)
+        encircled = False
+        if u.m <= P["shaken_threshold"]:  # 劣勢になって初めて退路を確認する（5秒ごとに見積もり直す）
+            if now_sec >= u.enc_next:
+                u.enc_cache = no_escape(u, units)
+                u.enc_next = now_sec + P["escape_check_sec"]
+            encircled = u.enc_cache
         if encircled:
+            if not u.despaired:
+                u.despaired = True
+                m += P["encircle_despair_shock"]
             m += P["encircled_per_min"] * dt_min
         u.n = max(0, u.n - cas[u.name])
         u.m -= m * P["training"][u.q]["morale_sens"]
         if u.m <= P["training"][u.q]["rout"]:
             u.routed = True
+            u.surrendered = encircled
+
+
+def escape_estimate(u, units):
+    """16方位それぞれについて、壊走の速さで500m逃げる間に失う兵の割合を見積もる。
+    逃げる中隊は背中を見せるので背面（x2）、400m以内の敵すべてから撃たれ続けると仮定する。
+    刻みは1秒、中隊は1刻みごとに 1.8m 進む（1刻み目の位置から評価する）。
+    戻り値: (最小の損害割合, その方位[rad])"""
+    foes = [e for e in units if e.side != u.side and not e.routed and e.n > 0]
+    if not foes:
+        return 0.0, u.facing + math.pi
+    steps = int(P["escape_len_m"] / P["escape_speed_mps"] / P["escape_step_sec"])
+    s = np.arange(1, steps + 1) * P["escape_speed_mps"] * P["escape_step_sec"]
+    ex = np.array([e.x for e in foes]); ey = np.array([e.y for e in foes])
+    rate = np.array([(P["k_per_min"] / 60.0) * e.n * P["training"][e.q]["fire"] for e in foes])
+    best = (float("inf"), 0.0)
+    for k in range(P["escape_dirs"]):
+        a = 2 * math.pi * k / P["escape_dirs"]
+        px = u.x + math.cos(a) * s
+        py = u.y + math.sin(a) * s
+        d = np.hypot(px[:, None] - ex[None, :], py[:, None] - ey[None, :])
+        mult = np.where(d <= 150, 1.3, 1.0) * (d <= 400)
+        lost = float((mult * rate[None, :]).sum()) * P["aspect_cas"]["rear"] * P["escape_step_sec"]
+        frac = lost / max(1, u.n)
+        if frac < best[0]:
+            best = (frac, a)
+    return best
+
+
+def no_escape(u, units):
+    """v3 の包囲判定: どの方位に逃げても、閾値以上を失う見込みなら包囲"""
+    frac, _ = escape_estimate(u, units)
+    return frac >= P["escape_loss_threshold"]
 
 
 def rear_corridor_blocked(u, units):
@@ -156,12 +210,17 @@ def scenario(name):
     if name == "S4_2v1_front_rear":
         return [Unit("A", "blue", 150, "regular", 0, 0, 0), Unit("B", "blue", 150, "regular", 600, 0, 180),
                 Unit("R", "red", 150, "regular", 300, 0, 180)], "R"
+    if name == "S6_4v1_surrounded":
+        return [Unit("A", "blue", 150, "regular", 0, 0, 0), Unit("B", "blue", 150, "regular", 300, 300, -90),
+                Unit("C", "blue", 150, "regular", 300, -300, 90), Unit("D", "blue", 150, "regular", 600, 0, 180),
+                Unit("R", "red", 150, "regular", 300, 0, 180)], "R"
     if name == "S5_vet_vs_reg":
         return [Unit("V", "blue", 150, "veteran", 0, 0, 0), Unit("R", "red", 150, "regular", 300, 0, 180)], "R_or_V"
     raise ValueError(name)
 
 
-SCENARIOS = ["S1_1v1_front", "S2_2v1_front_front", "S3_2v1_front_flank", "S4_2v1_front_rear", "S5_vet_vs_reg"]
+SCENARIOS = ["S1_1v1_front", "S2_2v1_front_front", "S3_2v1_front_flank", "S4_2v1_front_rear", "S5_vet_vs_reg",
+             "S6_4v1_surrounded"]
 
 
 def run_one(name, seed):
@@ -169,7 +228,7 @@ def run_one(name, seed):
     rng = np.random.default_rng(seed)
     t = 0.0
     while t < P["cap_min"]:
-        tick(units, rng, P)
+        tick(units, rng, P, t * 60.0)
         t += P["dt_sec"] / 60.0
         if any(u.routed for u in units):
             break
@@ -179,12 +238,14 @@ def run_one(name, seed):
 
 
 def summarize(name, runs):
-    times, routed_first, loss = [], {}, {}
+    times, routed_first, loss, surr = [], {}, {}, {}
     for s in range(1, runs + 1):
         t, by, routed = run_one(name, s)
         times.append(t)
         for r in routed:
             routed_first[r] = routed_first.get(r, 0) + 1
+            if by[r].surrendered:
+                surr[r] = surr.get(r, 0) + 1
         for k, u in by.items():
             loss.setdefault(k, []).append(1 - u.n / u.n0)
     times = np.array(times)
@@ -194,6 +255,7 @@ def summarize(name, runs):
                           "median": round(float(np.median(times)), 2),
                           "p95": round(float(np.percentile(times, 95)), 2)},
         "routed_count": routed_first,
+        "surrendered_count": surr,
         "loss_mean": {k: round(float(np.mean(v)), 3) for k, v in loss.items()},
     }
 

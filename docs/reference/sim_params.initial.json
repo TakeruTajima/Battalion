@@ -65,10 +65,18 @@
     }
   },
   "encirclement": {
-    "min_aspects": 2,
-    "rear_corridor_depth_m": 500,
-    "rear_corridor_half_width_m": 200,
-    "morale_per_min": 3.0
+    "check_when_morale_at_or_below": 50,
+    "check_interval_sec": 5,
+    "escape_dirs": 16,
+    "escape_len_m": 500,
+    "escape_speed_mps": 1.8,
+    "escape_step_sec": 1.0,
+    "escape_fire_aspect": "rear",
+    "escape_loss_threshold": 0.2,
+    "despair_shock": 15,
+    "morale_per_min": 3.0,
+    "fortified_morale_mult": 0.5,
+    "_note": "v3: どの方位に逃げても閾値以上を失う見込みなら包囲。fortified は塹壕・村の中"
   },
   "rout": {
     "flee_speed_mps": 1.8,
@@ -97,6 +105,7 @@
     "frontage_m": 200,
     "depth_m": 50,
     "company_strength": 150,
-    "retreat_speed_mult": 0.6
+    "retreat_speed_mult": 0.6,
+    "friendly_min_spacing_m": 200
   }
 }

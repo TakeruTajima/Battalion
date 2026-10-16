@@ -20,6 +20,8 @@ namespace Battalion.Sim
 
         public double Length => Math.Sqrt(X * X + Y * Y);
 
+        public double Dot(Vec2 o) => X * o.X + Y * o.Y;
+
         public static double Distance(Vec2 a, Vec2 b)
         {
             double dx = b.X - a.X, dy = b.Y - a.Y;

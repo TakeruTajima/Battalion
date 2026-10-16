@@ -2,7 +2,7 @@
 
 大隊規模の部隊を指揮するRTSの試作。仕様は [`docs/spec.md`](docs/spec.md)。
 
-現在の段階：**P0（戦闘シミュレーションの核、画面なし）**。報告は [`docs/reports/P0_report.md`](docs/reports/P0_report.md)。
+現在の段階：**P0.2（包囲判定を「逃げ道があるか」に変更）まで完了**。報告は [`docs/reports/`](docs/reports/)（P0・P0.1 は `P0_report.md`、P0.2 は `P0.2_report.md`）。
 
 ## 構成
 
@@ -11,7 +11,8 @@
 | `Assets/Sim/` | アセンブリ `Sim`（`noEngineReferences: true`）。Unity に依存しない純粋な C#。名前空間 `Battalion.Sim` |
 | `Assets/Sim.Tests/` | アセンブリ `Sim.Tests`（EditMode、NUnit）。検算・再現性・振る舞いのテスト |
 | `Assets/StreamingAssets/sim_params.json` | パラメータ。初期値は `docs/reference/sim_params.initial.json` と同一（テストで確認） |
-| `docs/` | 仕様書と検算のリファレンス（`combat_reference.py` は変更しない） |
+| `docs/` | 仕様書と検算のリファレンス（`docs/reference/` 以下は変更しない）。`docs/reference/map/` は P1a の視線と経路探索のリファレンス、`docs/reference/sketch/` は概算シミュレーション |
+| `maps/` | シナリオAの地図（ステージ1・2）。P1a で読み込む |
 | `tools/dotnet/` | Unity の外で同じソースをビルド・テストする .NET プロジェクト |
 
 ## テストの実行

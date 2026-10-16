@@ -47,7 +47,7 @@ namespace Battalion.Sim
     }
 
     /// <summary>
-    /// docs/reference/combat_reference.py の S1〜S5 と同じ配置（座標 m、向きは度、x 正が東）。
+    /// docs/reference/combat_reference.py の S1〜S6 と同じ配置（座標 m、向きは度、x 正が東）。
     /// </summary>
     public static class Scenarios
     {
@@ -72,6 +72,11 @@ namespace Battalion.Sim
         public static Scenario S5_vet_vs_reg() =>
             new Scenario("S5_vet_vs_reg", Blue("V", 0, 0, 0, Training.Veteran), Red("R", 300, 0, 180));
 
+        /// <summary>4対1：R が四方（西・北・南・東）を囲まれる。どの方位にも逃げ道がなく、壊走すれば降伏する。</summary>
+        public static Scenario S6_4v1_surrounded() =>
+            new Scenario("S6_4v1_surrounded", Blue("A", 0, 0, 0), Blue("B", 300, 300, -90), Blue("C", 300, -300, 90),
+                Blue("D", 600, 0, 180), Red("R", 300, 0, 180));
+
         /// <summary>接近戦の検算：50m で対峙した同数（通常練度）の正面衝突。</summary>
         public static Scenario CC_1v1_front_50m() =>
             new Scenario("CC_1v1_front_50m", Blue("A", 0, 0, 0), Red("R", 50, 0, 180));
@@ -85,6 +90,7 @@ namespace Battalion.Sim
                 case "S3_2v1_front_flank": return S3_2v1_front_flank();
                 case "S4_2v1_front_rear": return S4_2v1_front_rear();
                 case "S5_vet_vs_reg": return S5_vet_vs_reg();
+                case "S6_4v1_surrounded": return S6_4v1_surrounded();
                 case "CC_1v1_front_50m": return CC_1v1_front_50m();
                 default: throw new KeyNotFoundException(name);
             }
@@ -93,6 +99,7 @@ namespace Battalion.Sim
         public static readonly string[] Reference =
         {
             "S1_1v1_front", "S2_2v1_front_front", "S3_2v1_front_flank", "S4_2v1_front_rear", "S5_vet_vs_reg",
+            "S6_4v1_surrounded",
         };
     }
 
@@ -102,6 +109,8 @@ namespace Battalion.Sim
         public double EndTimeMin;
         public bool Routed;
         public readonly List<string> RoutedUnits = new List<string>();
+        /// <summary>壊走した中隊のうち、包囲されていて降伏したもの。</summary>
+        public readonly List<string> SurrenderedUnits = new List<string>();
         public readonly Dictionary<string, double> LossRate = new Dictionary<string, double>();
     }
 
@@ -122,6 +131,7 @@ namespace Battalion.Sim
             {
                 r.LossRate[c.Name] = c.LossRate;
                 if (c.State == CompanyState.Routed || c.State == CompanyState.Surrendered) r.RoutedUnits.Add(c.Name);
+                if (c.State == CompanyState.Surrendered) r.SurrenderedUnits.Add(c.Name);
             }
             return r;
         }
