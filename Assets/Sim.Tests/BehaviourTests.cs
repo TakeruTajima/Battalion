@@ -8,7 +8,7 @@ namespace Battalion.Sim.Tests
     public class BehaviourTests
     {
         static Simulation Empty(IEventSink log = null) =>
-            new Simulation(TestUtil.Params, 1, TerrainMap.FlatCovering(-1500, -1000, 1500, 1000), log);
+            new Simulation(TestUtil.Params, 1, TerrainMap.FlatCovering(TestUtil.Params.Terrain, -1500, -1000, 1500, 1000), log);
 
         /// <summary>直前に狙われた扱いにして、射程外での回復（+1/分）がしきい値の確認に混ざらないようにする。</summary>
         static void SuppressRecovery(Simulation sim)
@@ -147,7 +147,7 @@ namespace Battalion.Sim.Tests
         public void RoutedUnitLeavesBattleAtMapEdge()
         {
             var log = new StringEventSink();
-            var sim = new Simulation(TestUtil.Params, 1, TerrainMap.FlatCovering(-100, -1000, 1000, 1000), log);
+            var sim = new Simulation(TestUtil.Params, 1, TerrainMap.FlatCovering(TestUtil.Params.Terrain, -100, -1000, 1000, 1000), log);
             var a = sim.AddCompany("A", Side.Blue, Training.Regular, Personality.Calm, new Vec2(0, 0), 0, morale: 10);
             sim.AddCompany("E", Side.Red, Training.Regular, Personality.Calm, new Vec2(300, 0), 180);
             for (int i = 0; i < 400; i++) sim.Step();

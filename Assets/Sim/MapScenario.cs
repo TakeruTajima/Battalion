@@ -78,7 +78,7 @@ namespace Battalion.Sim
         /// </summary>
         public Simulation Build(SimParams p, ulong seed, IEventSink log = null)
         {
-            var sim = new Simulation(p, seed, TerrainMap.FromJson(Source), log);
+            var sim = new Simulation(p, seed, TerrainMap.FromJson(Source, p.Terrain), log);
             foreach (var u in Units)
                 sim.AddCompany(u.Id, u.Side, TrainingOf(u.Id), PersonalityOf(u.Id), new Vec2(u.X, u.Y), u.FacingDeg);
 
@@ -119,7 +119,8 @@ namespace Battalion.Sim
 
     /// <summary>
     /// 予備隊の台本：引き金の円の中に指揮下の青の中隊の中心が入ったら一度だけ発動し、
-    /// 予備（R3）が、円の中にいる青の中隊のうち R3 に最も近いものへ、R3 の側の側面から攻撃する。経路の脅威の重みは 0。
+    /// 予備（R3）が、円の中にいる青の中隊のうち R3 に最も近いものへ、R3 の側の側面から攻撃する。
+    /// 経路の脅威の重みは map_rules.threat_weight.scripted（0）。
     /// </summary>
     public sealed class ReserveScript : ISimScript
     {
@@ -159,7 +160,7 @@ namespace Battalion.Sim
             // 目標の左（向きから +90°）の側に R3 がいれば左の側面、そうでなければ右の側面
             var left = new Vec2(-Math.Sin(target.Facing), Math.Cos(target.Facing));
             int side = (r3.Position - target.Position).Dot(left) > 0 ? +1 : -1;
-            r3.ThreatWeightOverride = 0.0;
+            r3.ThreatWeightOverride = sim.Params.MapRules.ScriptedThreatWeight;
             sim.Issue(Order.Attack(r3.Id, target.Id, AttackAspect.Flank, side));
             sim.LogScriptEvent(tickStart + sim.Params.TickSec, "reserve_counterattack", r3, target);
         }

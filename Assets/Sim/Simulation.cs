@@ -46,7 +46,7 @@ namespace Battalion.Sim
             _map = map;
             _log = log ?? NullEventSink.Instance;
             _snapshotEveryTicks = (int)Math.Round(SnapshotIntervalSec / p.TickSec);
-            _exposureEveryTicks = (int)Math.Round(MapRules.ExposureRebuildSec / p.TickSec);
+            _exposureEveryTicks = (int)Math.Round(p.MapRules.ExposureRebuildSec / p.TickSec);
         }
 
         public void AddScript(ISimScript script) => _scripts.Add(script);
@@ -243,7 +243,7 @@ namespace Battalion.Sim
                 if (!e.OnBoard || e.Side == shooter.Side || e.Strength <= 0) continue;
                 double d = Vec2.Distance(shooter.Position, e.Position);
                 if (d > _p.Fire.RangeMaxM) continue;
-                if (!LineOfSight.Visible(_map, shooter.Position, e.Position)) continue;
+                if (!LineOfSight.Visible(_map, _p.Sight, shooter.Position, e.Position)) continue;
                 // 走査は ID 昇順なので、厳密に小さいときだけ更新すれば同距離は ID の小さい方が残る
                 if (d < dAny) { dAny = d; bestAny = e; }
                 if (AspectOf(shooter, e.Position) == Aspect.Front && d < dFront) { dFront = d; bestFront = e; }
@@ -516,7 +516,7 @@ namespace Battalion.Sim
                         sum += rate[f] * (d <= _p.Fire.RangeCloseM ? _p.Fire.RangeCloseMult : 1.0);
                     }
                 }
-                loss[k] = blocked ? MapRules.BlockedEscapeLoss : sum * aspectMult * ep.EscapeStepSec / Math.Max(1, c.Strength);
+                loss[k] = blocked ? _p.MapRules.BlockedEscapeLoss : sum * aspectMult * ep.EscapeStepSec / Math.Max(1, c.Strength);
             }
 
             // 最小の方位。同点が複数あれば、600m 以内の敵の平均位置から最も遠ざかる方位（それも同じなら添字の小さい方）

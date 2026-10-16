@@ -25,13 +25,17 @@ namespace Battalion.Sim
         /// <summary>南西の角の座標。シナリオAの地図は (0, 0)。</summary>
         public double OriginX { get; }
         public double OriginY { get; }
+        /// <summary>地形の表（移動倍率・被弾倍率・視線を遮る重み）。</summary>
+        public SimParams.TerrainParams Terrain { get; }
 
         readonly char[] _base;
         readonly char[] _overlay;
         readonly double[] _elev;
 
-        TerrainMap(int width, int height, double cellM, double originX, double originY, char[] baseTerrain, double[] elevation)
+        TerrainMap(SimParams.TerrainParams terrain, int width, int height, double cellM, double originX, double originY,
+            char[] baseTerrain, double[] elevation)
         {
+            Terrain = terrain;
             Width = width;
             Height = height;
             CellM = cellM;
@@ -48,19 +52,21 @@ namespace Battalion.Sim
         public double MaxY => OriginY + Height * CellM;
 
         /// <summary>全て平地・標高0の地図。</summary>
-        public static TerrainMap Flat(double originX, double originY, int width, int height, double cellM = 50.0)
+        public static TerrainMap Flat(SimParams.TerrainParams terrain, double originX, double originY, int width, int height,
+            double cellM = 50.0)
         {
             var t = new char[width * height];
             for (int k = 0; k < t.Length; k++) t[k] = Plain;
-            return new TerrainMap(width, height, cellM, originX, originY, t, new double[width * height]);
+            return new TerrainMap(terrain, width, height, cellM, originX, originY, t, new double[width * height]);
         }
 
         /// <summary>範囲 [minX, maxX]×[minY, maxY] を覆う平地の地図（マスの数は切り上げ）。</summary>
-        public static TerrainMap FlatCovering(double minX, double minY, double maxX, double maxY, double cellM = 50.0) =>
-            Flat(minX, minY, (int)Math.Ceiling((maxX - minX) / cellM), (int)Math.Ceiling((maxY - minY) / cellM), cellM);
+        public static TerrainMap FlatCovering(SimParams.TerrainParams terrain, double minX, double minY, double maxX, double maxY,
+            double cellM = 50.0) =>
+            Flat(terrain, minX, minY, (int)Math.Ceiling((maxX - minX) / cellM), (int)Math.Ceiling((maxY - minY) / cellM), cellM);
 
-        /// <summary>maps/scenario_*.json の形式から読む。原点は南西の角 (0, 0)。</summary>
-        public static TerrainMap FromJson(JsonValue d)
+        /// <summary>maps/scenario_*.json の形式から読む。原点は南西の角 (0, 0)。地形の文字は表にあるものだけを受け付ける。</summary>
+        public static TerrainMap FromJson(JsonValue d, SimParams.TerrainParams terrain)
         {
             int w = (int)d.D("width"), h = (int)d.D("height");
             double cell = d.D("cell_m");
@@ -80,56 +86,22 @@ namespace Battalion.Sim
                 for (int i = 0; i < w; i++)
                 {
                     char c = row[i];
-                    if (MoveMultOf(c) < 0) throw new FormatException($"不明な地形の文字 '{c}'");
+                    if (!terrain.Knows(c)) throw new FormatException($"不明な地形の文字 '{c}'");
                     t[j * w + i] = c;
                     e[j * w + i] = erow[i].Number;
                 }
             }
-            return new TerrainMap(w, h, cell, 0, 0, t, e);
+            return new TerrainMap(terrain, w, h, cell, 0, 0, t, e);
         }
 
-        // ---------------------------------------------------------------- 地形の表
+        // ---------------------------------------------------------------- 地形の表（sim_params.json の "terrain"）
 
-        /// <summary>移動倍率。川は 0（通れない）。不明な文字は −1。</summary>
-        public static double MoveMultOf(char c)
-        {
-            switch (c)
-            {
-                case Plain: return 1.0;
-                case Forest: return 0.5;
-                case Village: return 0.7;
-                case River: return 0.0;
-                case Bridge: return 1.0;
-                case Ford: return 0.3;
-                case Trench: return 0.8;
-                case Crater: return 0.6;
-                default: return -1.0;
-            }
-        }
-
-        /// <summary>被弾倍率（損害倍率）。塹壕の 0.3 は止まっている中隊にだけ効く（呼び出し側で判定する）。</summary>
-        public static double DamageMultOf(char c)
-        {
-            switch (c)
-            {
-                case Forest: return 0.6;
-                case Village: return 0.5;
-                case Trench: return 0.3;
-                case Crater: return 0.9;
-                default: return 1.0;
-            }
-        }
-
-        /// <summary>視線を遮る重み（そのマスを通る距離に掛ける）。森林 1.0、村落 0.5。</summary>
-        public static double ObscureOf(char c)
-        {
-            switch (c)
-            {
-                case Forest: return 1.0;
-                case Village: return 0.5;
-                default: return 0.0;
-            }
-        }
+        /// <summary>移動倍率。0 は通れない（川）。</summary>
+        public double MoveMult(char c) => Terrain.MoveMult(c);
+        /// <summary>被弾倍率。塹壕の値は止まっている中隊にだけ効く（呼び出し側で判定する）。</summary>
+        public double DamageMult(char c) => Terrain.DamageMult(c);
+        /// <summary>視線を遮る重み（そのマスを通る距離に掛ける）。</summary>
+        public double LosWeight(char c) => Terrain.LosWeightOf(c);
 
         // ---------------------------------------------------------------- 参照
 
@@ -168,7 +140,7 @@ namespace Battalion.Sim
 
         public char BaseTerrainAt(int i, int j) => _base[j * Width + i];
 
-        public bool Passable(int i, int j) => MoveMultOf(TerrainAt(i, j)) > 0;
+        public bool Passable(int i, int j) => MoveMult(TerrainAt(i, j)) > 0;
 
         public bool Passable(Vec2 p)
         {

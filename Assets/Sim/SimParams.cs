@@ -19,6 +19,9 @@ namespace Battalion.Sim
         public PinningParams Pinning = new PinningParams();
         public CloseCombatParams CloseCombat = new CloseCombatParams();
         public MovementParams Movement = new MovementParams();
+        public TerrainParams Terrain = new TerrainParams();
+        public SightParams Sight = new SightParams();
+        public MapRulesParams MapRules = new MapRulesParams();
 
         public TrainingParams Of(Training t) => TrainingTable[t];
 
@@ -125,6 +128,71 @@ namespace Battalion.Sim
             public double FriendlyMinSpacingM;
         }
 
+        /// <summary>
+        /// 地形の文字ごとの移動倍率・被弾倍率・視線を遮る重み（"terrain"）。
+        /// 移動倍率 0 の文字（川）は通れない。塹壕の被弾倍率は止まっている中隊にだけ効く（呼び出し側で判定する）。
+        /// </summary>
+        public sealed class TerrainParams
+        {
+            public readonly Dictionary<char, double> Move = new Dictionary<char, double>();
+            public readonly Dictionary<char, double> Damage = new Dictionary<char, double>();
+            public readonly Dictionary<char, double> LosWeight = new Dictionary<char, double>();
+
+            public bool Knows(char c) => Move.ContainsKey(c);
+            /// <summary>移動倍率。表にない文字は 0（通れない）。</summary>
+            public double MoveMult(char c) => Move.TryGetValue(c, out var v) ? v : 0.0;
+            /// <summary>被弾倍率。表にない文字は 1.0。</summary>
+            public double DamageMult(char c) => Damage.TryGetValue(c, out var v) ? v : 1.0;
+            /// <summary>視線を遮る重み（そのマスを通る距離に掛ける）。表にない文字は 0。</summary>
+            public double LosWeightOf(char c) => LosWeight.TryGetValue(c, out var v) ? v : 0.0;
+        }
+
+        /// <summary>視線（"sight"）。</summary>
+        public sealed class SightParams
+        {
+            public double BaseRangeM;
+            /// <summary>高い側から見るとき、高低差 10m ごとに視界距離に掛ける増分（0.1 なら +10%）。</summary>
+            public double RangeGainPer10mHeight;
+            public double EyeHeightM;
+            public double SampleStepM;
+            /// <summary>森林・村落を通る重み付きの距離がこれを超えたら遮られる。</summary>
+            public double CoverBlockM;
+        }
+
+        /// <summary>P1 の地図まわりの値（"map_rules"）。</summary>
+        public sealed class MapRulesParams
+        {
+            /// <summary>露出の地図（と、退路の見積もりに使う敵ごとの見える範囲）を作り直す間隔。</summary>
+            public double ExposureRebuildSec;
+            /// <summary>経路（攻撃の発起点を含む）を引き直す間隔。</summary>
+            public double ReplanSec;
+            /// <summary>露出1マスあたりのコスト（m 換算）。脅威の重みに掛ける。</summary>
+            public double ExposureCostM;
+            public readonly Dictionary<Personality, double> ThreatWeightByPersonality = new Dictionary<Personality, double>();
+            /// <summary>台本で動く中隊（予備隊の逆襲）の脅威の重み。</summary>
+            public double ScriptedThreatWeight;
+            /// <summary>攻撃の発起点：敵の中心から、指定の方向へこの距離。</summary>
+            public double AttackStandoffM;
+            /// <summary>機敏は、側面の経路コストが正面のこの倍以下なら側面を選ぶ。</summary>
+            public double AgileFlankCostRatio;
+            /// <summary>発起点に着いた後、発起点がこれ以上離れたら、また動く。</summary>
+            public double AttackRepositionM;
+            /// <summary>目的地が近すぎるときに、ずらす先を探す輪の刻み・最大半径・方位の数。</summary>
+            public double DestinationSearchStepM;
+            public double DestinationSearchMaxM;
+            public int DestinationSearchDirs;
+            /// <summary>経路探索で、止まっている味方の中心からこの距離未満のマスに入らない。</summary>
+            public double AvoidStationaryFriendM;
+            /// <summary>陣地構築：完成までの時間、完成時の被弾倍率、塹壕にする左右のマス数。</summary>
+            public double EntrenchSec;
+            public double EntrenchDamageMult;
+            public int EntrenchHalfWidthCells;
+            /// <summary>退路の見積もりで、川に突き当たる方位の損害割合（逃げられない）。</summary>
+            public double BlockedEscapeLoss;
+
+            public double ThreatWeight(Personality p) => ThreatWeightByPersonality[p];
+        }
+
         public static SimParams LoadFile(string path) => FromJson(File.ReadAllText(path));
 
         public static SimParams FromJson(string json)
@@ -207,7 +275,53 @@ namespace Battalion.Sim
             p.Movement.RetreatSpeedMult = mv.D("retreat_speed_mult");
             p.Movement.FriendlyMinSpacingM = mv.D("friendly_min_spacing_m");
 
+            var te = root["terrain"];
+            ReadCharTable(te["move_mult"], p.Terrain.Move);
+            ReadCharTable(te["damage_mult"], p.Terrain.Damage);
+            ReadCharTable(te["los_weight"], p.Terrain.LosWeight);
+
+            var si = root["sight"];
+            p.Sight.BaseRangeM = si.D("base_range_m");
+            p.Sight.RangeGainPer10mHeight = si.D("range_gain_per_10m_height");
+            p.Sight.EyeHeightM = si.D("eye_height_m");
+            p.Sight.SampleStepM = si.D("sample_step_m");
+            p.Sight.CoverBlockM = si.D("cover_block_m");
+
+            var mr = root["map_rules"];
+            p.MapRules.ExposureRebuildSec = mr.D("exposure_rebuild_sec");
+            p.MapRules.ReplanSec = mr.D("replan_sec");
+            p.MapRules.ExposureCostM = mr.D("exposure_cost_m");
+            var tw = mr["threat_weight"];
+            p.MapRules.ThreatWeightByPersonality[Personality.Cautious] = tw.D("cautious");
+            p.MapRules.ThreatWeightByPersonality[Personality.Calm] = tw.D("calm");
+            p.MapRules.ThreatWeightByPersonality[Personality.Agile] = tw.D("agile");
+            p.MapRules.ThreatWeightByPersonality[Personality.Reckless] = tw.D("reckless");
+            p.MapRules.ScriptedThreatWeight = tw.D("scripted");
+            p.MapRules.AttackStandoffM = mr.D("attack_standoff_m");
+            p.MapRules.AgileFlankCostRatio = mr.D("agile_flank_cost_ratio");
+            p.MapRules.AttackRepositionM = mr.D("attack_reposition_m");
+            p.MapRules.DestinationSearchStepM = mr.D("destination_search_step_m");
+            p.MapRules.DestinationSearchMaxM = mr.D("destination_search_max_m");
+            p.MapRules.DestinationSearchDirs = (int)mr.D("destination_search_dirs");
+            p.MapRules.AvoidStationaryFriendM = mr.D("avoid_stationary_friend_m");
+            p.MapRules.EntrenchSec = mr.D("entrench_sec");
+            p.MapRules.EntrenchDamageMult = mr.D("entrench_damage_mult");
+            p.MapRules.EntrenchHalfWidthCells = (int)mr.D("entrench_half_width_cells");
+            p.MapRules.BlockedEscapeLoss = mr.D("blocked_escape_loss");
+
             return p;
+        }
+
+        /// <summary>1文字のキーから数値への表。"_" で始まるキー（注記）は読み飛ばす。</summary>
+        static void ReadCharTable(JsonValue v, Dictionary<char, double> into)
+        {
+            foreach (var kv in v.Object)
+            {
+                if (kv.Key.StartsWith("_", StringComparison.Ordinal)) continue;
+                if (kv.Key.Length != 1) throw new FormatException($"地形の文字は1文字: '{kv.Key}'");
+                if (kv.Value.Kind != JsonKind.Number) throw new FormatException($"'{kv.Key}' は数値ではない");
+                into[kv.Key[0]] = kv.Value.Number;
+            }
         }
 
         static Aspect ParseAspect(string s)

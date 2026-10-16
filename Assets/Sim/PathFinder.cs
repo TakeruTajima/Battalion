@@ -5,7 +5,7 @@ namespace Battalion.Sim
 {
     /// <summary>
     /// 経路探索（仕様「P1 詳細仕様」の経路探索。docs/reference/map/map_reference.py の astar と同じ手順）。
-    /// 8近傍の A*。1歩のコスト＝距離÷移動倍率＋脅威の重み×露出×50。斜め移動で通れないマスの角を切らない。
+    /// 8近傍の A*。1歩のコスト＝距離÷移動倍率＋脅威の重み×露出×露出のコスト（50m）。斜め移動で通れないマスの角を切らない。
     /// 同点の扱いもリファレンスに合わせる：キューは (f, g, i, j) の辞書順で取り出し、近傍は di, dj を −1, 0, 1 の順に調べる。
     /// </summary>
     public static class PathFinder
@@ -45,8 +45,8 @@ namespace Battalion.Sim
         /// 届かなければ null。<paramref name="exposure"/> は添字 <c>j * Width + i</c> の露出（null なら全て 0）。
         /// <paramref name="blocked"/> が true のマスには入らない（目的地のマスは除く。止まっている味方の周りを避けるのに使う）。
         /// </summary>
-        public static List<Cell> Find(TerrainMap m, Cell start, Cell goal, bool[] exposure, double threatWeight, out double cost,
-            bool[] blocked = null)
+        public static List<Cell> Find(TerrainMap m, Cell start, Cell goal, bool[] exposure, double threatWeight, double exposureCostM,
+            out double cost, bool[] blocked = null)
         {
             int w = m.Width;
             var g = new Dictionary<int, double>();
@@ -69,18 +69,18 @@ namespace Battalion.Sim
                         if (di == 0 && dj == 0) continue;
                         int ni = cur.I + di, nj = cur.J + dj;
                         if (!m.InBounds(ni, nj)) continue;
-                        double mv = TerrainMap.MoveMultOf(m.TerrainAt(ni, nj));
+                        double mv = m.MoveMult(m.TerrainAt(ni, nj));
                         if (mv <= 0) continue;
                         if (blocked != null && blocked[nj * w + ni] && (ni != goal.I || nj != goal.J)) continue;
                         if (di != 0 && dj != 0)
                         {
-                            if (TerrainMap.MoveMultOf(m.TerrainAt(ni, cur.J)) <= 0 || TerrainMap.MoveMultOf(m.TerrainAt(cur.I, nj)) <= 0)
+                            if (m.MoveMult(m.TerrainAt(ni, cur.J)) <= 0 || m.MoveMult(m.TerrainAt(cur.I, nj)) <= 0)
                                 continue;
                         }
                         double step = m.CellM * (di != 0 && dj != 0 ? Math.Sqrt(2) : 1.0);
                         int nk = nj * w + ni;
                         double exp = exposure != null && exposure[nk] ? 1.0 : 0.0;
-                        double ng = cur.G + (step / mv + threatWeight * exp * m.CellM);
+                        double ng = cur.G + (step / mv + threatWeight * exp * exposureCostM);
                         if (ng < (g.TryGetValue(nk, out var old) ? old : 1e18))
                         {
                             g[nk] = ng;

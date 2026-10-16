@@ -10,12 +10,12 @@ namespace Battalion.Sim
         /// 観測者から、中心が <paramref name="radius"/> 以内にある各マスの中心が見えるか（添字 <c>j * Width + i</c>）。
         /// 範囲外のマスは false。
         /// </summary>
-        public static bool[] VisibleCells(TerrainMap m, Vec2 observer, double radius)
+        public static bool[] VisibleCells(TerrainMap m, SimParams.SightParams sp, Vec2 observer, double radius)
         {
             var v = new bool[m.Width * m.Height];
             ForCellsWithin(m, observer, radius, (i, j, center) =>
             {
-                if (LineOfSight.Visible(m, observer, center)) v[j * m.Width + i] = true;
+                if (LineOfSight.Visible(m, sp, observer, center)) v[j * m.Width + i] = true;
             });
             return v;
         }
@@ -24,7 +24,7 @@ namespace Battalion.Sim
         /// 露出の地図：マスの中心が、<paramref name="range"/> 以内のいずれかの観測者（敵）から見えていれば true。
         /// map_reference.py の exposure_map と同じ（視線は敵の中心からマスの中心へ引く）。
         /// </summary>
-        public static bool[] Exposure(TerrainMap m, IEnumerable<Vec2> observers, double range)
+        public static bool[] Exposure(TerrainMap m, SimParams.SightParams sp, IEnumerable<Vec2> observers, double range)
         {
             var exp = new bool[m.Width * m.Height];
             foreach (var o in observers)
@@ -32,7 +32,7 @@ namespace Battalion.Sim
                 ForCellsWithin(m, o, range, (i, j, center) =>
                 {
                     int k = j * m.Width + i;
-                    if (!exp[k] && LineOfSight.Visible(m, o, center)) exp[k] = true;
+                    if (!exp[k] && LineOfSight.Visible(m, sp, o, center)) exp[k] = true;
                 });
             }
             return exp;
@@ -84,7 +84,7 @@ namespace Battalion.Sim
         static bool IsShooter(Company c) => c.OnBoard && c.UnderCommand && c.Strength > 0;
 
         SightGrid BuildSight(Company c) =>
-            new SightGrid { From = c.Position, Cells = Visibility.VisibleCells(_map, c.Position, SightRadius) };
+            new SightGrid { From = c.Position, Cells = Visibility.VisibleCells(_map, _p.Sight, c.Position, SightRadius) };
 
         SightGrid SightOf(Company c)
         {
@@ -197,12 +197,12 @@ namespace Battalion.Sim
             }
         }
 
-        double ThreatWeightOf(Company c) => c.ThreatWeightOverride ?? MapRules.ThreatWeight(c.Personality);
+        double ThreatWeightOf(Company c) => c.ThreatWeightOverride ?? _p.MapRules.ThreatWeight(c.Personality);
 
         /// <summary>今の位置から <see cref="Company.MoveGoal"/> への経路を引く。次の引き直しは30秒後。</summary>
         void Plan(Company c, double tickStart)
         {
-            c.NextReplanTime = tickStart + MapRules.ReplanSec;
+            c.NextReplanTime = tickStart + _p.MapRules.ReplanSec;
             var cells = FindPath(c, c.MoveGoal, out _);
             if (cells == null)
             {
@@ -226,8 +226,9 @@ namespace Battalion.Sim
             double w = ThreatWeightOf(c);
             // 止まっている味方は押されないので、その周り（中心から 200m 未満のマス）を避けて引く。
             // 避けると届かない場合（味方に囲まれている等）は、避けずに引き直す
-            var path = PathFinder.Find(_map, start, end, exposure, w, out cost, StationaryFriendZone(c));
-            return path ?? PathFinder.Find(_map, start, end, exposure, w, out cost);
+            double ec = _p.MapRules.ExposureCostM;
+            var path = PathFinder.Find(_map, start, end, exposure, w, ec, out cost, StationaryFriendZone(c));
+            return path ?? PathFinder.Find(_map, start, end, exposure, w, ec, out cost);
         }
 
         /// <summary>
@@ -237,7 +238,7 @@ namespace Battalion.Sim
         bool[] StationaryFriendZone(Company c)
         {
             bool[] zone = null;
-            double min = _p.Movement.FriendlyMinSpacingM;
+            double min = _p.MapRules.AvoidStationaryFriendM;
             foreach (var f in _companies)
             {
                 if (f == c || f.Side != c.Side || !f.OnBoard || !f.UnderCommand) continue;
@@ -270,15 +271,15 @@ namespace Battalion.Sim
         // ---------------------------------------------------------------- 攻撃
 
         /// <summary>攻撃の発起点：敵の中心から、敵の向きを基準にした方向へ 250m（側面は +1 が敵の左、−1 が右）。</summary>
-        public static Vec2 JumpOff(Company tgt, AttackAspect aspect, int side)
+        public Vec2 JumpOff(Company tgt, AttackAspect aspect, int side)
         {
             var front = Vec2.FromAngle(tgt.Facing);
             var left = new Vec2(-front.Y, front.X);
             switch (aspect)
             {
-                case AttackAspect.Rear: return tgt.Position - front * MapRules.AttackStandoffM;
-                case AttackAspect.Flank: return tgt.Position + left * (side * MapRules.AttackStandoffM);
-                default: return tgt.Position + front * MapRules.AttackStandoffM;
+                case AttackAspect.Rear: return tgt.Position - front * _p.MapRules.AttackStandoffM;
+                case AttackAspect.Flank: return tgt.Position + left * (side * _p.MapRules.AttackStandoffM);
+                default: return tgt.Position + front * _p.MapRules.AttackStandoffM;
             }
         }
 
@@ -298,7 +299,7 @@ namespace Battalion.Sim
                 {
                     double front = PathCost(c, JumpOff(tgt, AttackAspect.Front, 0));
                     int s = CheaperFlankSide(c, tgt, out double flank);
-                    if (!double.IsInfinity(flank) && flank <= MapRules.AgileFlankCostRatio * front)
+                    if (!double.IsInfinity(flank) && flank <= _p.MapRules.AgileFlankCostRatio * front)
                     {
                         aspect = AttackAspect.Flank;
                         side = s;
@@ -333,7 +334,7 @@ namespace Battalion.Sim
             if (tickStart >= c.NextReplanTime)
             {
                 var goal = AdjustDestination(c, JumpOff(tgt, c.AttackChosenAspect, c.AttackSide));
-                if (!c.Arrived || Vec2.Distance(goal, c.Position) > MapRules.AttackRepositionM)
+                if (!c.Arrived || Vec2.Distance(goal, c.Position) > _p.MapRules.AttackRepositionM)
                 {
                     c.MoveGoal = goal;
                     c.Arrived = false;
@@ -341,7 +342,7 @@ namespace Battalion.Sim
                 }
                 else
                 {
-                    c.NextReplanTime = tickStart + MapRules.ReplanSec;
+                    c.NextReplanTime = tickStart + _p.MapRules.ReplanSec;
                 }
             }
             if (c.Arrived) FaceToward(c, tgt.Position, maxTurn);
@@ -366,7 +367,7 @@ namespace Battalion.Sim
         {
             if (!e.OnBoard || e.Side == shooter.Side || e.Strength <= 0) return false;
             if (Vec2.Distance(shooter.Position, e.Position) > _p.Fire.RangeMaxM) return false;
-            return LineOfSight.Visible(_map, shooter.Position, e.Position);
+            return LineOfSight.Visible(_map, _p.Sight, shooter.Position, e.Position);
         }
 
         // ---------------------------------------------------------------- 移動
@@ -425,8 +426,8 @@ namespace Battalion.Sim
             var to = target - c.Position;
             double dist = to.Length;
 
-            double mv = TerrainMap.MoveMultOf(_map.TerrainAt(c.Position));
-            if (mv <= 0) mv = TerrainMap.MoveMultOf(TerrainMap.Ford); // 通れないマスに押し出された場合の保険
+            double mv = _map.MoveMult(_map.TerrainAt(c.Position));
+            if (mv <= 0) mv = _map.MoveMult(TerrainMap.Ford); // 通れないマスに押し出された場合の保険
             double speed = _p.Movement.SpeedMps * mv * (c.Pinned ? _p.Pinning.MoveMult : 1.0);
             if (c.Backward)
             {
@@ -465,13 +466,13 @@ namespace Battalion.Sim
         public Vec2 AdjustDestination(Company c, Vec2 dest)
         {
             if (DestinationOk(c, dest)) return dest;
-            for (double r = MapRules.DestinationSearchStepM; r <= MapRules.DestinationSearchMaxM + 1e-9; r += MapRules.DestinationSearchStepM)
+            for (double r = _p.MapRules.DestinationSearchStepM; r <= _p.MapRules.DestinationSearchMaxM + 1e-9; r += _p.MapRules.DestinationSearchStepM)
             {
                 Vec2? best = null;
                 double bestD = double.MaxValue;
-                for (int k = 0; k < MapRules.DestinationSearchDirs; k++)
+                for (int k = 0; k < _p.MapRules.DestinationSearchDirs; k++)
                 {
-                    var p = dest + Vec2.FromAngle(2 * Math.PI * k / MapRules.DestinationSearchDirs) * r;
+                    var p = dest + Vec2.FromAngle(2 * Math.PI * k / _p.MapRules.DestinationSearchDirs) * r;
                     if (!DestinationOk(c, p)) continue;
                     double d = Vec2.Distance(p, c.Position);
                     if (d < bestD) { bestD = d; best = p; }
@@ -556,9 +557,9 @@ namespace Battalion.Sim
                     c.EntrenchProgress = 0;
                     continue;
                 }
-                if (c.CurrentOrder.Type != OrderType.Entrench || c.EntrenchProgress >= MapRules.EntrenchSec) continue;
-                c.EntrenchProgress = Math.Min(MapRules.EntrenchSec, c.EntrenchProgress + _p.TickSec);
-                if (c.EntrenchProgress >= MapRules.EntrenchSec) CompleteEntrenchment(c, t);
+                if (c.CurrentOrder.Type != OrderType.Entrench || c.EntrenchProgress >= _p.MapRules.EntrenchSec) continue;
+                c.EntrenchProgress = Math.Min(_p.MapRules.EntrenchSec, c.EntrenchProgress + _p.TickSec);
+                if (c.EntrenchProgress >= _p.MapRules.EntrenchSec) CompleteEntrenchment(c, t);
             }
         }
 
@@ -579,7 +580,7 @@ namespace Battalion.Sim
             _map.CellOf(c.Position, out int ci, out int cj);
             double a8 = Math.Round((c.Facing + Math.PI / 2) / (Math.PI / 4)) * (Math.PI / 4);
             int di = (int)Math.Round(Math.Cos(a8)), dj = (int)Math.Round(Math.Sin(a8));
-            for (int k = -MapRules.EntrenchHalfWidthCells; k <= MapRules.EntrenchHalfWidthCells; k++)
+            for (int k = -_p.MapRules.EntrenchHalfWidthCells; k <= _p.MapRules.EntrenchHalfWidthCells; k++)
             {
                 int i = ci + k * di, j = cj + k * dj;
                 if (_map.InBounds(i, j)) yield return (i, j);
@@ -594,10 +595,10 @@ namespace Battalion.Sim
         {
             char ch = _map.TerrainAt(c.Position);
             double f = ch == TerrainMap.Trench
-                ? (c.MovedThisTick ? 1.0 : TerrainMap.DamageMultOf(TerrainMap.Trench))
-                : TerrainMap.DamageMultOf(ch);
-            if (!c.MovedThisTick && c.EntrenchProgress > 0 && f > MapRules.EntrenchDamageMult)
-                f += (MapRules.EntrenchDamageMult - f) * Math.Min(1.0, c.EntrenchProgress / MapRules.EntrenchSec);
+                ? (c.MovedThisTick ? 1.0 : _map.DamageMult(TerrainMap.Trench))
+                : _map.DamageMult(ch);
+            if (!c.MovedThisTick && c.EntrenchProgress > 0 && f > _p.MapRules.EntrenchDamageMult)
+                f += (_p.MapRules.EntrenchDamageMult - f) * Math.Min(1.0, c.EntrenchProgress / _p.MapRules.EntrenchSec);
             return f;
         }
 

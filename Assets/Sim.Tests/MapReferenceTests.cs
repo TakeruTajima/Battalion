@@ -14,7 +14,7 @@ namespace Battalion.Sim.Tests
         public static readonly string[] Stages = { "a1", "a2" };
 
         static MapScenario Scenario(string stage) => MapScenario.LoadFile(TestUtil.PathOf($"maps/scenario_{stage}.json"));
-        static TerrainMap Map(string stage) => TerrainMap.FromJson(Scenario(stage).Source);
+        static TerrainMap Map(string stage) => TerrainMap.FromJson(Scenario(stage).Source, TestUtil.Params.Terrain);
         static JsonValue Ref(string stage) =>
             JsonValue.Parse(File.ReadAllText(TestUtil.PathOf($"docs/reference/map/map_reference_results_{stage}.json")));
 
@@ -46,7 +46,7 @@ namespace Battalion.Sim.Tests
             {
                 var from = kv.Value["from"].Array;
                 var to = kv.Value["to"].Array;
-                var r = LineOfSight.Check(m, new Vec2(from[0].Number, from[1].Number), new Vec2(to[0].Number, to[1].Number));
+                var r = LineOfSight.Check(m, TestUtil.Params.Sight, new Vec2(from[0].Number, from[1].Number), new Vec2(to[0].Number, to[1].Number));
                 TestContext.WriteLine($"{stage} {kv.Key}: {LineOfSight.Name(r)}（リファレンス {kv.Value["reason"].String}）");
                 Assert.That(LineOfSight.Name(r), Is.EqualTo(kv.Value["reason"].String), kv.Key);
                 Assert.That(r == SightResult.Clear, Is.EqualTo(kv.Value["visible"].Bool), kv.Key);
@@ -57,7 +57,7 @@ namespace Battalion.Sim.Tests
         public void ExposureCellCountMatchesReference(string stage)
         {
             var m = Map(stage);
-            var exp = Visibility.Exposure(m, RedDeploy(Scenario(stage)), 400);
+            var exp = Visibility.Exposure(m, TestUtil.Params.Sight, RedDeploy(Scenario(stage)), 400);
             Assert.That(exp.Count(x => x), Is.EqualTo((int)Ref(stage).D("exposed_cells")));
         }
 
@@ -65,7 +65,7 @@ namespace Battalion.Sim.Tests
         public void PathsMatchReference(string stage)
         {
             var m = Map(stage);
-            var exp = Visibility.Exposure(m, RedDeploy(Scenario(stage)), 400);
+            var exp = Visibility.Exposure(m, TestUtil.Params.Sight, RedDeploy(Scenario(stage)), 400);
             var weights = new Dictionary<string, double> { ["cautious"] = 3.0, ["calm"] = 1.0, ["reckless"] = 0.3 };
             var exposed = new Dictionary<string, double>();
             foreach (var kv in Ref(stage)["paths"].Object)
@@ -76,7 +76,7 @@ namespace Battalion.Sim.Tests
                 var to = r["to"].Array;
                 m.CellOf(new Vec2(from[0].Number, from[1].Number), out int si, out int sj);
                 m.CellOf(new Vec2(to[0].Number, to[1].Number), out int gi, out int gj);
-                var path = PathFinder.Find(m, new PathFinder.Cell(si, sj), new PathFinder.Cell(gi, gj), exp, weights[pers], out double cost);
+                var path = PathFinder.Find(m, new PathFinder.Cell(si, sj), new PathFinder.Cell(gi, gj), exp, weights[pers], TestUtil.Params.MapRules.ExposureCostM, out double cost);
                 PathFinder.Stats(m, path, exp, out double len, out double expM);
                 double refLen = r.D("length_m"), refExp = r.D("exposed_m");
                 bool sameCells = path.Count == r["path"].Array.Count &&
@@ -98,7 +98,7 @@ namespace Battalion.Sim.Tests
         [Test]
         public void WaypointsDropCollinearCells()
         {
-            var m = TerrainMap.Flat(0, 0, 10, 10);
+            var m = TerrainMap.Flat(TestUtil.Params.Terrain, 0, 0, 10, 10);
             var path = new List<PathFinder.Cell>
             {
                 new PathFinder.Cell(0, 0), new PathFinder.Cell(1, 0), new PathFinder.Cell(2, 0),
@@ -112,7 +112,7 @@ namespace Battalion.Sim.Tests
         public void PathDoesNotCrossRiverExceptBridgeOrFord()
         {
             var m = Map("a1");
-            var path = PathFinder.Find(m, new PathFinder.Cell(30, 2), new PathFinder.Cell(30, 10), null, 0, out _);
+            var path = PathFinder.Find(m, new PathFinder.Cell(30, 2), new PathFinder.Cell(30, 10), null, 0, TestUtil.Params.MapRules.ExposureCostM, out _);
             Assert.That(path, Is.Not.Null);
             Assert.That(path.All(c => m.Passable(c.I, c.J)), Is.True);
             Assert.That(path.Any(c => m.TerrainAt(c.I, c.J) == TerrainMap.Bridge || m.TerrainAt(c.I, c.J) == TerrainMap.Ford), Is.True);

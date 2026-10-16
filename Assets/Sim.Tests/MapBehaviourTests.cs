@@ -8,12 +8,12 @@ namespace Battalion.Sim.Tests
     public class MapBehaviourTests
     {
         static Simulation Flat(double minX = -2000, double minY = -2000, double maxX = 2000, double maxY = 2000) =>
-            new Simulation(TestUtil.Params, 1, TerrainMap.FlatCovering(minX, minY, maxX, maxY));
+            new Simulation(TestUtil.Params, 1, TerrainMap.FlatCovering(TestUtil.Params.Terrain, minX, minY, maxX, maxY));
 
         static Simulation OnStage(string stage)
         {
             var s = MapScenario.LoadFile(TestUtil.PathOf($"maps/scenario_{stage}.json"));
-            return new Simulation(TestUtil.Params, 1, TerrainMap.FromJson(s.Source));
+            return new Simulation(TestUtil.Params, 1, TerrainMap.FromJson(s.Source, TestUtil.Params.Terrain));
         }
 
         static Company Add(Simulation sim, string name, Side side, double x, double y, double facingDeg,
@@ -207,10 +207,10 @@ namespace Battalion.Sim.Tests
         {
             var sim = Flat();
             var e = Add(sim, "E", Side.Red, 1000, 0, 180); // 西向き
-            Assert.That(Dist(Simulation.JumpOff(e, AttackAspect.Front, 0), new Vec2(750, 0)), Is.LessThan(1e-9));
-            Assert.That(Dist(Simulation.JumpOff(e, AttackAspect.Rear, 0), new Vec2(1250, 0)), Is.LessThan(1e-9));
-            Assert.That(Dist(Simulation.JumpOff(e, AttackAspect.Flank, +1), new Vec2(1000, -250)), Is.LessThan(1e-9), "西向きの左は南");
-            Assert.That(Dist(Simulation.JumpOff(e, AttackAspect.Flank, -1), new Vec2(1000, 250)), Is.LessThan(1e-9));
+            Assert.That(Dist(sim.JumpOff(e, AttackAspect.Front, 0), new Vec2(750, 0)), Is.LessThan(1e-9));
+            Assert.That(Dist(sim.JumpOff(e, AttackAspect.Rear, 0), new Vec2(1250, 0)), Is.LessThan(1e-9));
+            Assert.That(Dist(sim.JumpOff(e, AttackAspect.Flank, +1), new Vec2(1000, -250)), Is.LessThan(1e-9), "西向きの左は南");
+            Assert.That(Dist(sim.JumpOff(e, AttackAspect.Flank, -1), new Vec2(1000, 250)), Is.LessThan(1e-9));
         }
 
         static double Dist(Vec2 a, Vec2 b) => Vec2.Distance(a, b);
@@ -322,7 +322,7 @@ namespace Battalion.Sim.Tests
         [Test]
         public void EscapeOffTheMapStopsCountingAtTheEdge()
         {
-            var sim = new Simulation(TestUtil.Params, 1, TerrainMap.Flat(0, 0, 60, 40));
+            var sim = new Simulation(TestUtil.Params, 1, TerrainMap.Flat(TestUtil.Params.Terrain, 0, 0, 60, 40));
             var a = Add(sim, "A", Side.Blue, 100, 1000, 0);
             Add(sim, "E", Side.Red, 200, 1000, 180);
             var est = sim.EstimateEscape(a);
@@ -339,7 +339,7 @@ namespace Battalion.Sim.Tests
             var hill = OnStage("a1");
             var a = Add(hill, "A", Side.Blue, 1825 - 250, 1000, 0);
             Add(hill, "R1", Side.Red, 1825, 1000, 180);
-            var flat = new Simulation(TestUtil.Params, 1, TerrainMap.Flat(0, 0, 60, 40));
+            var flat = new Simulation(TestUtil.Params, 1, TerrainMap.Flat(TestUtil.Params.Terrain, 0, 0, 60, 40));
             var b = Add(flat, "A", Side.Blue, 1825 - 250, 1000, 0);
             Add(flat, "R1", Side.Red, 1825, 1000, 180);
             double onHill = hill.EstimateEscape(a).Loss[4], onFlat = flat.EstimateEscape(b).Loss[4]; // 北へ逃げる

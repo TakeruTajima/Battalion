@@ -107,5 +107,63 @@
     "company_strength": 150,
     "retreat_speed_mult": 0.6,
     "friendly_min_spacing_m": 200
+  },
+  "terrain": {
+    "_note": "文字ごとの移動倍率・被弾倍率・視線を遮る重み。塹壕の被弾倍率は止まっている中隊にだけ効く。W は通れない",
+    "move_mult": {
+      ".": 1.0,
+      "F": 0.5,
+      "V": 0.7,
+      "T": 0.8,
+      "C": 0.6,
+      "B": 1.0,
+      "S": 0.3,
+      "W": 0.0
+    },
+    "damage_mult": {
+      ".": 1.0,
+      "F": 0.6,
+      "V": 0.5,
+      "T": 0.3,
+      "C": 0.9,
+      "B": 1.0,
+      "S": 1.0,
+      "W": 1.0
+    },
+    "los_weight": {
+      "F": 1.0,
+      "V": 0.5
+    }
+  },
+  "sight": {
+    "base_range_m": 800,
+    "range_gain_per_10m_height": 0.1,
+    "eye_height_m": 2.0,
+    "sample_step_m": 10.0,
+    "cover_block_m": 100.0
+  },
+  "map_rules": {
+    "_note": "P1a の MapRules.cs の定数を移したもの",
+    "exposure_rebuild_sec": 10.0,
+    "replan_sec": 30.0,
+    "exposure_cost_m": 50.0,
+    "threat_weight": {
+      "cautious": 3.0,
+      "calm": 1.0,
+      "agile": 1.0,
+      "reckless": 0.3,
+      "scripted": 0.0
+    },
+    "attack_standoff_m": 250.0,
+    "agile_flank_cost_ratio": 1.5,
+    "attack_reposition_m": 50.0,
+    "destination_search_step_m": 50.0,
+    "destination_search_max_m": 1000.0,
+    "destination_search_dirs": 16,
+    "avoid_stationary_friend_m": 200.0,
+    "entrench_sec": 600.0,
+    "entrench_damage_mult": 0.3,
+    "entrench_half_width_cells": 2,
+    "blocked_escape_loss": 1.0
   }
 }

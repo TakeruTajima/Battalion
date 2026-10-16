@@ -30,7 +30,7 @@ namespace Battalion.Sim
         /// 全て平地の地図（60×40マス、3km×2km）。原点を (−1200, −850) にずらして配置の中心付近に置く。
         /// 壊走した中隊が会戦から離脱する範囲は P0 と同じ（x −1200〜1800、y −850〜1150）。
         /// </summary>
-        public static TerrainMap FlatMap() => TerrainMap.Flat(-1200, -850, 60, 40);
+        public static TerrainMap FlatMap(SimParams p) => TerrainMap.Flat(p.Terrain, -1200, -850, 60, 40);
 
         public Scenario(string name, params CompanySetup[] companies)
         {
@@ -40,7 +40,7 @@ namespace Battalion.Sim
 
         public Simulation Build(SimParams p, ulong seed, IEventSink log = null)
         {
-            var sim = new Simulation(p, seed, FlatMap(), log);
+            var sim = new Simulation(p, seed, FlatMap(p), log);
             foreach (var s in Companies)
                 sim.AddCompany(s.Name, s.Side, s.Training, s.Personality, new Vec2(s.X, s.Y), s.FacingDeg);
             return sim;

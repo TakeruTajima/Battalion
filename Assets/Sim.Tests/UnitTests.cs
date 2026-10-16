@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using NUnit.Framework;
@@ -37,6 +38,45 @@ namespace Battalion.Sim.Tests
             Assert.That(p.Encirclement.MoralePerMin, Is.EqualTo(3.0));
             Assert.That(p.Encirclement.FortifiedMoraleMult, Is.EqualTo(0.5));
             Assert.That(p.Movement.FriendlyMinSpacingM, Is.EqualTo(200));
+        }
+
+        /// <summary>P1a.1 で sim_params.json に移した値が、P1a の定数と同じであること。</summary>
+        [Test]
+        public void LoadsP1MapValuesEqualToP1aConstants()
+        {
+            var p = TestUtil.Params;
+            var move = new Dictionary<char, double> { ['.'] = 1.0, ['F'] = 0.5, ['V'] = 0.7, ['W'] = 0.0, ['B'] = 1.0, ['S'] = 0.3, ['T'] = 0.8, ['C'] = 0.6 };
+            var damage = new Dictionary<char, double> { ['.'] = 1.0, ['F'] = 0.6, ['V'] = 0.5, ['W'] = 1.0, ['B'] = 1.0, ['S'] = 1.0, ['T'] = 0.3, ['C'] = 0.9 };
+            Assert.That(p.Terrain.Move, Is.EquivalentTo(move));
+            Assert.That(p.Terrain.Damage, Is.EquivalentTo(damage));
+            Assert.That(p.Terrain.LosWeight, Is.EquivalentTo(new Dictionary<char, double> { ['F'] = 1.0, ['V'] = 0.5 }));
+
+            Assert.That(p.Sight.BaseRangeM, Is.EqualTo(800));
+            Assert.That(p.Sight.RangeGainPer10mHeight, Is.EqualTo(0.1));
+            Assert.That(p.Sight.EyeHeightM, Is.EqualTo(2.0));
+            Assert.That(p.Sight.SampleStepM, Is.EqualTo(10.0));
+            Assert.That(p.Sight.CoverBlockM, Is.EqualTo(100.0));
+
+            var r = p.MapRules;
+            Assert.That(r.ExposureRebuildSec, Is.EqualTo(10.0));
+            Assert.That(r.ReplanSec, Is.EqualTo(30.0));
+            Assert.That(r.ExposureCostM, Is.EqualTo(50.0));
+            Assert.That(r.ThreatWeight(Personality.Cautious), Is.EqualTo(3.0));
+            Assert.That(r.ThreatWeight(Personality.Calm), Is.EqualTo(1.0));
+            Assert.That(r.ThreatWeight(Personality.Agile), Is.EqualTo(1.0));
+            Assert.That(r.ThreatWeight(Personality.Reckless), Is.EqualTo(0.3));
+            Assert.That(r.ScriptedThreatWeight, Is.EqualTo(0.0));
+            Assert.That(r.AttackStandoffM, Is.EqualTo(250.0));
+            Assert.That(r.AgileFlankCostRatio, Is.EqualTo(1.5));
+            Assert.That(r.AttackRepositionM, Is.EqualTo(50.0));
+            Assert.That(r.DestinationSearchStepM, Is.EqualTo(50.0));
+            Assert.That(r.DestinationSearchMaxM, Is.EqualTo(1000.0));
+            Assert.That(r.DestinationSearchDirs, Is.EqualTo(16));
+            Assert.That(r.AvoidStationaryFriendM, Is.EqualTo(200.0));
+            Assert.That(r.EntrenchSec, Is.EqualTo(600.0));
+            Assert.That(r.EntrenchDamageMult, Is.EqualTo(0.3));
+            Assert.That(r.EntrenchHalfWidthCells, Is.EqualTo(2));
+            Assert.That(r.BlockedEscapeLoss, Is.EqualTo(1.0));
             Assert.That(p.Movement.CompanyStrength, Is.EqualTo(150));
             Assert.That(p.Movement.RetreatSpeedMult, Is.EqualTo(0.6));
             Assert.That(p.CloseCombat.RangeMult, Is.EqualTo(2.0));
@@ -109,7 +149,7 @@ namespace Battalion.Sim.Tests
 
     public class GeometryTests
     {
-        static Simulation Empty() => new Simulation(TestUtil.Params, 1, TerrainMap.FlatCovering(-5000, -5000, 5000, 5000));
+        static Simulation Empty() => new Simulation(TestUtil.Params, 1, TerrainMap.FlatCovering(TestUtil.Params.Terrain, -5000, -5000, 5000, 5000));
 
         [TestCase(0, 0, Aspect.Front)]      // 真正面
         [TestCase(60, 0, Aspect.Front)]     // 60° ちょうどは正面
@@ -144,7 +184,7 @@ namespace Battalion.Sim.Tests
     /// <summary>退路の見積もり（v3 の包囲判定と壊走の方向）。</summary>
     public class EscapeEstimateTests
     {
-        static Simulation Empty() => new Simulation(TestUtil.Params, 1, TerrainMap.FlatCovering(-5000, -5000, 5000, 5000));
+        static Simulation Empty() => new Simulation(TestUtil.Params, 1, TerrainMap.FlatCovering(TestUtil.Params.Terrain, -5000, -5000, 5000, 5000));
 
         static Simulation Build(Scenario sc) => sc.Build(TestUtil.Params, 1);
 
@@ -222,7 +262,7 @@ namespace Battalion.Sim.Tests
 
     public class TargetSelectionTests
     {
-        static Simulation Empty() => new Simulation(TestUtil.Params, 1, TerrainMap.FlatCovering(-5000, -5000, 5000, 5000));
+        static Simulation Empty() => new Simulation(TestUtil.Params, 1, TerrainMap.FlatCovering(TestUtil.Params.Terrain, -5000, -5000, 5000, 5000));
 
         [Test]
         public void PrefersNearestInFrontArc()

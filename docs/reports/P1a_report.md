@@ -147,3 +147,35 @@
 ## 未確認事項
 
 - Unity 6.3 LTS で開けるか、EditMode で通るか（P0 から持ち越し）。P1b で確かめる
+
+---
+
+## P1a.1：P1 の数値を sim_params.json から読む
+
+タグ：`proto-p1a.1-params`
+
+仕様側が `sim_params.initial.json` に足した `terrain`・`sight`・`map_rules` の区分から、地形の表・視線の値・P1 の地図まわりの値を読むようにした。`MapRules.cs`（定数）は削除した。`Assets/StreamingAssets/sim_params.json` は `sim_params.initial.json` と同一にした（バイト単位で一致することを既存のテストで確認）。
+
+### 完了基準の確認
+
+| 基準 | 結果 |
+| --- | --- |
+| 全テストが通る | .NET 8 + NUnit 3.14 で 109 件が通った（P1a の 108 件＋読み込んだ値が P1a の定数と同じことを確かめる1件） |
+| S1〜S6 と5作戦の通し実行の結果が P1a と完全に同じ | **ログが完全に一致**。`proto-p1a-terrain` のワークツリーと今のコードで同じ一時テストを回し、全イベントログの SHA256 を比べた：5作戦×2ステージ（各20回・90分）の10通り、S1〜S6 と接近戦（各20シード・60分）の7通り、計17通りが全て一致。5作戦の表も P1a と同じ |
+
+### 値とキーの照合
+
+- **値の違いはない**。地形の移動倍率・被弾倍率・視線を遮る重み、視線の5つの値、`map_rules` の値は、全て P1a の定数と同じだった
+- **キーの過不足**：P1a の定数に対して、足りないキーはなかった。次の2つは P1a で定数を別の値から流用していたもので、新しいキーで読むようにした（値は同じ）
+  - `map_rules.threat_weight.scripted`（0）：予備隊の台本が R3 に設定していた脅威の重み 0（`MapScenario.cs` に直接書いていた）
+  - `map_rules.avoid_stationary_friend_m`（200）：止まっている味方の周りを避ける距離。P1a では `movement.friendly_min_spacing_m` を流用していた。目的地をずらす判定と押し離しは、引き続き `friendly_min_spacing_m` を使う
+- **露出のコスト**：P1a は経路探索で「露出×1マスの長さ（50m）」としていた（リファレンスと同じ書き方）。これを `map_rules.exposure_cost_m` で読むようにした。値は同じ 50
+- 地図ファイルの地形の文字は、`terrain.move_mult` にある文字だけを受け付ける（P1a では C# の表にある文字）
+
+### 変更内容
+
+- `SimParams`：`Terrain`（文字ごとの表）、`Sight`、`MapRules` を足した
+- `TerrainMap`：地形の表を `SimParams.Terrain` から受け取る（`FromJson`・`Flat`・`FlatCovering` が引数に取る）
+- `LineOfSight`・`Visibility`：視線の値を `SimParams.Sight` から受け取る
+- `PathFinder.Find`：露出のコストを引数に取る
+- `Simulation.JumpOff` は発起点の距離をパラメータから読むので、静的メソッドからインスタンスメソッドにした
