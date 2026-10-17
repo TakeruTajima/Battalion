@@ -209,6 +209,10 @@
     "flee_switch_min_gain": 0.05,
     "contact_radius_m": 400,
     "pin_distance_far_m": 350,
-    "attack_range_inset_deg": 10
+    "attack_range_inset_deg": 10,
+    "sight_contact_gap_m": 50,
+    "sight_seek_side_deg": 45,
+    "sight_seek_side_step_deg": 5,
+    "sight_seek_step_m": 10
   }
 }

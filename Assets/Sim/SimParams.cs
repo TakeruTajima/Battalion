@@ -249,6 +249,13 @@ namespace Battalion.Sim
             public double PinDistanceFarM;
             /// <summary>範囲での攻撃の指定：今の方角が範囲の外なら、範囲の端からこの角度だけ内側の方角から攻める（P1e の4）。</summary>
             public double AttackRangeInsetDeg;
+            /// <summary>P1g：互いの矩形の隙間がこれ以内（接触中）なら、視線を問わずに撃ち合える。</summary>
+            public double SightContactGapM;
+            /// <summary>P1g：拘束で見える位置を探す、今の方角の左右の範囲と刻み。</summary>
+            public double SightSeekSideDeg;
+            public double SightSeekSideStepDeg;
+            /// <summary>P1g：見える位置を探して目標へ詰めるときに調べる距離の刻み。</summary>
+            public double SightSeekStepM;
         }
 
         public static SimParams LoadFile(string path) => FromJson(File.ReadAllText(path));
@@ -395,6 +402,10 @@ namespace Battalion.Sim
             p.Behavior.ContactRadiusM = be.D("contact_radius_m");
             p.Behavior.PinDistanceFarM = be.D("pin_distance_far_m");
             p.Behavior.AttackRangeInsetDeg = be.D("attack_range_inset_deg");
+            p.Behavior.SightContactGapM = be.D("sight_contact_gap_m");
+            p.Behavior.SightSeekSideDeg = be.D("sight_seek_side_deg");
+            p.Behavior.SightSeekSideStepDeg = be.D("sight_seek_side_step_deg");
+            p.Behavior.SightSeekStepM = be.D("sight_seek_step_m");
 
             return p;
         }

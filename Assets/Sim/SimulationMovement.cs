@@ -163,6 +163,8 @@ namespace Battalion.Sim
             readonly double? _facingOverride;
             readonly double? _turnWait;
             readonly double _pinBearing;
+            readonly bool _seeking;
+            readonly double? _pinStandoff;
 
             public CompanySnapshot(Company c)
             {
@@ -180,6 +182,8 @@ namespace Battalion.Sim
                 _facingOverride = c.FacingOverride;
                 _turnWait = c.TurnWaitStart;
                 _pinBearing = c.PinBearing;
+                _seeking = c.SeekingSight;
+                _pinStandoff = c.PinStandoffM;
             }
 
             public void Restore(Company c)
@@ -198,6 +202,8 @@ namespace Battalion.Sim
                 c.FacingOverride = _facingOverride;
                 c.TurnWaitStart = _turnWait;
                 c.PinBearing = _pinBearing;
+                c.SeekingSight = _seeking;
+                c.PinStandoffM = _pinStandoff;
             }
         }
     }

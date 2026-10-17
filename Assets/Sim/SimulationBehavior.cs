@@ -129,6 +129,7 @@ namespace Battalion.Sim
                 return;
             }
 
+            if (c.Arrived) c.SeekingSight = false;
             if (!c.AttackFixed)
             {
                 // 着いた：発起点に届いた。届かない発起点の手前で止まった、敵の手前で止められた（P1e.1）だけなら
@@ -141,6 +142,9 @@ namespace Battalion.Sim
                     c.AttackFixed = true;
                     c.AttackFixedBearing = Math.Atan2(d.Y, d.X);
                     c.AttackFixedTargetPos = tgt.Position;
+                    // 発起点で目標と交戦できなければ、方角に沿って見えるまで詰める（P1g）
+                    c.NextReplanTime = tickStart + _p.MapRules.ReplanSec;
+                    if (!c.FacingOverride.HasValue && !CanEngage(c, tgt)) SeekSightForAttack(c, tgt, t, tickStart);
                 }
                 else if (tickStart >= c.NextReplanTime)
                 {
@@ -157,7 +161,19 @@ namespace Battalion.Sim
                 c.MoveGoal = AdjustDestination(c, tgt.Position + Vec2.FromAngle(c.AttackFixedBearing) * _p.MapRules.AttackStandoffM);
                 c.Arrived = false;
                 c.FacingOverride = null;
+                c.SeekingSight = false;
                 Plan(c, tickStart);
+            }
+            else if (!c.Arrived && tickStart >= c.NextReplanTime)
+            {
+                // 方角を固定した後に動いている間（見える位置へ詰める、動き直す）も、阻まれたら30秒ごとに引き直す（P1e.1）
+                Plan(c, tickStart);
+            }
+            else if (c.Arrived && tickStart >= c.NextReplanTime)
+            {
+                // 30秒ごと：目標と交戦できなければ（目標が動いて見えなくなった等）、また詰める（P1g）。向き直った中隊は除く
+                c.NextReplanTime = tickStart + _p.MapRules.ReplanSec;
+                if (!c.FacingOverride.HasValue && !CanEngage(c, tgt)) SeekSightForAttack(c, tgt, t, tickStart);
             }
 
             if (c.AttackFixed && c.Arrived && !c.FacingOverride.HasValue) FaceToward(c, tgt.Position, maxTurn);
@@ -296,7 +312,8 @@ namespace Battalion.Sim
             Plan(c, tickStart);
         }
 
-        double PinDistance(Company c) => c.CurrentOrder.PinRange == PinRange.Near ? B.PinDistanceM : B.PinDistanceFarM;
+        double PinDistance(Company c) =>
+            c.PinStandoffM ?? (c.CurrentOrder.PinRange == PinRange.Near ? B.PinDistanceM : B.PinDistanceFarM);
 
         Vec2 PinPoint(Company tgt, Company c) => tgt.Position + Vec2.FromAngle(c.PinBearing) * PinDistance(c);
 
@@ -306,6 +323,7 @@ namespace Battalion.Sim
         /// </summary>
         void UpdatePin(Company c, Company tgt, double tickStart, double maxTurn)
         {
+            if (c.Arrived) c.SeekingSight = false;
             if (c.State != CompanyState.Shaken && tickStart >= c.NextReplanTime)
             {
                 var goal = PinPoint(tgt, c);
@@ -320,6 +338,8 @@ namespace Battalion.Sim
                 else
                 {
                     c.NextReplanTime = tickStart + _p.MapRules.ReplanSec;
+                    // 拘束点で目標と交戦できなければ、見える位置を探す（P1g）
+                    if (!CanEngage(c, tgt)) SeekSightForPin(c, tgt, Time, tickStart);
                 }
             }
             if (c.Arrived || c.State == CompanyState.Shaken) FaceToward(c, tgt.Position, maxTurn);

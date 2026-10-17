@@ -264,7 +264,7 @@ namespace Battalion.Sim
                 if (!e.OnBoard || e.Side == shooter.Side || e.Strength <= 0) continue;
                 double d = Vec2.Distance(shooter.Position, e.Position);
                 if (d > _p.Fire.RangeMaxM) continue;
-                if (!LineOfSight.Visible(_map, _p.Sight, shooter.Position, e.Position)) continue;
+                if (!SightForFire(shooter, e)) continue; // 接触中は視線を問わない（P1g）
                 // 走査は ID 昇順なので、厳密に小さいときだけ更新すれば同距離は ID の小さい方が残る
                 if (d < dAny) { dAny = d; bestAny = e; }
                 if (AspectOf(shooter, e.Position) == Aspect.Front && d < dFront) { dFront = d; bestFront = e; }

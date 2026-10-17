@@ -196,6 +196,8 @@ namespace Battalion.Sim
             // 向き直った向きは新しい命令が出るまで（P1d の5）
             c.FacingOverride = null;
             c.TurnWaitStart = null;
+            c.SeekingSight = false;
+            c.PinStandoffM = null;
 
             switch (order.Type)
             {
@@ -527,7 +529,8 @@ namespace Battalion.Sim
         {
             if (!e.OnBoard || e.Side == shooter.Side || e.Strength <= 0) return false;
             if (Vec2.Distance(shooter.Position, e.Position) > _p.Fire.RangeMaxM) return false;
-            return LineOfSight.Visible(_map, _p.Sight, shooter.Position, e.Position);
+            // 接触中（矩形の隙間 50m 以内）は視線を問わない（P1g）
+            return SightForFire(shooter, e);
         }
 
         // ---------------------------------------------------------------- 移動

@@ -90,6 +90,12 @@ namespace Battalion.Sim
         public MoveStyle MoveStyle;
         /// <summary>超越中の、止まっている味方の ID（押し離しをしない相手）。毎刻み、移動の前に判定する。</summary>
         public readonly System.Collections.Generic.HashSet<int> Passing = new System.Collections.Generic.HashSet<int>();
+        // ---- P1g：目標が見えないときの判断
+        /// <summary>目標が見えないため、見える位置を探して動いているか（着いたら false）。</summary>
+        public bool SeekingSight;
+        /// <summary>拘束：見える位置を探して決めた、目標からの距離（null なら拘束の距離。遠い 350m／近い 125m）。</summary>
+        public double? PinStandoffM;
+
         /// <summary>その刻みに、移動の命令中なのに敵の矩形の手前で止められて全く進めなかったか（P1e.1。着いた扱いにはしない）。</summary>
         public bool BlockedByEnemy;
         /// <summary>止まっている味方の矩形と重なっているか（超越の ×0.5）。毎刻み、移動の前に判定する。</summary>

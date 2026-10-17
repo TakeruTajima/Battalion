@@ -375,6 +375,7 @@ namespace Battalion.View
                 }
                 if (c.MoveStyle == MoveStyle.Turning)
                     DrawArcArrow(pos, facing, Math.Atan2(u.Y, u.X), Mathf.Sqrt(ex * ex + ey * ey) + 10 * px, new Color32(255, 255, 255, 235), px);
+                if (c.SeekingSight) DrawEye(pos + u * (reach + 46 * px), px);
                 return;
             }
             if (o.Type == OrderType.Hold || ((o.Type == OrderType.Advance || o.Type == OrderType.Retreat) && c.Arrived))
@@ -418,6 +419,25 @@ namespace Battalion.View
                 var normal = V(Vec2.FromAngle(to));
                 _shapes.Triangle(tip + tangent * 8 * px, tip - tangent * 4 * px + normal * 6 * px, tip - tangent * 4 * px - normal * 6 * px, col);
             }
+        }
+
+        /// <summary>見える位置を探して動いている印（P1g）：山形の先に、目の形（横長の輪と黒目）。</summary>
+        void DrawEye(Vec2 at, float px)
+        {
+            var c = V(at);
+            var ink = new Color32(20, 20, 20, 235);
+            var white = new Color32(255, 255, 255, 235);
+            const int n = 16;
+            var prev = c + new Vector2(10 * px, 0);
+            for (int k = 1; k <= n; k++)
+            {
+                double a = 2 * Math.PI * k / n;
+                var p = c + new Vector2((float)(Math.Cos(a) * 10 * px), (float)(Math.Sin(a) * 5.5 * px));
+                _shapes.Triangle(c, prev, p, white);
+                _shapes.Line(prev, p, 2 * px, ink);
+                prev = p;
+            }
+            _shapes.Circle(c, 2.5f * px, 2.5f * px, ink, 10);
         }
 
         /// <summary>駒の脇の、<paramref name="from"/> から <paramref name="to"/> への矢じり付きの弧（旋回中の印）。</summary>

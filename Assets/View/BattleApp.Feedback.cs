@@ -182,6 +182,11 @@ namespace Battalion.View
                     text = "隊形の乱れ";
                     col = new Color(1f, 0.6f, 0.2f);
                     break;
+                case EventFeed.Kind.SeekSight:
+                    // 目標が見えないため見える位置を探す（P1g）。自動一時停止の理由には足さない
+                    text = "見える位置へ";
+                    col = new Color(0.85f, 0.95f, 1f);
+                    break;
             }
             if (text != null)
                 _floats.Add(new FloatText { UnitId = c.Id, Text = text, Color = col, Start = now, Duration = BigTextSec, Big = true });

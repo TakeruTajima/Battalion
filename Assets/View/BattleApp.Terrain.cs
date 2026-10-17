@@ -77,6 +77,7 @@ namespace Battalion.View
                 {
                     if (!e.OnBoard || !e.UnderCommand || e.Side == c.Side) continue;
                     if (Vec2.Distance(c.Position, e.Position) > _params.Fire.RangeMaxM) continue;
+                    if (_sim.InFireContact(c, e)) continue; // 接触中は視線を問わずに撃てる（P1g）
                     var t = LineOfSight.TraceLine(_sim.Map, _params.Sight, c.Position, e.Position);
                     string why = BlockReason(t);
                     if (why != null) _blocked.Add(new BlockedSight(c.Id, e.Id, why, t.BlockAt.Value));

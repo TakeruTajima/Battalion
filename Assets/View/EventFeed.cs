@@ -29,7 +29,7 @@ namespace Battalion.View
         public enum Kind
         {
             FlankHit, RearHit, Encircled, Routed, Surrendered, RallyStart, RallyComplete, Counterattack, Entrenched, LeftBattle,
-            TargetBroken, PursuitEnd, Turn, Disarray,
+            TargetBroken, PursuitEnd, Turn, Disarray, SeekSight,
         }
 
         /// <summary>駒の上に出す出来事。表示側が読んだら <see cref="Recent"/> を空にする。</summary>
@@ -138,6 +138,13 @@ namespace Battalion.View
                     Add(t, $"{unit} 隊形が乱れた（壊走中の {v["by"].String} にすり抜けられた）", true);
                     Happen(t, Kind.Disarray, unit, v["by"].String);
                     break;
+                case "seek_sight":
+                {
+                    string how = v["how"].String == "side" ? "見える位置へ移る" : "前進";
+                    Add(t, $"{unit}：目標 {v["target"].String} が見えないため{how}", false);
+                    Happen(t, Kind.SeekSight, unit, v["target"].String);
+                    break;
+                }
                 case "state_change":
                     if (v["to"].String == "shaken" && v["from"].String == "normal") Add(t, $"{unit} 動揺", false);
                     break;
