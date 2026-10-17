@@ -214,5 +214,13 @@
     "sight_seek_side_deg": 45,
     "sight_seek_side_step_deg": 5,
     "sight_seek_step_m": 10
+  },
+  "runners": {
+    "_note": "P2a の伝令。max_out は青だけ数える",
+    "prep_sec": 30,
+    "speed_mps": 3.0,
+    "loss_per_sec": 0.003,
+    "overdue_mult": 1.5,
+    "max_out": 3
   }
 }

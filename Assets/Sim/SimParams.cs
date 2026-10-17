@@ -23,6 +23,22 @@ namespace Battalion.Sim
         public SightParams Sight = new SightParams();
         public MapRulesParams MapRules = new MapRulesParams();
         public BehaviorParams Behavior = new BehaviorParams();
+        public RunnersParams Runners = new RunnersParams();
+
+        /// <summary>P2a の伝令（"runners"）。</summary>
+        public sealed class RunnersParams
+        {
+            /// <summary>発令から伝令が出るまで（秒）。</summary>
+            public double PrepSec;
+            /// <summary>伝令の速さ（行きも帰りも）。</summary>
+            public double SpeedMps;
+            /// <summary>射界を通る間、1秒あたりに倒れる確率。</summary>
+            public double LossPerSec;
+            /// <summary>往復の予定時間のこの倍で、受領が来なければ判断枠を空ける。</summary>
+            public double OverdueMult;
+            /// <summary>判断枠（同時に外に出ている伝令の上限）。</summary>
+            public int MaxOut;
+        }
 
         public TrainingParams Of(Training t) => TrainingTable[t];
 
@@ -406,6 +422,13 @@ namespace Battalion.Sim
             p.Behavior.SightSeekSideDeg = be.D("sight_seek_side_deg");
             p.Behavior.SightSeekSideStepDeg = be.D("sight_seek_side_step_deg");
             p.Behavior.SightSeekStepM = be.D("sight_seek_step_m");
+
+            var rn = root["runners"];
+            p.Runners.PrepSec = rn.D("prep_sec");
+            p.Runners.SpeedMps = rn.D("speed_mps");
+            p.Runners.LossPerSec = rn.D("loss_per_sec");
+            p.Runners.OverdueMult = rn.D("overdue_mult");
+            p.Runners.MaxOut = (int)rn.D("max_out");
 
             return p;
         }

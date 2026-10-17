@@ -146,6 +146,7 @@ namespace Battalion.View
             if (GUILayout.Button(_autoPause ? "自動一時停止：入 (P)" : "自動一時停止：切 (P)", _autoPause ? _toggleOn : _button, GUILayout.Width(160)))
                 _autoPause = !_autoPause;
             GUILayout.FlexibleSpace();
+            GUILayout.Label(SlotText(), _label, GUILayout.Width(200));
             GUILayout.Label($"移動中の被弾×{_params.Terrain.MovingOpenDamageMult:0.0#}　シード {_seed}", _small);
             GUILayout.EndHorizontal();
             GUILayout.EndArea();
@@ -261,6 +262,11 @@ namespace Battalion.View
             }
             if (o.Moves) s += c.Arrived ? "（到着）" : "（移動中）";
             if (_sim.PendingOrderOf(c.Id) != null) s += "　→ 新しい命令を次の刻みで受け付ける";
+            else if (c.Side == Side.Blue)
+            {
+                string tag = RunnerTag(c);
+                if (tag != null) s += $"　<color=#ffe070>［{tag}］</color>";
+            }
             if (o.Type == OrderType.Entrench && (!o.Moves || c.Arrived))
                 s += $" {Math.Min(100, c.EntrenchProgress / _params.MapRules.EntrenchSec * 100):0}%";
             return s;
@@ -291,7 +297,7 @@ namespace Battalion.View
             GUILayout.Label($"士気の要因：正面{l.Front:0} 側面{l.Flank:0} 背面{l.Rear:0} 包囲{l.Encircled:0}\n　隣の壊走{l.NeighborRout:0} 被弾中{l.UnderFire:0} 離脱{l.Disengage:0} 回復+{l.Recovery:0}", _small);
 
             GUILayout.Space(8);
-            bool can = CanCommand(c);
+            bool can = CanCommand(c) && SlotAvailable;
             GUI.enabled = can;
             GUILayout.Label("命令", _bold);
             GUILayout.BeginHorizontal();
@@ -323,7 +329,11 @@ namespace Battalion.View
             GUI.enabled = true;
 
             if (!can)
-                GUILayout.Label(c.Side == Side.Red ? "敵の中隊には命令できません" : (_phase == Phase.Running ? "この状態では命令を受け付けません" : ""), _small);
+                GUILayout.Label(c.Side == Side.Red ? "敵の中隊には命令できません"
+                    : !CanCommand(c) ? (_phase == Phase.Running ? "この状態では命令を受け付けません" : "")
+                    : NoSlotReason(), _small);
+            else if (_commandRefusal != null)
+                GUILayout.Label(_commandRefusal, _small);
 
             var hint = ModeHint();
             if (hint != null)

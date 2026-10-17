@@ -159,17 +159,13 @@ namespace Battalion.Sim.Tests
             double endSec = sc.TimeLimitMin * 60;
             while (sim.Time < endSec)
             {
-                while (next < orders.Count && orders[next].AtSec <= sim.Time)
-                {
-                    var o = orders[next++];
-                    Issue(sim, o);
-                }
+                // 命令は伝令で出す（P2a）。時刻 0（会戦開始前）の命令は伝令を使わずに届く。判断枠がなければ、空くまで毎刻み出し直す
+                while (next < orders.Count && orders[next].AtSec <= sim.Time && Issue(sim, orders[next])) next++;
                 for (int k = conditional.Count - 1; k >= 0; k--)
                 {
                     var o = conditional[k];
                     if (o.AtSec > sim.Time || sim.Find(o.WhenBroken).UnderCommand) continue;
-                    conditional.RemoveAt(k);
-                    Issue(sim, o);
+                    if (Issue(sim, o)) conditional.RemoveAt(k);
                 }
                 sim.Step();
                 foreach (var c in sim.Companies)
@@ -183,15 +179,18 @@ namespace Battalion.Sim.Tests
             return Summarize(sc, sim, counter, redAllBroken, fixedAt);
         }
 
-        static void Issue(Simulation sim, PlannedOrder o)
+        /// <summary>作戦の命令を伝令で出す（P2a）。出せた（判断枠があった）ら true。</summary>
+        public static bool Issue(Simulation sim, PlannedOrder o) => sim.SendOrder(ToOrder(sim, o)) != SendResult.NoSlot;
+
+        public static Order ToOrder(Simulation sim, PlannedOrder o)
         {
             var c = sim.Find(o.Unit);
             switch (o.Kind)
             {
-                case PlannedKind.PinFar: sim.Issue(Order.Pin(c.Id, sim.Find(o.Target).Id, PinRange.Far)); break;
-                case PlannedKind.PinNear: sim.Issue(Order.Pin(c.Id, sim.Find(o.Target).Id, PinRange.Near)); break;
-                case PlannedKind.AttackFlank: sim.Issue(Order.Attack(c.Id, sim.Find(o.Target).Id, AttackAspect.Flank)); break;
-                default: sim.Issue(Order.Advance(c.Id, new Vec2(o.X, o.Y), o.FacingDeg * Angles.DegToRad)); break;
+                case PlannedKind.PinFar: return Order.Pin(c.Id, sim.Find(o.Target).Id, PinRange.Far);
+                case PlannedKind.PinNear: return Order.Pin(c.Id, sim.Find(o.Target).Id, PinRange.Near);
+                case PlannedKind.AttackFlank: return Order.Attack(c.Id, sim.Find(o.Target).Id, AttackAspect.Flank);
+                default: return Order.Advance(c.Id, new Vec2(o.X, o.Y), o.FacingDeg * Angles.DegToRad);
             }
         }
 

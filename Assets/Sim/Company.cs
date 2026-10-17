@@ -90,6 +90,13 @@ namespace Battalion.Sim
         public MoveStyle MoveStyle;
         /// <summary>超越中の、止まっている味方の ID（押し離しをしない相手）。毎刻み、移動の前に判定する。</summary>
         public readonly System.Collections.Generic.HashSet<int> Passing = new System.Collections.Generic.HashSet<int>();
+        // ---- P2a：伝令
+        /// <summary>受けた命令の出した順（これより古い命令の伝令が後から着いたら捨てる）。</summary>
+        public long ReceivedSeq;
+        /// <summary>届いて、練度の遅れの後に始まる命令（null ならなし）と、始まる時刻。</summary>
+        public Order StartWaitOrder;
+        public double StartWaitAt;
+
         // ---- P1g：目標が見えないときの判断
         /// <summary>目標が見えないため、見える位置を探して動いているか（着いたら false）。</summary>
         public bool SeekingSight;

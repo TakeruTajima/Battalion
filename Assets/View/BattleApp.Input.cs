@@ -119,10 +119,15 @@ namespace Battalion.View
         {
             var c = Selected;
             if (!CanCommand(c)) return;
+            if (!SlotAvailable)
+            {
+                // 判断枠がない（伝令が出払っている。P2a）：命令を選べない
+                _commandRefusal = NoSlotReason();
+                return;
+            }
             if (type == OrderType.Entrench && _mode == Mode.Entrench)
             {
-                _sim.Issue(Order.Entrench(c.Id));
-                _mode = Mode.None;
+                if (SendCommand(Order.Entrench(c.Id))) _mode = Mode.None;
                 return;
             }
             switch (type)
@@ -132,7 +137,7 @@ namespace Battalion.View
                 case OrderType.Pin: _mode = Mode.Pin; break;
                 case OrderType.Attack: _mode = Mode.Attack; break;
                 case OrderType.Hold:
-                    _sim.Issue(Order.Hold(c.Id));
+                    // 保持はクリック（その場）かドラッグ（向き）で1つだけ出す（伝令を2人使わないように。P2a）
                     _mode = Mode.HoldFacing;
                     break;
                 case OrderType.Entrench:
@@ -228,10 +233,10 @@ namespace Battalion.View
             bool drag = ((Vector2)Input.mousePosition - _pressPx).magnitude > AttackDragPx;
             _pressTarget = null;
             if (!CanCommand(c) || tgt == null) return;
-            _sim.Issue(drag
-                ? Order.AttackFrom(c.Id, tgt.Id, BearingTo(tgt, up), _onBreak)
-                : Order.Attack(c.Id, tgt.Id, _attackAspect, _onBreak));
-            _mode = Mode.None;
+            if (SendCommand(drag
+                    ? Order.AttackFrom(c.Id, tgt.Id, BearingTo(tgt, up), _onBreak)
+                    : Order.Attack(c.Id, tgt.Id, _attackAspect, _onBreak)))
+                _mode = Mode.None;
         }
 
         void OnMapClick(Vec2 at, double? facing)
@@ -248,28 +253,26 @@ namespace Battalion.View
                 case Mode.Advance:
                 case Mode.Retreat:
                     if (!CanCommand(c)) break;
-                    _sim.Issue(_mode == Mode.Advance ? Order.Advance(c.Id, at, facing) : Order.Retreat(c.Id, at, facing));
-                    _mode = Mode.None;
+                    if (SendCommand(_mode == Mode.Advance ? Order.Advance(c.Id, at, facing) : Order.Retreat(c.Id, at, facing)))
+                        _mode = Mode.None;
                     break;
                 case Mode.HoldFacing:
-                    if (CanCommand(c) && facing.HasValue) _sim.Issue(Order.Hold(c.Id, facing));
-                    _mode = Mode.None;
+                    if (CanCommand(c) && SendCommand(Order.Hold(c.Id, facing))) _mode = Mode.None;
                     break;
                 case Mode.Entrench:
                 {
                     if (!CanCommand(c)) break;
                     // 選んだ中隊の駒をクリックしたらその場で、それ以外は目的地へ移動してから掘る
                     var hit = UnitAt(at, Side.Blue);
-                    _sim.Issue(hit == c && !facing.HasValue ? Order.Entrench(c.Id) : Order.Entrench(c.Id, at, facing));
-                    _mode = Mode.None;
+                    if (SendCommand(hit == c && !facing.HasValue ? Order.Entrench(c.Id) : Order.Entrench(c.Id, at, facing)))
+                        _mode = Mode.None;
                     break;
                 }
                 case Mode.Pin:
                 {
                     var tgt = UnitAt(at, Side.Red);
                     if (!CanCommand(c) || tgt == null) break;
-                    _sim.Issue(Order.Pin(c.Id, tgt.Id, _pinRange));
-                    _mode = Mode.None;
+                    if (SendCommand(Order.Pin(c.Id, tgt.Id, _pinRange))) _mode = Mode.None;
                     break;
                 }
             }
@@ -332,7 +335,7 @@ namespace Battalion.View
             {
                 case Mode.Advance: return "前進：目的地をクリック（押したままドラッグで到着後の向き）";
                 case Mode.Retreat: return "後退：目的地をクリック（接敵中で背後なら後ろ向きに下がる。ドラッグで向き）";
-                case Mode.HoldFacing: return "保持しました。向きを変えるなら地図をドラッグ（Esc で終わる）";
+                case Mode.HoldFacing: return "保持：地図をクリックでその場で保持、ドラッグで保持して向きを変える（Esc でやめる）";
                 case Mode.Entrench: return "陣地構築：掘る地点をクリック（ドラッグで向き）。その場で掘るなら、もう一度 Y か、この中隊の駒をクリック";
                 case Mode.Pin:
                     return $"拘束（{PinRangeName(_pinRange)}）：目標の敵の駒をクリック（D で遠い／近い）";

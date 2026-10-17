@@ -85,10 +85,13 @@ namespace Battalion.View
             return $"{_sim.Tick}|{o.CompanyId}|{o.Type}|{o.TargetId}|{o.Aspect}|{o.PinRange}|{at}|{b}|{f}";
         }
 
-        /// <summary>中隊の受け付け待ちの命令の下見（なければ null）。命令か刻みが変わったときだけ計算し直す。</summary>
+        /// <summary>
+        /// 中隊のまだ始まっていない命令（次の刻みで受け付ける、開始待ち、伝令が運んでいる）の下見（なければ null）。
+        /// 命令か刻みが変わったときだけ計算し直す。
+        /// </summary>
         Simulation.OrderPreview PendingPreview(Company c)
         {
-            var o = _sim.PendingOrderOf(c.Id);
+            var o = _sim.PendingOrderOf(c.Id) ?? c.StartWaitOrder ?? _sim.InFlightTo(c.Id, out _)?.Order;
             if (o == null) return null;
             if (!ReferenceEquals(o, _pendingFor) || _pendingTick != _sim.Tick)
             {

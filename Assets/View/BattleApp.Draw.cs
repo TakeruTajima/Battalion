@@ -25,6 +25,7 @@ namespace Battalion.View
             float now = Time.unscaledTime;
 
             DrawContourLabels(px);
+            DrawHeadquarters(px);
             DrawVillage(px);
             if (_showTrigger) DrawTrigger(px);
             DrawBlockedSights(px);
@@ -33,6 +34,8 @@ namespace Battalion.View
             foreach (var c in _sim.Companies)
                 if (c.State != CompanyState.LeftBattle) DrawUnit(c, px, now);
             if (_showEscape) DrawEscapes(px);
+            DrawRunners(px);
+            DrawRunnerTags(px);
             DrawHover(px);
             DrawHoverPreview(px);
             DrawDragPreview(px);
@@ -589,14 +592,14 @@ namespace Battalion.View
             var pending = c.Side == Side.Blue ? PendingPreview(c) : null;
             if (pending != null)
             {
-                var po = _sim.PendingOrderOf(c.Id);
-                DrawPreviewPath(pending, po, px, Palette.Path, Palette.PathShadow);
+                // 未着・開始待ちの命令（P2a）：その命令の下見を薄く出す。今の命令の経路もそのまま出す（届くまでは古い命令で動く）
+                var po = _pendingFor;
+                DrawPreviewPath(pending, po, px, new Color32(255, 255, 255, 120), new Color32(0, 0, 0, 60));
                 if ((po.Type == OrderType.Attack || po.Type == OrderType.Pin) && po.TargetId >= 0)
                 {
                     Pose(_sim.Companies[po.TargetId], out var ptp, out _);
-                    _shapes.DashedLine(V(pos), V(ptp), 2 * px, 8 * px, Palette.Hover);
+                    _shapes.DashedLine(V(pos), V(ptp), 1.5f * px, 8 * px, Palette.WithAlpha(Palette.Hover, 140));
                 }
-                return;
             }
             var o = c.CurrentOrder;
             if (o.Moves && !c.Arrived && c.Path != null && c.PathIndex < c.Path.Count)

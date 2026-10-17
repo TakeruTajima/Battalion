@@ -380,6 +380,13 @@ namespace Battalion.Sim.Tests
             Assert.That(r3.CurrentOrder.Type, Is.EqualTo(OrderType.Hold), "引き金の円に入るまでは動かない");
             b2.Position = new Vec2(1650, 1000); // 村の中心 (1975, 1000) から 325m
             sim.Step();
+            // 逆襲の命令は赤の本部から伝令で届き、練度の遅れの後に始まる（P2a）
+            Assert.That(r3.CurrentOrder.Type, Is.EqualTo(OrderType.Hold));
+            for (int k = 0; k < 1000 && r3.CurrentOrder.Type != OrderType.Attack; k++)
+            {
+                b2.Position = new Vec2(1650, 1000);
+                sim.Step();
+            }
             Assert.That(r3.CurrentOrder.Type, Is.EqualTo(OrderType.Attack));
             Assert.That(r3.CurrentOrder.TargetId, Is.EqualTo(b2.Id));
             Assert.That(r3.AttackChosenAspect, Is.EqualTo(AttackAspect.Flank));

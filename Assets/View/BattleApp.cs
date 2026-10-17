@@ -111,6 +111,7 @@ namespace Battalion.View
             _escapeCache.Clear();
             _result = null;
             _hideEnd = false;
+            _commandRefusal = null;
             _phase = Phase.Running;
             FitCamera();
         }

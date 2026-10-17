@@ -22,13 +22,12 @@ namespace Battalion.Sim.Tests
             double endSec = sc.TimeLimitMin * 60;
             while (sim.Time < endSec)
             {
-                while (next < timed.Count && timed[next].AtSec <= sim.Time) Issue(sim, timed[next++]);
+                while (next < timed.Count && timed[next].AtSec <= sim.Time && ScenarioAReportTests.Issue(sim, timed[next])) next++;
                 for (int k = conditional.Count - 1; k >= 0; k--)
                 {
                     var o = conditional[k];
                     if (o.AtSec > sim.Time || sim.Find(o.WhenBroken).UnderCommand) continue;
-                    conditional.RemoveAt(k);
-                    Issue(sim, o);
+                    if (ScenarioAReportTests.Issue(sim, o)) conditional.RemoveAt(k);
                 }
                 sim.Step();
                 if (!sim.Companies.Any(c => c.Side == Side.Red && c.OnBoard) || !sim.Companies.Any(c => c.Side == Side.Blue && c.OnBoard)) break;
@@ -37,18 +36,6 @@ namespace Battalion.Sim.Tests
             lines = log.Count;
             using (var sha = SHA256.Create())
                 return BitConverter.ToString(sha.ComputeHash(new UTF8Encoding(false).GetBytes(text))).Replace("-", "").ToLowerInvariant();
-        }
-
-        static void Issue(Simulation sim, ScenarioAReportTests.PlannedOrder o)
-        {
-            var c = sim.Find(o.Unit);
-            switch (o.Kind)
-            {
-                case ScenarioAReportTests.PlannedKind.PinFar: sim.Issue(Order.Pin(c.Id, sim.Find(o.Target).Id, PinRange.Far)); break;
-                case ScenarioAReportTests.PlannedKind.PinNear: sim.Issue(Order.Pin(c.Id, sim.Find(o.Target).Id, PinRange.Near)); break;
-                case ScenarioAReportTests.PlannedKind.AttackFlank: sim.Issue(Order.Attack(c.Id, sim.Find(o.Target).Id, AttackAspect.Flank)); break;
-                default: sim.Issue(Order.Advance(c.Id, new Vec2(o.X, o.Y), o.FacingDeg * Angles.DegToRad)); break;
-            }
         }
 
         [Test]

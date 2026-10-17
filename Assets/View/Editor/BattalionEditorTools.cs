@@ -56,6 +56,7 @@ namespace Battalion.View.Editor
                 foreach (int stage in new[] { 1, 2 }) CaptureBattle(stage, 25, dir);
                 CaptureFireDemo(dir);
                 CaptureTerrainView(dir);
+                CaptureRunners(dir);
                 Debug.Log("[Battalion] 撮影した：" + dir);
             }
             catch (Exception e)
@@ -210,6 +211,34 @@ namespace Battalion.View.Editor
                 Shoot(rig, b2.Id, 0, false, false, r1.Position, Path.Combine(dir, "terrain_r1_dead_ground.png"), b2.Position, true);
                 rig.Look(new Vec2(975, 925), 380);
                 Shoot(rig, b3.Id, 0, false, false, b3.Position, Path.Combine(dir, "terrain_forest_profile.png"), r3.Position);
+            }
+        }
+
+        /// <summary>
+        /// 伝令（P2a）：ステージ1。開始前の命令で全中隊が前進し始め、2分後に B1・B2・B4 へ伝令で新しい命令を出す。さらに2分進めて、
+        /// 本部の旗、行きと帰りの伝令の点と点線、未着と開始待ちの印、未着の命令の下見を撮る。
+        /// </summary>
+        static void CaptureRunners(string dir)
+        {
+            using (var rig = new Rig(1500, 1000))
+            {
+                var sim = rig.App.BeginCapture(rig.Cam, 1, 5);
+                var b1 = sim.Find("B1");
+                var b2 = sim.Find("B2");
+                var b3 = sim.Find("B3");
+                var b4 = sim.Find("B4");
+                sim.SendOrder(Order.Advance(b1.Id, new Vec2(1100, 1450), 0));
+                sim.SendOrder(Order.Advance(b2.Id, new Vec2(1100, 1050), 0));
+                sim.SendOrder(Order.Advance(b3.Id, new Vec2(1100, 650), 0));
+                sim.SendOrder(Order.Advance(b4.Id, new Vec2(700, 1050), 0));
+                rig.App.StepForCapture(240);
+                sim.SendOrder(Order.Hold(b2.Id, 0));
+                rig.App.StepForCapture(60);
+                sim.SendOrder(Order.Advance(b1.Id, new Vec2(1500, 1500), -30 * Angles.DegToRad));
+                sim.SendOrder(Order.Entrench(b4.Id, new Vec2(800, 850), 0));
+                rig.App.StepForCapture(150);
+                rig.Look(new Vec2(650, 1000), 600);
+                Shoot(rig, b1.Id, 0, false, false, null, Path.Combine(dir, "runners_stage1.png"));
             }
         }
 

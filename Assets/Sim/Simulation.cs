@@ -20,6 +20,7 @@ namespace Battalion.Sim
     {
         readonly SimParams _p;
         readonly Pcg32 _rng;
+        readonly ulong _seed;
         readonly IEventSink _log;
         readonly TerrainMap _map;
         readonly List<Company> _companies = new List<Company>();
@@ -43,6 +44,7 @@ namespace Battalion.Sim
         {
             _p = p;
             _rng = new Pcg32(seed);
+            _seed = seed;
             _map = map;
             _log = log ?? NullEventSink.Instance;
             _snapshotEveryTicks = (int)Math.Round(SnapshotIntervalSec / p.TickSec);
@@ -73,8 +75,18 @@ namespace Battalion.Sim
             return null;
         }
 
-        /// <summary>命令を渡す。次の刻みの最初に即時適用される（伝令の遅延は P2）。</summary>
-        public void Issue(Order order) => _pending.Add(order);
+        /// <summary>
+        /// 命令を伝令を使わずに渡す。次の刻みの最初に適用される（会戦開始前の命令、本部のない場面）。
+        /// 伝令で運ぶ命令は <see cref="SendOrder"/>（P2a）。
+        /// </summary>
+        public void Issue(Order order)
+        {
+            var c = _companies[order.CompanyId];
+            // 出した順を進める（後から着いた古い伝令の命令を捨てるため）。開始待ちの命令はこの命令に置き換わる
+            c.ReceivedSeq = ++_orderSeq;
+            c.StartWaitOrder = null;
+            _pending.Add(order);
+        }
 
         public void Step()
         {
@@ -85,6 +97,7 @@ namespace Battalion.Sim
             if ((Tick - 1) % _exposureEveryTicks == 0) RebuildVisibility();
             foreach (var s in _scripts) s.Update(this, tickStart);
 
+            UpdateRunners(t, tickStart);
             ApplyOrders(t, tickStart);
             Move(t, tickStart);
             UpdateFortified();

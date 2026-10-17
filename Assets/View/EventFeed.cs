@@ -29,7 +29,7 @@ namespace Battalion.View
         public enum Kind
         {
             FlankHit, RearHit, Encircled, Routed, Surrendered, RallyStart, RallyComplete, Counterattack, Entrenched, LeftBattle,
-            TargetBroken, PursuitEnd, Turn, Disarray, SeekSight,
+            TargetBroken, PursuitEnd, Turn, Disarray, SeekSight, Receipt, ReceiptOverdue,
         }
 
         /// <summary>駒の上に出す出来事。表示側が読んだら <see cref="Recent"/> を空にする。</summary>
@@ -137,6 +137,17 @@ namespace Battalion.View
                 case "disarray":
                     Add(t, $"{unit} 隊形が乱れた（壊走中の {v["by"].String} にすり抜けられた）", true);
                     Happen(t, Kind.Disarray, unit, v["by"].String);
+                    break;
+                case "runner_returned":
+                    // 伝令の出来事は青だけ（赤の本部の事情は青から分からない）
+                    if (v["side"].String != "blue") break;
+                    Add(t, v["late"].Bool ? $"{unit} 命令受領（遅れて届いた報告）" : $"{unit} 命令受領", false);
+                    Happen(t, Kind.Receipt, unit, null);
+                    break;
+                case "receipt_overdue":
+                    if (v["side"].String != "blue") break;
+                    Add(t, $"{unit} 受領報告なし（伝令が倒れた可能性）", true);
+                    Happen(t, Kind.ReceiptOverdue, unit, null);
                     break;
                 case "seek_sight":
                 {

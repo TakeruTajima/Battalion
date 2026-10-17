@@ -182,6 +182,15 @@ namespace Battalion.View
                     text = "隊形の乱れ";
                     col = new Color(1f, 0.6f, 0.2f);
                     break;
+                case EventFeed.Kind.Receipt:
+                    text = "受領";
+                    col = new Color(0.6f, 0.85f, 1f);
+                    break;
+                case EventFeed.Kind.ReceiptOverdue:
+                    text = "受領報告なし";
+                    col = new Color(1f, 0.55f, 0.4f);
+                    reasons.Add($"{c.Name} 受領報告なし");
+                    break;
                 case EventFeed.Kind.SeekSight:
                     // 目標が見えないため見える位置を探す（P1g）。自動一時停止の理由には足さない
                     text = "見える位置へ";

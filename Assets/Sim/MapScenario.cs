@@ -31,6 +31,9 @@ namespace Battalion.Sim
 
         /// <summary>勝ちの判定に使う村の中心（概算シミュレーションと同じ）。</summary>
         public static readonly Vec2 VillageCenter = new Vec2(1975, 1000);
+        /// <summary>大隊本部の位置（P2a。両ステージ共通、試作では動かない）。</summary>
+        public static readonly Vec2 BlueHeadquarters = new Vec2(100, 800);
+        public static readonly Vec2 RedHeadquarters = new Vec2(2700, 1000);
         public const double VillageHoldRadiusM = 250.0;
 
         public static MapScenario LoadFile(string path) => FromJson(JsonValue.Parse(File.ReadAllText(path)));
@@ -79,6 +82,8 @@ namespace Battalion.Sim
         public Simulation Build(SimParams p, ulong seed, IEventSink log = null)
         {
             var sim = new Simulation(p, seed, TerrainMap.FromJson(Source, p.Terrain), log);
+            sim.SetHeadquarters(Side.Blue, BlueHeadquarters);
+            sim.SetHeadquarters(Side.Red, RedHeadquarters);
             foreach (var u in Units)
                 sim.AddCompany(u.Id, u.Side, TrainingOf(u.Id), PersonalityOf(u.Id), new Vec2(u.X, u.Y), u.FacingDeg);
 
@@ -161,8 +166,9 @@ namespace Battalion.Sim
             Triggered = true;
             TriggeredAt = tickStart;
             r3.ThreatWeightOverride = sim.Params.MapRules.ScriptedThreatWeight;
-            // 側面の範囲で攻撃する（P1e の4。逆襲は突出した敵の側面を突く）。範囲なので、目標が向きを変えれば選び直す
-            sim.Issue(Order.Attack(r3.Id, target.Id, AttackAspect.Flank));
+            // 側面の範囲で攻撃する（P1e の4。逆襲は突出した敵の側面を突く）。範囲なので、目標が向きを変えれば選び直す。
+            // 赤の本部から伝令で届く（P2a。判断枠は数えない）
+            sim.SendScriptOrder(Order.Attack(r3.Id, target.Id, AttackAspect.Flank));
             sim.LogScriptEvent(tickStart + sim.Params.TickSec, "reserve_counterattack", r3, target);
         }
     }
