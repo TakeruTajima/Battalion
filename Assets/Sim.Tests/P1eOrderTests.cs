@@ -338,6 +338,42 @@ namespace Battalion.Sim.Tests
             Assert.That(Vec2.Distance(a.Position, sim.JumpOff(e, Math.PI)), Is.LessThan(1e-6));
         }
 
+        // ---------------------------------------------------------------- P1e.2 阻まれた中隊の向き直り
+
+        [Test]
+        public void UnitBlockedByEnemyTurnsWhenShotFromTheFlank()
+        {
+            // 北を向いたまま東へ横歩きする中隊が、東の敵の矩形の手前で阻まれる。その敵から側面を撃たれ、正面（北）は空いているので、
+            // 練度の遅れ（通常 25秒）の後にその敵の方へ向き直る
+            var sim = Flat();
+            var a = Add(sim, "A", Side.Blue, 0, 0, 90);
+            var e = Add(sim, "E", Side.Red, 300, 0, 180);
+            sim.Issue(Order.Advance(a.Id, new Vec2(300, 0)));
+            for (int k = 0; k < 2000 && (k == 0 || !a.BlockedByEnemy); k++) Step(sim);
+            Assert.That(a.BlockedByEnemy, Is.True);
+            Assert.That(a.Arrived, Is.False);
+            Assert.That(Deg(a.Facing), Is.EqualTo(90).Within(1e-9), "横歩きで向きは変えていない");
+            for (int k = 0; k < 120 && !a.FacingOverride.HasValue; k++) Step(sim);
+            Assert.That(a.FacingOverride.HasValue, Is.True, "阻まれて止まっていても向き直る");
+            var toE = e.Position - a.Position;
+            Assert.That(Angles.Wrap(a.FacingOverride.Value - Math.Atan2(toE.Y, toE.X)), Is.EqualTo(0).Within(1e-9), "撃ってきた敵の方へ");
+            Run(sim, 35); // 最大 180° を毎秒 6° で 30秒
+            Assert.That(Deg(a.Facing), Is.EqualTo(Deg(a.FacingOverride.Value)).Within(1e-9), "向き直り終えた");
+            Assert.That(sim.AspectOf(a, e.Position), Is.EqualTo(Aspect.Front));
+        }
+
+        [Test]
+        public void BlockedPinOrderDoesNotTurn()
+        {
+            // 拘束の命令中は、阻まれていても向き直らない（P1d と同じ）
+            var sim = Flat();
+            var a = Add(sim, "A", Side.Blue, 0, 0, 90);
+            var e = Add(sim, "E", Side.Red, 300, 0, 180);
+            sim.Issue(Order.Pin(a.Id, e.Id, PinRange.Near));
+            Run(sim, 300);
+            Assert.That(a.FacingOverride.HasValue, Is.False);
+        }
+
         // ---------------------------------------------------------------- 5. 下見
 
         [Test]

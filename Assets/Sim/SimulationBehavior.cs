@@ -327,11 +327,16 @@ namespace Battalion.Sim
 
         // ---------------------------------------------------------------- 5. 向き直り
 
-        /// <summary>向き直りの対象か：止まっている保持・陣地構築・攻撃（着いた後、追撃中を除く）・前進や後退（着いた後）。拘束は対象外。</summary>
+        /// <summary>
+        /// 向き直りの対象か：止まっている保持・陣地構築・攻撃（着いた後、追撃中を除く）・前進や後退（着いた後）と、
+        /// 敵に阻まれて止まっている中隊（P1e.2）。拘束は対象外。
+        /// </summary>
         static bool CanReactByTurning(Company c)
         {
             if (!c.UnderCommand) return false;
             var o = c.CurrentOrder;
+            // 敵に阻まれて止まっている中隊も対象（P1e.2。止まって撃たれている点は保持と同じ）。拘束の命令中・追撃中は除く
+            if (c.BlockedByEnemy && o.Type != OrderType.Pin && !c.Pursuing) return true;
             switch (o.Type)
             {
                 case OrderType.Hold: return true;

@@ -48,7 +48,8 @@ namespace Battalion.Sim.Tests
 
         /// <summary>
         /// 「拘束＋迂回」（P1e の6）：B2 が R1 を拘束し、B1 が R1 を側面の範囲で攻撃、B4 が 2分後に続く。B3 は B2 の南で火力支援。
-        /// 攻撃は追撃なし（確保）。R1 が指揮下でなくなったら、B3 と B4 は村の中心へ前進する（P1e.1）。
+        /// 攻撃は追撃なし（確保）。R1 が指揮下でなくなったら、拘束役も含む指揮下の青の全中隊が村の中心へ前進する（P1e.2。
+        /// P1e.1 では B3 と B4 だけ）。
         /// </summary>
         public static PlannedOrder[] PinAndFlank(int stage, bool near)
         {
@@ -59,6 +60,8 @@ namespace Battalion.Sim.Tests
                 T(0, "B1", PlannedKind.AttackFlank, "R1"),
                 T(120, "B4", PlannedKind.AttackFlank, "R1"),
                 O(0, "B3", fx, fy, 0),
+                new PlannedOrder(0, "B1", MapScenario.VillageCenter.X, MapScenario.VillageCenter.Y, 0, whenBroken: "R1"),
+                new PlannedOrder(0, "B2", MapScenario.VillageCenter.X, MapScenario.VillageCenter.Y, 0, whenBroken: "R1"),
                 new PlannedOrder(0, "B3", MapScenario.VillageCenter.X, MapScenario.VillageCenter.Y, 0, whenBroken: "R1"),
                 new PlannedOrder(0, "B4", MapScenario.VillageCenter.X, MapScenario.VillageCenter.Y, 0, whenBroken: "R1"),
             };

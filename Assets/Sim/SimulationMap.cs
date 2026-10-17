@@ -600,7 +600,9 @@ namespace Battalion.Sim
             double speed = _p.Movement.SpeedMps * mv * (c.Pinned ? _p.Pinning.MoveMult : 1.0);
             if (c.PassOverlap) speed *= _p.Movement.PassThroughSpeedMult;
             double heading = Math.Atan2(to.Y, to.X);
-            if (c.InContact)
+            // 阻まれている間に向き直った中隊（P1e.2）は、向き直った向きへ回り、その向きのまま動く（接敵中と同じ扱い）
+            if (c.FacingOverride.HasValue) c.Facing = TurnToward(c.Facing, c.FacingOverride.Value, maxTurn);
+            if (c.InContact || c.FacingOverride.HasValue)
             {
                 // 接敵中は向きを変えない（敵に横腹や背を向けない）。背を向けて逃げるのは壊走だけ
                 double diff = Math.Abs(Angles.Wrap(heading - c.Facing)) * Angles.RadToDeg;
