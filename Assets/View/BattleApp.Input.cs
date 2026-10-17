@@ -42,6 +42,7 @@ namespace Battalion.View
             _pressing = false;
             _pressTarget = null;
             _sightFrom = null;
+            _sightTo = null;
             if (_mapView != null) _mapView.ClearOverlay();
         }
 
@@ -88,6 +89,7 @@ namespace Battalion.View
             if (Input.GetKeyDown(KeyCode.F5)) CycleExposure();
             if (Input.GetKeyDown(KeyCode.F6)) _showTrigger = !_showTrigger;
             if (Input.GetKeyDown(KeyCode.F7)) _showEscape = !_showEscape;
+            if (Input.GetKeyDown(KeyCode.F8)) _showBlockedAll = !_showBlockedAll;
         }
 
         void Select(int id)
@@ -101,6 +103,7 @@ namespace Battalion.View
             if (_mode == Mode.Sight)
             {
                 _sightFrom = null;
+                _sightTo = null;
                 RefreshOverlay();
             }
             _mode = Mode.None;
@@ -196,6 +199,11 @@ namespace Battalion.View
                     IssueAttack(up);
                     return;
                 }
+                if (_mode == Mode.Sight)
+                {
+                    SightClick(_pressWorld, up, ((Vector2)Input.mousePosition - _pressPx).magnitude > DragThresholdPx);
+                    return;
+                }
                 bool drag = ((Vector2)Input.mousePosition - _pressPx).magnitude > DragThresholdPx;
                 double? facing = drag ? Math.Atan2(up.Y - _pressWorld.Y, up.X - _pressWorld.X) : (double?)null;
                 OnMapClick(_pressWorld, facing);
@@ -264,16 +272,30 @@ namespace Battalion.View
                     _mode = Mode.None;
                     break;
                 }
-                case Mode.Sight:
-                {
-                    // 中隊の駒をクリックしたらその中心から、そうでなければクリックした地点から
-                    var unit = UnitAt(at, null);
-                    _sightFrom = unit != null ? unit.Position : at;
-                    _sightFromLabel = unit != null ? unit.Name + " の位置から" : $"({at.X:0}, {at.Y:0}) から";
-                    RefreshOverlay();
-                    break;
-                }
             }
+        }
+
+        /// <summary>
+        /// 視線確認のクリック。クリックで見る点（中隊の駒ならその中心）。Shift＋クリックか、2点の間のドラッグで、断面図の2点目（P1f のオ）。
+        /// </summary>
+        void SightClick(Vec2 down, Vec2 up, bool drag)
+        {
+            bool shift = Input.GetKey(KeyCode.LeftShift) || Input.GetKey(KeyCode.RightShift);
+            if (drag)
+            {
+                _sightFrom = SightPoint(down, out _sightFromLabel);
+                _sightTo = SightPoint(up, out _sightToLabel);
+            }
+            else if (shift && _sightFrom.HasValue)
+            {
+                _sightTo = SightPoint(down, out _sightToLabel);
+            }
+            else
+            {
+                _sightFrom = SightPoint(down, out _sightFromLabel);
+                _sightTo = null;
+            }
+            RefreshOverlay();
         }
 
         /// <summary>点にある盤上の中隊（駒の矩形の中、少し広めに判定）。重なっていれば中心に近い方。</summary>
@@ -320,7 +342,8 @@ namespace Battalion.View
                     return $"攻撃（{AspectName(_attackAspect)}・{brk}）：敵の駒から外へドラッグで攻める方角、クリックなら範囲で指定" +
                            "（0・F・S・B で範囲、C で確保／追撃可）";
                 }
-                case Mode.Sight: return "視線確認：地点か中隊の駒をクリック（緑＝見える、赤＝稜線・遮蔽で見えない）。L か Esc で終わる";
+                case Mode.Sight:
+                    return "視線確認：地点か中隊の駒をクリック（緑＝見える、赤＝稜線・遮蔽で見えない）。Shift＋クリックか、2点の間のドラッグで断面図。L か Esc で終わる";
                 default: return null;
             }
         }

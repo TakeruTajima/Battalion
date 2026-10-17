@@ -165,7 +165,10 @@ namespace Battalion.View
             }
             GUILayout.FlexibleSpace();
             string exp = _exposureMode == 0 ? "なし" : (_exposureMode == 1 ? "青から見た赤の射界" : "赤から見た青の射界");
-            GUILayout.Label($"露出(F5)：{exp}　引き金(F6)：{(_showTrigger ? "表示" : "なし")}　退路(F7)：{(_showEscape ? "表示" : "なし")}　視線(L)：{(_mode == Mode.Sight ? "使用中" : "なし")}", _small);
+            var ce = CursorElevation();
+            GUILayout.Label(ce.HasValue ? $"<b>標高 {ce.Value:0.0}m</b>" : "標高 —", _label, GUILayout.Width(100));
+            GUILayout.Label($"露出(F5)：{exp}　引き金(F6)：{(_showTrigger ? "表示" : "なし")}　退路(F7)：{(_showEscape ? "表示" : "なし")}　" +
+                            $"撃たない理由(F8)：{(_showBlockedAll ? "全中隊" : "選んだ中隊")}　視線(L)：{(_mode == Mode.Sight ? "使用中" : "なし")}", _small);
             GUILayout.EndHorizontal();
             GUILayout.EndArea();
         }
@@ -329,7 +332,8 @@ namespace Battalion.View
                 hs.normal.textColor = new Color(1f, 0.85f, 0.2f);
                 GUILayout.Label(hint, hs);
             }
-            if (_sightFrom.HasValue) GUILayout.Label("視線確認：" + _sightFromLabel, _small);
+            if (_sightFrom.HasValue)
+                GUILayout.Label("視線確認：" + _sightFromLabel + " から" + (_sightTo.HasValue ? "　断面：" + _sightToLabel + " まで" : ""), _small);
             if (_showEscape && c.OnBoard && (c.UnderCommand || c.State == CompanyState.Routed))
             {
                 var e = EscapeOf(c);

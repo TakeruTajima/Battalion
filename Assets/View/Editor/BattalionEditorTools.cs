@@ -55,6 +55,7 @@ namespace Battalion.View.Editor
             {
                 foreach (int stage in new[] { 1, 2 }) CaptureBattle(stage, 25, dir);
                 CaptureFireDemo(dir);
+                CaptureTerrainView(dir);
                 Debug.Log("[Battalion] 撮影した：" + dir);
             }
             catch (Exception e)
@@ -173,9 +174,49 @@ namespace Battalion.View.Editor
             }
         }
 
-        static void Shoot(Rig rig, int selected, int exposure, bool trigger, bool escape, Vec2? sight, string path)
+        /// <summary>
+        /// 地形の高さを読む（P1f）：陰影・高さの明暗・等高線の数字の全体（両ステージ）、ステージ1の R1（頂上の塹壕）の目の前の斜面の死角
+        /// （撃たない理由の点線と、R1 から B2 への断面図）、森で遮られる例（断面図の森の帯）。時間は進めない。
+        /// </summary>
+        static void CaptureTerrainView(string dir)
         {
-            rig.App.DrawForCapture(selected, exposure, trigger, escape, sight);
+            foreach (int stage in new[] { 1, 2 })
+            {
+                using (var rig = new Rig(1500, 1000))
+                {
+                    var sim = rig.App.BeginCapture(rig.Cam, stage, 3);
+                    rig.App.StepForCapture(0);
+                    rig.Look(new Vec2(1500, 1000), 1000);
+                    Shoot(rig, -1, 0, false, false, null, Path.Combine(dir, $"terrain_stage{stage}_overview.png"));
+                }
+            }
+            using (var rig = new Rig(1500, 1000))
+            {
+                var sim = rig.App.BeginCapture(rig.Cam, 1, 3);
+                var r1 = sim.Find("R1");
+                var r3 = sim.Find("R3");
+                var b2 = sim.Find("B2");
+                var b3 = sim.Find("B3");
+                b2.Position = new Vec2(1575, 1000); // R1 の正面 250m：頂上の塹壕から見えない斜面
+                b2.Facing = 0;
+                b3.Position = new Vec2(800, 925);   // 小さな森の西
+                b3.Facing = 0;
+                r3.Position = new Vec2(1150, 925);  // 小さな森の東
+                r3.Facing = Math.PI;
+                rig.App.StepForCapture(0);
+
+                rig.Look(new Vec2(1640, 1000), 380);
+                Shoot(rig, b2.Id, 0, false, false, null, Path.Combine(dir, "terrain_r1_slope_shade.png"), null, true);
+                Shoot(rig, b2.Id, 0, false, false, r1.Position, Path.Combine(dir, "terrain_r1_dead_ground.png"), b2.Position, true);
+                rig.Look(new Vec2(975, 925), 380);
+                Shoot(rig, b3.Id, 0, false, false, b3.Position, Path.Combine(dir, "terrain_forest_profile.png"), r3.Position);
+            }
+        }
+
+        static void Shoot(Rig rig, int selected, int exposure, bool trigger, bool escape, Vec2? sight, string path,
+            Vec2? sightTo = null, bool blockedAll = false)
+        {
+            rig.App.DrawForCapture(selected, exposure, trigger, escape, sight, sightTo, blockedAll);
             rig.Cam.Render();
             var prev = RenderTexture.active;
             RenderTexture.active = rig.Rt;

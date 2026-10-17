@@ -24,8 +24,10 @@ namespace Battalion.View
             float px = PixelsToWorld(1);
             float now = Time.unscaledTime;
 
+            DrawContourLabels(px);
             DrawVillage(px);
             if (_showTrigger) DrawTrigger(px);
+            DrawBlockedSights(px);
             DrawFireLines(px, now);
             DrawSelectedPath(px);
             foreach (var c in _sim.Companies)
@@ -36,6 +38,7 @@ namespace Battalion.View
             DrawDragPreview(px);
             if (_sightFrom.HasValue) _shapes.Circle(V(_sightFrom.Value), 6 * px, 2 * px, Palette.Selected, 16);
             DrawFloatTexts(px, now);
+            DrawProfile(px);
 
             _shapes.Apply();
             _texts.End();

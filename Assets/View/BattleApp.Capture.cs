@@ -61,9 +61,14 @@ namespace Battalion.View
         }
 
         /// <summary>表示の切り替えを設定して、駒と重ねる表示を描き直す。</summary>
-        public void DrawForCapture(int selectedId, int exposureMode, bool trigger, bool escape, Vec2? sightFrom)
+        public void DrawForCapture(int selectedId, int exposureMode, bool trigger, bool escape, Vec2? sightFrom,
+            Vec2? sightTo = null, bool blockedAll = false)
         {
             _selected = selectedId;
+            _sightTo = sightTo;
+            _showBlockedAll = blockedAll;
+            if (sightFrom.HasValue) SightPoint(sightFrom.Value, out _sightFromLabel);
+            if (sightTo.HasValue) SightPoint(sightTo.Value, out _sightToLabel);
             _exposureMode = exposureMode;
             _showTrigger = trigger;
             _showEscape = escape;
