@@ -127,6 +127,13 @@ namespace Battalion.Sim
             public double RetreatSpeedMult;
             /// <summary>味方中隊の中心どうしの最小間隔（P1a で使う）。</summary>
             public double FriendlyMinSpacingM;
+            /// <summary>止まっている味方の矩形と重なっている間（隊列の超越）の速さの倍率（P1e の1）。</summary>
+            public double PassThroughSpeedMult;
+            /// <summary>接敵中に、向きから横（60〜120°）の方角へ動くとき（横歩き）の速さの倍率（P1e の2）。</summary>
+            public double SidewaysSpeedMult;
+            /// <summary>接敵していないとき、向きと進む方角の差が <see cref="TurningSlowDeg"/> を超える間（旋回中）の速さの倍率。</summary>
+            public double TurningSpeedMult;
+            public double TurningSlowDeg;
         }
 
         /// <summary>
@@ -186,7 +193,7 @@ namespace Battalion.Sim
             public double DestinationSearchStepM;
             public double DestinationSearchMaxM;
             public int DestinationSearchDirs;
-            /// <summary>経路探索で、止まっている味方の中心からこの距離未満のマスに入らない。</summary>
+            /// <summary>経路探索で、止まっている味方の中心からこの距離未満のマスは高コスト（P1e の1。P1d までは通れなかった）。</summary>
             public double AvoidStationaryFriendM;
             /// <summary>陣地構築：完成までの時間、完成時の被弾倍率、塹壕にする左右のマス数。</summary>
             public double EntrenchSec;
@@ -194,6 +201,8 @@ namespace Battalion.Sim
             public int EntrenchHalfWidthCells;
             /// <summary>退路の見積もりで、川に突き当たる方位の損害割合（逃げられない）。</summary>
             public double BlockedEscapeLoss;
+            /// <summary>止まっている味方の圏（<see cref="AvoidStationaryFriendM"/> 未満のマス）の距離のコストの倍率（P1e の1）。</summary>
+            public double StationaryFriendPathCostMult;
 
             public double ThreatWeight(Personality p) => ThreatWeightByPersonality[p];
         }
@@ -205,7 +214,7 @@ namespace Battalion.Sim
             public double AttackSideSwitchRatio;
             /// <summary>動いている中隊は、自分の矩形と敵の矩形の隙間がこれ未満になる手前で止まる。</summary>
             public double EnemyMinGapM;
-            /// <summary>拘束：目標の中心から、今いる方角へこの距離の点まで詰める。</summary>
+            /// <summary>近い拘束：目標の中心から、今いる方角へこの距離の点まで詰める。</summary>
             public double PinDistanceM;
             /// <summary>追撃：壊走中の目標からこの距離を保って追う。</summary>
             public double PursuitKeepDistanceM;
@@ -234,6 +243,12 @@ namespace Battalion.Sim
             public double DisarrayFireMult;
             /// <summary>壊走中の方位は、新しい最小の方位の見積もり損害が今の方位よりこれ以上小さいときだけ替える。</summary>
             public double FleeSwitchMinGain;
+            /// <summary>接敵：この距離以内に視線の通る指揮下の敵がいる（P1e の2）。</summary>
+            public double ContactRadiusM;
+            /// <summary>遠い拘束の距離（<see cref="PinDistanceM"/> は近い拘束。P1e の3）。</summary>
+            public double PinDistanceFarM;
+            /// <summary>範囲での攻撃の指定：今の方角が範囲の外なら、範囲の端からこの角度だけ内側の方角から攻める（P1e の4）。</summary>
+            public double AttackRangeInsetDeg;
         }
 
         public static SimParams LoadFile(string path) => FromJson(File.ReadAllText(path));
@@ -317,6 +332,10 @@ namespace Battalion.Sim
             p.Movement.CompanyStrength = (int)mv.D("company_strength");
             p.Movement.RetreatSpeedMult = mv.D("retreat_speed_mult");
             p.Movement.FriendlyMinSpacingM = mv.D("friendly_min_spacing_m");
+            p.Movement.PassThroughSpeedMult = mv.D("pass_through_speed_mult");
+            p.Movement.SidewaysSpeedMult = mv.D("sideways_speed_mult");
+            p.Movement.TurningSpeedMult = mv.D("turning_speed_mult");
+            p.Movement.TurningSlowDeg = mv.D("turning_slow_deg");
 
             var te = root["terrain"];
             ReadCharTable(te["move_mult"], p.Terrain.Move);
@@ -352,6 +371,7 @@ namespace Battalion.Sim
             p.MapRules.EntrenchDamageMult = mr.D("entrench_damage_mult");
             p.MapRules.EntrenchHalfWidthCells = (int)mr.D("entrench_half_width_cells");
             p.MapRules.BlockedEscapeLoss = mr.D("blocked_escape_loss");
+            p.MapRules.StationaryFriendPathCostMult = mr.D("stationary_friend_path_cost_mult");
 
             var be = root["behavior"];
             p.Behavior.AttackSideSwitchRatio = be.D("attack_side_switch_ratio");
@@ -372,6 +392,9 @@ namespace Battalion.Sim
             p.Behavior.DisarraySec = be.D("disarray_sec");
             p.Behavior.DisarrayFireMult = be.D("disarray_fire_mult");
             p.Behavior.FleeSwitchMinGain = be.D("flee_switch_min_gain");
+            p.Behavior.ContactRadiusM = be.D("contact_radius_m");
+            p.Behavior.PinDistanceFarM = be.D("pin_distance_far_m");
+            p.Behavior.AttackRangeInsetDeg = be.D("attack_range_inset_deg");
 
             return p;
         }

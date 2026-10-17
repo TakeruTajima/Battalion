@@ -50,17 +50,15 @@ namespace Battalion.Sim
         public Vec2 MoveGoal;
         /// <summary>次に経路を引き直す時刻（秒）。</summary>
         public double NextReplanTime;
-        /// <summary>後退で、向きを変えずに後ろ向きに下がっているか。</summary>
-        public bool Backward;
-        /// <summary>攻撃で選んだ方向と側（+1 は目標の左、−1 は右、0 は正面・背面）。</summary>
+        /// <summary>
+        /// 攻撃：選んだ方角（目標の中心から見た発起点の方角、地図の方角）と、選んだときの結果の向き（正面・側面・背面）。
+        /// </summary>
         public AttackAspect AttackChosenAspect;
-        public int AttackSide;
+        public double AttackBearing;
         /// <summary>経路の脅威の重みを性格の値から置き換える（予備隊の台本で 0）。null なら性格の値。</summary>
         public double? ThreatWeightOverride;
 
         // ---- P1d：行動の規則
-        /// <summary>攻撃の側をプレイヤーが指定したか（指定していなければ、着くまで選び直す）。</summary>
-        public bool AttackSideLocked;
         /// <summary>攻撃で発起点に着いた後：目標の中心から見た自分の方角（地図の方角）と、そのときの目標の中心。</summary>
         public bool AttackFixed;
         public double AttackFixedBearing;
@@ -84,6 +82,16 @@ namespace Battalion.Sim
         public readonly System.Collections.Generic.HashSet<int> PassedBy = new System.Collections.Generic.HashSet<int>();
         /// <summary>今の逃げる方位の添字（揺れ止めに使う。−1 はまだない）。</summary>
         public int FleeDirIndex = -1;
+
+        // ---- P1e：動くときの向きと隊列の超越
+        /// <summary>接敵中か（400m 以内に視線の通る指揮下の敵がいる）。毎刻み、移動の前に、経路に沿って動く中隊だけ判定する。</summary>
+        public bool InContact;
+        /// <summary>その刻みの動き方（表示用）。</summary>
+        public MoveStyle MoveStyle;
+        /// <summary>超越中の、止まっている味方の ID（押し離しをしない相手）。毎刻み、移動の前に判定する。</summary>
+        public readonly System.Collections.Generic.HashSet<int> Passing = new System.Collections.Generic.HashSet<int>();
+        /// <summary>止まっている味方の矩形と重なっているか（超越の ×0.5）。毎刻み、移動の前に判定する。</summary>
+        public bool PassOverlap;
 
         /// <summary>その刻みに位置が変わったか（塹壕の被弾倍率と陣地構築に使う）。</summary>
         public bool MovedThisTick;

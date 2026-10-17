@@ -160,12 +160,9 @@ namespace Battalion.Sim
 
             Triggered = true;
             TriggeredAt = tickStart;
-            // 目標の左（向きから +90°）の側に R3 がいれば左の側面、そうでなければ右の側面
-            var left = new Vec2(-Math.Sin(target.Facing), Math.Cos(target.Facing));
-            int side = (r3.Position - target.Position).Dot(left) > 0 ? +1 : -1;
             r3.ThreatWeightOverride = sim.Params.MapRules.ScriptedThreatWeight;
-            // 最初の側は R3 の側。固定はせず、着くまで経路を引き直すたびに安い側を選び直す（P1d の1）
-            sim.Issue(Order.Attack(r3.Id, target.Id, AttackAspect.Flank, side, lockSide: false));
+            // 側面の範囲で攻撃する（P1e の4。逆襲は突出した敵の側面を突く）。範囲なので、目標が向きを変えれば選び直す
+            sim.Issue(Order.Attack(r3.Id, target.Id, AttackAspect.Flank));
             sim.LogScriptEvent(tickStart + sim.Params.TickSec, "reserve_counterattack", r3, target);
         }
     }

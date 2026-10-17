@@ -30,24 +30,22 @@ namespace Battalion.Sim.Tests
 
         // ---------------------------------------------------------------- 1. 攻撃の側と方角の固定
 
-        [TestCase(false, -1)]
-        [TestCase(true, +1)]
-        public void UnlockedFlankSwitchesWhenTargetTurnsLockedKeeps(bool locked, int expectedSide)
+        [TestCase(false, -30)]
+        [TestCase(true, -90)]
+        public void FlankRangeIsReconsideredWhenTargetTurnsMapBearingKeeps(bool byBearing, double expectedDeg)
         {
             var sim = Flat();
-            // 目標は西向き：左（+1）は南、右（−1）は北。攻撃側は真南にいるので、最初は左（南）が安い
+            // 目標は西向き。攻撃側は真南にいる：側面の範囲に入っているので、今の方角（南）から攻める（P1e の4）
             var a = Add(sim, "A", Side.Blue, 1500, -1500, 90);
             var e = Add(sim, "E", Side.Red, 1500, 0, 180);
-            sim.Issue(Order.Attack(a.Id, e.Id, AttackAspect.Flank, +1, lockSide: locked));
+            sim.Issue(byBearing ? Order.AttackFrom(a.Id, e.Id, -Math.PI / 2) : Order.Attack(a.Id, e.Id, AttackAspect.Flank));
             sim.Step();
-            Assert.That(a.AttackSide, Is.EqualTo(+1));
-            // 目標が東を向く：左は北、右は南。固定していなければ、次の引き直しで右（南）へ替える
-            e.Facing = 0;
+            Assert.That(Deg(a.AttackBearing), Is.EqualTo(-90).Within(1e-6));
+            // 目標が北東寄り（80°）を向く：南は背面になる。範囲の指定なら、側面の端から 10° 内側のうち近い方（−30°）へ選び直す
+            e.Facing = 80 * Angles.DegToRad;
             Run(sim, 31);
-            Assert.That(a.AttackSide, Is.EqualTo(expectedSide));
-            var expected = sim.JumpOff(e, AttackAspect.Flank, expectedSide);
-            Assert.That(Vec2.Distance(a.MoveGoal, expected), Is.LessThan(1e-6));
-            Assert.That(expected.Y, Is.EqualTo(expectedSide == -1 ? -250 : 250).Within(1e-6));
+            Assert.That(Deg(Angles.Wrap(a.AttackBearing)), Is.EqualTo(expectedDeg).Within(1e-6));
+            Assert.That(Vec2.Distance(a.MoveGoal, sim.JumpOff(e, a.AttackBearing)), Is.LessThan(1e-6));
         }
 
         [Test]
@@ -152,7 +150,7 @@ namespace Battalion.Sim.Tests
             var sim = Flat();
             var a = Add(sim, "A", Side.Blue, -400, 0, 0);
             var e = Add(sim, "E", Side.Red, 0, 0, 180); // こちらを向いている：隙間は 125−25−25＝75m
-            sim.Issue(Order.Pin(a.Id, e.Id));
+            sim.Issue(Order.Pin(a.Id, e.Id, PinRange.Near));
             for (int k = 0; k < 1200; k++) { Freeze(a, e); sim.Step(); }
             Assert.That(Vec2.Distance(a.Position, e.Position), Is.EqualTo(125).Within(1e-6));
             Assert.That(a.Position.Y, Is.EqualTo(0).Within(1e-6), "回り込まずに、今いる方角から詰める");
@@ -169,8 +167,8 @@ namespace Battalion.Sim.Tests
             var e = Add(sim, "E", Side.Red, 0, 0, 180);
             sim.Step();
             Assert.That(shaken.State, Is.EqualTo(CompanyState.Shaken));
-            sim.Issue(Order.Pin(near.Id, e.Id));
-            sim.Issue(Order.Pin(shaken.Id, e.Id));
+            sim.Issue(Order.Pin(near.Id, e.Id, PinRange.Near));
+            sim.Issue(Order.Pin(shaken.Id, e.Id, PinRange.Near));
             for (int k = 0; k < 120; k++) { near.Morale = 100; shaken.Morale = 45; e.Morale = 100; sim.Step(); }
             Assert.That(near.Position.X, Is.EqualTo(-100), "125m より近ければ下がらない");
             Assert.That(shaken.Position.Y, Is.EqualTo(-400), "動揺中は詰めない");

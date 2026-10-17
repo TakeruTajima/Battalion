@@ -143,10 +143,13 @@ namespace Battalion.Sim
         {
             double dt = _p.TickSec;
             double maxTurn = _p.Movement.TurnDegPerSec * Angles.DegToRad * dt;
+            // 接敵と隊列の超越は、全中隊が動く前の位置でまとめて判定する（処理の順番で結果が変わらないように。P1e）
+            UpdateContactAndPassing();
 
             foreach (var c in _companies)
             {
                 c.MovedThisTick = false;
+                c.MoveStyle = MoveStyle.None;
                 if (!c.OnBoard) continue;
 
                 if (c.State == CompanyState.Routed)

@@ -29,36 +29,39 @@ namespace Battalion.Sim.Tests
         // ---------------------------------------------------------------- 後退の向き
 
         [Test]
-        public void RetreatToRearArcBacksAwayWithoutTurning()
+        public void RetreatInContactToRearArcBacksAwayWithoutTurning()
         {
             var sim = Flat();
             var a = Add(sim, "A", Side.Blue, 0, 0, 0);
-            Add(sim, "Far", Side.Red, 1900, 1900, 180);
+            var e = Add(sim, "E", Side.Red, 350, 0, 180); // 接敵中（350m、視線が通る）
             sim.Issue(Order.Retreat(a.Id, new Vec2(-200, -80))); // 向き（東）から約158°：背後の弧
             sim.Step();
-            Assert.That(a.Backward, Is.True);
+            Assert.That(a.InContact, Is.True);
+            Assert.That(a.MoveStyle, Is.EqualTo(MoveStyle.Backward));
             Assert.That(a.Facing, Is.EqualTo(0).Within(1e-12));
             Assert.That(a.Position.X, Is.LessThan(0));
-            Run(sim, 600);
-            Assert.That(a.Arrived, Is.True);
-            Assert.That(a.Facing, Is.EqualTo(0).Within(1e-12), "後ろ向きのまま下がり、向きは変わらない");
+            for (int k = 0; k < 60; k++) { a.Morale = 100; e.Morale = 100; sim.Step(); }
+            Assert.That(a.Facing, Is.EqualTo(0).Within(1e-12), "接敵中は後ろ向きのまま下がり、向きは変わらない");
+            Assert.That(Vec2.Distance(a.Position, new Vec2(0, 0)), Is.EqualTo(1.2 * 0.6 * 30.5).Within(0.2), "×0.6（経路はマスの中心を通るので、直線距離は少し短い）");
         }
 
         [Test]
-        public void RetreatOutsideRearArcTurnsAndMovesLikeAdvance()
+        public void RetreatOutOfContactTurnsWhileMovingAtNormalSpeed()
         {
             var sim = Flat();
             var a = Add(sim, "A", Side.Blue, 0, 0, 0);
             Add(sim, "Far", Side.Red, 1900, 1900, 180);
-            sim.Issue(Order.Retreat(a.Id, new Vec2(0, -300))); // 向きから 90°：側面。前進と同じ扱い
+            sim.Issue(Order.Retreat(a.Id, new Vec2(-1000, 0))); // 真後ろ。接敵していないので振り向いて下がる（P1e の2）
             sim.Step();
-            Assert.That(a.Backward, Is.False);
-            Assert.That(a.Position.Y, Is.EqualTo(0), "旋回し終えるまでは動かない");
-            Run(sim, 15);
-            Assert.That(a.Facing, Is.EqualTo(-Math.PI / 2).Within(1e-9));
-            Run(sim, 10);
-            Assert.That(a.Position.Y, Is.LessThan(-10), "速度は ×0.6 にならない（1.2m/s）");
-            Assert.That(a.Position.Y, Is.EqualTo(-1.2 * 10).Within(1.2));
+            Assert.That(a.InContact, Is.False);
+            Assert.That(a.MoveStyle, Is.EqualTo(MoveStyle.Turning));
+            Assert.That(a.Position.X, Is.EqualTo(-1.2 * 0.7 * 0.5).Within(1e-9), "旋回中は ×0.7 で、止まらずに進む");
+            Run(sim, 40);
+            Assert.That(Math.Abs(a.Facing), Is.EqualTo(Math.PI).Within(1e-9), "振り向いた");
+            Assert.That(a.MoveStyle, Is.EqualTo(MoveStyle.Forward));
+            double x = a.Position.X;
+            sim.Step();
+            Assert.That(x - a.Position.X, Is.EqualTo(1.2 * 0.5).Within(1e-9), "振り向いた後は普通の速さ（×0.6 にならない）");
         }
 
         // ---------------------------------------------------------------- 陣地構築
@@ -159,9 +162,9 @@ namespace Battalion.Sim.Tests
         }
 
         [Test]
-        public void PathGoesAroundGapBetweenStationaryFriends()
+        public void PassesBetweenStationaryFriendsWithoutPushingThem()
         {
-            // 止まっている2個中隊の間（250m）は通れない（押されないので挟まって動けなくなる）。経路はその外を回る
+            // 止まっている2個中隊の間（250m）。P1d までは通れなかった。P1e からは高コスト（×3）。ここでは回る方が安いが、どちらでも挟まらずに着く
             var sim = Flat();
             var f1 = Add(sim, "F1", Side.Blue, 0, 125, 180);
             var f2 = Add(sim, "F2", Side.Blue, 0, -125, 180);
@@ -176,7 +179,6 @@ namespace Battalion.Sim.Tests
             }
             Assert.That(m.Arrived, Is.True, "挟まらずに目的地に着く");
             Assert.That(Vec2.Distance(m.Position, new Vec2(-400, 0)), Is.LessThan(1e-6));
-            Assert.That(minDist, Is.GreaterThanOrEqualTo(200 - 1e-6));
             Assert.That(f1.Position.Y, Is.EqualTo(125));
             Assert.That(f2.Position.Y, Is.EqualTo(-125));
         }
@@ -203,21 +205,23 @@ namespace Battalion.Sim.Tests
         // ---------------------------------------------------------------- 攻撃
 
         [Test]
-        public void JumpOffPointsAre250mFromTheEnemyByItsFacing()
+        public void JumpOffPointsAre250mFromTheEnemyByBearing()
         {
             var sim = Flat();
             var e = Add(sim, "E", Side.Red, 1000, 0, 180); // 西向き
-            Assert.That(Dist(sim.JumpOff(e, AttackAspect.Front, 0), new Vec2(750, 0)), Is.LessThan(1e-9));
-            Assert.That(Dist(sim.JumpOff(e, AttackAspect.Rear, 0), new Vec2(1250, 0)), Is.LessThan(1e-9));
-            Assert.That(Dist(sim.JumpOff(e, AttackAspect.Flank, +1), new Vec2(1000, -250)), Is.LessThan(1e-9), "西向きの左は南");
-            Assert.That(Dist(sim.JumpOff(e, AttackAspect.Flank, -1), new Vec2(1000, 250)), Is.LessThan(1e-9));
+            Assert.That(Dist(sim.JumpOff(e, Math.PI), new Vec2(750, 0)), Is.LessThan(1e-9));
+            Assert.That(Dist(sim.JumpOff(e, 0), new Vec2(1250, 0)), Is.LessThan(1e-9));
+            Assert.That(Dist(sim.JumpOff(e, -Math.PI / 2), new Vec2(1000, -250)), Is.LessThan(1e-9));
+            Assert.That(sim.AspectOfBearing(e, Math.PI), Is.EqualTo(AttackAspect.Front));
+            Assert.That(sim.AspectOfBearing(e, -Math.PI / 2), Is.EqualTo(AttackAspect.Flank));
+            Assert.That(sim.AspectOfBearing(e, 0), Is.EqualTo(AttackAspect.Rear));
         }
 
         static double Dist(Vec2 a, Vec2 b) => Vec2.Distance(a, b);
 
         [TestCase(Personality.Calm, AttackAspect.Front)]
         [TestCase(Personality.Agile, AttackAspect.Flank)]
-        public void UnspecifiedAttackIsFrontalExceptAgileTakesCheapFlank(Personality pers, AttackAspect expected)
+        public void UnspecifiedAttackFromTheFrontIsFrontalExceptAgileTakesCheapFlank(Personality pers, AttackAspect expected)
         {
             var sim = Flat();
             var a = Add(sim, "A", Side.Blue, 0, 0, 0, pers);
@@ -232,14 +236,14 @@ namespace Battalion.Sim.Tests
         {
             var sim = Flat();
             var a = Add(sim, "A", Side.Blue, 0, 0, 0);
-            var e = Add(sim, "E", Side.Red, 1000, 0, 90); // 北向き：正面の発起点は (1000, 250)
+            var e = Add(sim, "E", Side.Red, 1000, 0, 90); // 北向き。A は西（側面）にいるので、正面の範囲の端から 10° 内側（140°）の点
             sim.Issue(Order.Attack(a.Id, e.Id, AttackAspect.Front));
             Run(sim, 1500);
             Assert.That(a.CurrentOrder.Type, Is.EqualTo(OrderType.Attack));
             Assert.That(a.Arrived, Is.True);
-            Assert.That(Vec2.Distance(a.Position, new Vec2(1000, 250)), Is.LessThan(1e-6));
+            Assert.That(Vec2.Distance(a.Position, sim.JumpOff(e, 140 * Angles.DegToRad)), Is.LessThan(1e-6));
             Assert.That(sim.AspectOf(a, e.Position), Is.EqualTo(Aspect.Front), "着いたら敵に正面を向ける");
-            Assert.That(a.Facing, Is.EqualTo(-Math.PI / 2).Within(1e-9));
+            Assert.That(a.Facing, Is.EqualTo(-40 * Angles.DegToRad).Within(1e-9));
         }
 
         [Test]
@@ -267,8 +271,7 @@ namespace Battalion.Sim.Tests
             Run(sim, 20);
             Assert.That(a.Facing, Is.EqualTo(Math.PI / 2).Within(1e-9), "目標に正面を向ける");
             Assert.That(a.TargetId, Is.EqualTo(t.Id), "近い敵がいても拘束の目標を撃つ");
-            Assert.That(a.Position.X, Is.EqualTo(0).Within(1e-6), "P1d から、拘束は目標へ向かって（北へ）詰める");
-            Assert.That(a.Position.Y, Is.GreaterThan(0));
+            Assert.That(Vec2.Distance(a.Position, new Vec2(0, 0)), Is.LessThan(1e-9), "遠い拘束（P1e）：すでに 350m 以内なのでその場"); 
         }
 
         // ---------------------------------------------------------------- 視線と地形

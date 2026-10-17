@@ -30,19 +30,5 @@ namespace Battalion.View
             ToLocal(center, facingRad, p, out double along, out double across);
             return Math.Abs(along) <= depthM / 2 + marginM && Math.Abs(across) <= frontageM / 2 + marginM;
         }
-
-        /// <summary>
-        /// 攻撃で「側面」を選んで敵の駒をクリックしたときの側。長辺を3等分し、左の端なら +1（敵の左の側面）、
-        /// 右の端なら −1（右の側面）、中央なら 0（Sim が経路コストの小さい側を選ぶ）。
-        /// 側の符号は <see cref="Simulation.JumpOff"/> と同じ（+1 は敵の向きから見て左）。
-        /// </summary>
-        public static int FlankSideAt(Vec2 center, double facingRad, double frontageM, Vec2 p)
-        {
-            ToLocal(center, facingRad, p, out _, out double across);
-            double third = frontageM / 6; // 中心から長辺の 1/6 までが中央の 1/3
-            if (across > third) return +1;
-            if (across < -third) return -1;
-            return 0;
-        }
     }
 }

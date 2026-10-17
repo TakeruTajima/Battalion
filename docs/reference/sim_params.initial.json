@@ -106,7 +106,11 @@
     "depth_m": 50,
     "company_strength": 150,
     "retreat_speed_mult": 0.6,
-    "friendly_min_spacing_m": 200
+    "friendly_min_spacing_m": 200,
+    "pass_through_speed_mult": 0.5,
+    "sideways_speed_mult": 0.5,
+    "turning_speed_mult": 0.7,
+    "turning_slow_deg": 20
   },
   "terrain": {
     "_note": "文字ごとの移動倍率・被弾倍率・視線を遮る重み。塹壕の被弾倍率は止まっている中隊にだけ効く。W は通れない",
@@ -166,7 +170,8 @@
     "entrench_sec": 600.0,
     "entrench_damage_mult": 0.3,
     "entrench_half_width_cells": 2,
-    "blocked_escape_loss": 1.0
+    "blocked_escape_loss": 1.0,
+    "stationary_friend_path_cost_mult": 3
   },
   "behavior": {
     "_note": "P1d の行動の規則。pursuit_limit_mult の 0 は追わない、turn_front_clear_m の -1 は向き直らない",
@@ -201,6 +206,9 @@
     "rout_pass_morale_hit": 5,
     "disarray_sec": 30,
     "disarray_fire_mult": 0.5,
-    "flee_switch_min_gain": 0.05
+    "flee_switch_min_gain": 0.05,
+    "contact_radius_m": 400,
+    "pin_distance_far_m": 350,
+    "attack_range_inset_deg": 10
   }
 }

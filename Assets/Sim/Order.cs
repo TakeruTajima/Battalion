@@ -2,8 +2,14 @@ namespace Battalion.Sim
 {
     public enum OrderType { Hold, Advance, Retreat, Attack, Pin, Entrench }
 
-    /// <summary>攻撃の方向（目標の敵から見た向き）。None は「指定なし」（正面。ただし機敏は側面を選ぶことがある）。</summary>
+    /// <summary>
+    /// 攻撃の方向の範囲（目標の向きを基準に、正面は ±60°、側面は 60〜120°、背面は 120〜180°）。
+    /// None は「指定なし」（今いる方角から攻める。機敏はより良い向きを選ぶことがある）。P1e の4。
+    /// </summary>
     public enum AttackAspect { None, Front, Flank, Rear }
+
+    /// <summary>拘束の距離（P1e の3）：遠い（350m。足止めの効果はない）／近い（125m）。</summary>
+    public enum PinRange { Far, Near }
 
     /// <summary>攻撃の目標が崩れたら（P1d）：確保（その場で固める）／追撃可（性格で追うかを決める）。</summary>
     public enum AttackOnBreak { Secure, Pursue }
@@ -22,22 +28,21 @@ namespace Battalion.Sim
         public double? FacingRad { get; }
         /// <summary>攻撃・拘束の目標の敵中隊の ID。それ以外では −1。</summary>
         public int TargetId { get; }
+        /// <summary>攻撃の範囲での指定（<see cref="BearingRad"/> があればそちらが優先）。</summary>
         public AttackAspect Aspect { get; }
         /// <summary>
-        /// 攻撃で側面のときの最初の側（+1 は目標の左、−1 は右、0 は経路コストの小さい側を選ぶ）。
+        /// 攻撃の地図の方角での指定：目標の中心から見た発起点の方角（ラジアン、東から反時計回り）。
+        /// 指定した方角は、発起点に着くまで守る。null なら範囲（<see cref="Aspect"/>）の規則で選ぶ。
         /// </summary>
-        public int FlankSide { get; }
-        /// <summary>
-        /// 側をプレイヤーが指定したか（駒の端をクリックした）。指定した側は守る。指定していなければ、発起点に着くまで
-        /// 経路を引き直すたびに安い側を選び直す（予備隊の台本、機敏、中央のクリック）。
-        /// </summary>
-        public bool FlankSideLocked { get; }
+        public double? BearingRad { get; }
         /// <summary>攻撃の目標が崩れたら：確保／追撃可。</summary>
         public AttackOnBreak OnBreak { get; }
+        /// <summary>拘束の距離。</summary>
+        public PinRange PinRange { get; }
 
         Order(OrderType type, int companyId, Vec2? destination, double? facingRad,
-            int targetId = -1, AttackAspect aspect = AttackAspect.None, int flankSide = 0,
-            bool flankSideLocked = false, AttackOnBreak onBreak = AttackOnBreak.Secure)
+            int targetId = -1, AttackAspect aspect = AttackAspect.None, double? bearingRad = null,
+            AttackOnBreak onBreak = AttackOnBreak.Secure, PinRange pinRange = PinRange.Far)
         {
             Type = type;
             CompanyId = companyId;
@@ -45,9 +50,9 @@ namespace Battalion.Sim
             FacingRad = facingRad;
             TargetId = targetId;
             Aspect = aspect;
-            FlankSide = flankSide;
-            FlankSideLocked = flankSideLocked;
+            BearingRad = bearingRad;
             OnBreak = onBreak;
+            PinRange = pinRange;
         }
 
         public static Order Hold(int companyId, double? facingRad = null) =>
@@ -59,17 +64,19 @@ namespace Battalion.Sim
         public static Order Retreat(int companyId, Vec2 destination, double? facingRad = null) =>
             new Order(OrderType.Retreat, companyId, destination, facingRad);
 
-        /// <summary>
-        /// 攻撃。<paramref name="lockSide"/> を省くと、側を指定したとき（<paramref name="flankSide"/> が 0 でない）は固定する。
-        /// 予備隊の台本は、最初の側を決めるが固定しない（false）。
-        /// </summary>
-        public static Order Attack(int companyId, int targetId, AttackAspect aspect = AttackAspect.None, int flankSide = 0,
-            bool? lockSide = null, AttackOnBreak onBreak = AttackOnBreak.Secure) =>
-            new Order(OrderType.Attack, companyId, null, null, targetId, aspect, flankSide,
-                aspect == AttackAspect.Flank && flankSide != 0 && (lockSide ?? true), onBreak);
+        /// <summary>攻撃（範囲での指定。<paramref name="aspect"/> が None なら指定なし）。</summary>
+        public static Order Attack(int companyId, int targetId, AttackAspect aspect = AttackAspect.None,
+            AttackOnBreak onBreak = AttackOnBreak.Secure) =>
+            new Order(OrderType.Attack, companyId, null, null, targetId, aspect, null, onBreak);
 
-        public static Order Pin(int companyId, int targetId) =>
-            new Order(OrderType.Pin, companyId, null, null, targetId);
+        /// <summary>攻撃（地図の方角での指定。目標の中心から <paramref name="bearingRad"/> の方角の 250m の点が発起点）。</summary>
+        public static Order AttackFrom(int companyId, int targetId, double bearingRad,
+            AttackOnBreak onBreak = AttackOnBreak.Secure) =>
+            new Order(OrderType.Attack, companyId, null, null, targetId, AttackAspect.None, bearingRad, onBreak);
+
+        /// <summary>拘束（初期は遠い）。</summary>
+        public static Order Pin(int companyId, int targetId, PinRange range = PinRange.Far) =>
+            new Order(OrderType.Pin, companyId, null, null, targetId, pinRange: range);
 
         /// <summary>
         /// 陣地構築。目的地があれば前進と同じく移動し、着いて向きを変え終えたら掘り始める（移動中は進捗が増えない）。

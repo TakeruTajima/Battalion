@@ -89,8 +89,10 @@ namespace Battalion.Sim
 
         SightGrid SightOf(Company c)
         {
-            // 作り直しの後に指揮下へ戻った中隊などは、その場で作る（次の作り直しまで使う）
-            if (!_sight.TryGetValue(c.Id, out var g)) _sight[c.Id] = g = BuildSight(c);
+            // 作り直しの後に指揮下へ戻った中隊などは、その場で作る（次の作り直しまで使う）。下見では使い回しを作らない
+            if (_sight.TryGetValue(c.Id, out var g)) return g;
+            g = BuildSight(c);
+            if (!_previewing) _sight[c.Id] = g;
             return g;
         }
 
@@ -107,7 +109,9 @@ namespace Battalion.Sim
         {
             int s = (int)side;
             if (_exposure[s] != null) return _exposure[s];
-            return _exposure[s] = BuildExposure(side, SightOf);
+            var exp = BuildExposure(side, SightOf);
+            if (!_previewing) _exposure[s] = exp;
+            return exp;
         }
 
         bool[] BuildExposure(Side side, Func<Company, SightGrid> sightOf)
@@ -185,10 +189,7 @@ namespace Battalion.Sim
             c.Arrived = !order.Moves;
             c.Path = null;
             c.PathIndex = 0;
-            c.Backward = false;
             c.AttackChosenAspect = AttackAspect.None;
-            c.AttackSide = 0;
-            c.AttackSideLocked = false;
             c.AttackFixed = false;
             c.Pursuing = false;
             c.PursuitTargetId = -1;
@@ -218,15 +219,14 @@ namespace Battalion.Sim
                         HoldInPlace(c);
                         break;
                     }
-                    ChooseAttackAspect(c, tgt, order);
-                    c.AttackSideLocked = order.FlankSideLocked;
-                    c.MoveGoal = AdjustDestination(c, JumpOff(tgt, c.AttackChosenAspect, c.AttackSide));
+                    ChooseAttackBearing(c, tgt, order, true);
+                    c.MoveGoal = AdjustDestination(c, JumpOff(tgt, c.AttackBearing));
                     Plan(c, tickStart);
-                    if (_log.Enabled)
+                    if (_log.Enabled && !_previewing)
                         _log.Write(Ev(t, "attack_plan", c)
                             .Add("target", tgt.Name)
                             .Add("aspect", AspectName(c.AttackChosenAspect))
-                            .Add("side", c.AttackSide)
+                            .Add("bearing", Math.Round(Angles.Wrap(c.AttackBearing) * Angles.RadToDeg, 1))
                             .Add("x", c.MoveGoal.X)
                             .Add("y", c.MoveGoal.Y)
                             .ToString());
@@ -289,7 +289,6 @@ namespace Battalion.Sim
             }
             c.Path = PathFinder.ToWaypoints(_map, cells, c.MoveGoal);
             c.PathIndex = 0;
-            if (c.CurrentOrder.Type == OrderType.Retreat) c.Backward = InRearArc(c, c.MoveGoal);
         }
 
         /// <summary>
@@ -304,41 +303,41 @@ namespace Battalion.Sim
             var end = new PathFinder.Cell(gi, gj);
             var exposure = ExposureFor(c.Side);
             double w = ThreatWeightOf(c);
-            // 敵の矩形が掛かるマスは通らない（P1d の2）。止まっている味方は押されないので、その周り（中心から 200m 未満のマス）も避ける。
-            // 味方の周りを避けると届かなければ、敵だけを避けて引き直す。それでも届かなければ、届くところまでの経路を引く
+            // 敵の矩形の周りのマスは通らない（P1d の2）。止まっている味方の周り（中心から 200m 未満のマス）は、通れるが
+            // 距離のコストを ×3 にする（隊列の超越。P1e の1）。届かなければ、届くところまでの経路を引く
             double ec = _p.MapRules.ExposureCostM;
             var enemy = EnemyCells(c.Side);
             var friend = StationaryFriendZone(c);
-            bool[] both = enemy;
-            if (friend != null)
-            {
-                both = (bool[])enemy.Clone();
-                for (int k = 0; k < both.Length; k++) both[k] |= friend[k];
-            }
-            return PathFinder.Find(_map, start, end, exposure, w, ec, out cost, both)
-                   ?? PathFinder.Find(_map, start, end, exposure, w, ec, out cost, enemy)
-                   ?? (allowPartial ? PathFinder.Find(_map, start, end, exposure, w, ec, out cost, enemy, allowPartial: true) : null);
+            return PathFinder.Find(_map, start, end, exposure, w, ec, out cost, enemy, distanceMult: friend)
+                   ?? (allowPartial ? PathFinder.Find(_map, start, end, exposure, w, ec, out cost, enemy, true, friend) : null);
         }
 
+        /// <summary>止まっている指揮下の味方か（移動の命令がないか、着いている）。</summary>
+        static bool IsStationaryFriend(Company f, Company c) =>
+            f != c && f.Side == c.Side && f.OnBoard && f.UnderCommand && (!f.CurrentOrder.Moves || f.Arrived);
+
         /// <summary>
-        /// 止まっている指揮下の味方（移動の命令がないか、着いている中隊）の中心から 200m 未満のマス。
-        /// 経路はここを通らない。自分が今いるマスは除く。
+        /// 止まっている指揮下の味方の中心から 200m 未満のマスの、距離のコストの倍率（×3。それ以外は 1）。
+        /// 該当がなければ null。
         /// </summary>
-        bool[] StationaryFriendZone(Company c)
+        double[] StationaryFriendZone(Company c)
         {
-            bool[] zone = null;
+            double[] zone = null;
             double min = _p.MapRules.AvoidStationaryFriendM;
+            double mult = _p.MapRules.StationaryFriendPathCostMult;
             foreach (var f in _companies)
             {
-                if (f == c || f.Side != c.Side || !f.OnBoard || !f.UnderCommand) continue;
-                if (f.CurrentOrder.Moves && !f.Arrived) continue;
-                if (zone == null) zone = new bool[_map.Width * _map.Height];
+                if (!IsStationaryFriend(f, c)) continue;
+                if (zone == null)
+                {
+                    zone = new double[_map.Width * _map.Height];
+                    for (int k = 0; k < zone.Length; k++) zone[k] = 1.0;
+                }
                 Visibility.ForCellsWithin(_map, f.Position, min, (i, j, center) =>
                 {
-                    if (Vec2.Distance(center, f.Position) < min) zone[j * _map.Width + i] = true;
+                    if (Vec2.Distance(center, f.Position) < min) zone[j * _map.Width + i] = mult;
                 });
             }
-            if (zone != null) zone[_map.IndexOf(c.Position)] = false;
             return zone;
         }
 
@@ -348,64 +347,161 @@ namespace Battalion.Sim
             return cells == null ? double.PositiveInfinity : cost;
         }
 
-        /// <summary>目的地が向きから 120° より後ろ（背後の弧）にあるか。</summary>
-        bool InRearArc(Company c, Vec2 p)
-        {
-            var d = p - c.Position;
-            if (d.Length < 1e-9) return false;
-            double deg = Math.Abs(Angles.Wrap(Math.Atan2(d.Y, d.X) - c.Facing)) * Angles.RadToDeg;
-            return deg > _p.Fire.FlankArcDeg;
-        }
-
         // ---------------------------------------------------------------- 攻撃
 
-        /// <summary>攻撃の発起点：敵の中心から、敵の向きを基準にした方向へ 250m（側面は +1 が敵の左、−1 が右）。</summary>
-        public Vec2 JumpOff(Company tgt, AttackAspect aspect, int side)
+        /// <summary>攻撃の発起点：目標の中心から、地図の方角 <paramref name="bearingRad"/> へ 250m の点（P1e の4）。</summary>
+        public Vec2 JumpOff(Company tgt, double bearingRad) => tgt.Position + Vec2.FromAngle(bearingRad) * _p.MapRules.AttackStandoffM;
+
+        /// <summary>目標の中心から見た、<paramref name="p"/> の方角（同じ点なら目標の向き）。</summary>
+        public static double BearingFrom(Company tgt, Vec2 p)
         {
-            var front = Vec2.FromAngle(tgt.Facing);
-            var left = new Vec2(-front.Y, front.X);
-            switch (aspect)
-            {
-                case AttackAspect.Rear: return tgt.Position - front * _p.MapRules.AttackStandoffM;
-                case AttackAspect.Flank: return tgt.Position + left * (side * _p.MapRules.AttackStandoffM);
-                default: return tgt.Position + front * _p.MapRules.AttackStandoffM;
-            }
+            var d = p - tgt.Position;
+            return d.Length < 1e-9 ? tgt.Facing : Math.Atan2(d.Y, d.X);
         }
 
-        void ChooseAttackAspect(Company c, Company tgt, Order order)
+        /// <summary>
+        /// 方角 <paramref name="bearingRad"/> から攻めたときの向き（目標の向きとの差が ±60° 以内は正面、120° 以内は側面、それ以外は背面）。
+        /// </summary>
+        public AttackAspect AspectOfBearing(Company tgt, double bearingRad)
         {
-            var aspect = order.Aspect;
-            int side = 0;
-            if (aspect == AttackAspect.Flank)
+            double a = Math.Abs(Angles.Wrap(bearingRad - tgt.Facing)) * Angles.RadToDeg;
+            if (a <= _p.Fire.FrontArcDeg + 1e-9) return AttackAspect.Front;
+            if (a <= _p.Fire.FlankArcDeg + 1e-9) return AttackAspect.Flank;
+            return AttackAspect.Rear;
+        }
+
+        /// <summary>
+        /// 範囲での指定の候補の方角。今の方角 <paramref name="current"/> が範囲に入っていればそれだけ。
+        /// 入っていなければ、範囲の端から 10° 内側の方角のうち、今の方角に最も近いもの（同じ近さなら複数）。
+        /// </summary>
+        List<double> RangeCandidates(Company tgt, AttackAspect range, double current)
+        {
+            var list = new List<double>();
+            if (AspectOfBearing(tgt, current) == range)
             {
-                side = order.FlankSide != 0 ? Math.Sign(order.FlankSide) : CheaperFlankSide(c, tgt, out _);
+                list.Add(current);
+                return list;
             }
-            else if (aspect == AttackAspect.None)
+            double front = _p.Fire.FrontArcDeg, flank = _p.Fire.FlankArcDeg, inset = B.AttackRangeInsetDeg;
+            double[] rel;
+            switch (range)
             {
-                // 指定がなければ正面。機敏は、側面の経路コストが正面の1.5倍以下なら側面を選ぶ
-                aspect = AttackAspect.Front;
-                if (c.Personality == Personality.Agile)
+                case AttackAspect.Front: rel = new[] { front - inset, -(front - inset) }; break;
+                case AttackAspect.Rear: rel = new[] { flank + inset, -(flank + inset) }; break;
+                default: rel = new[] { front + inset, flank - inset, -(front + inset), -(flank - inset) }; break;
+            }
+            double best = double.MaxValue;
+            foreach (double r in rel)
+            {
+                double b = Angles.Wrap(tgt.Facing + r * Angles.DegToRad);
+                double d = Math.Abs(Angles.Wrap(b - current));
+                if (d < best - 1e-9)
                 {
-                    double front = PathCost(c, JumpOff(tgt, AttackAspect.Front, 0));
-                    int s = CheaperFlankSide(c, tgt, out double flank);
-                    if (!double.IsInfinity(flank) && flank <= _p.MapRules.AgileFlankCostRatio * front)
+                    best = d;
+                    list.Clear();
+                    list.Add(b);
+                }
+                else if (Math.Abs(d - best) <= 1e-9) list.Add(b);
+            }
+            return list;
+        }
+
+        /// <summary>
+        /// 攻撃の方角を選ぶ（P1e の4）。地図の方角の指定はそのまま。範囲の指定は <see cref="RangeCandidates"/> から。
+        /// 指定なしは今の方角。機敏は、今より良い向き（正面＜側面＜背面）の範囲の候補のうち、経路コストが今の方角の 1.5 倍以下で
+        /// 最も良い向きを選ぶ。候補を経路コストで選ぶときは、前に選んだ方角を、他の候補が 0.8 倍未満のときだけ替える。
+        /// 選び直し（<paramref name="first"/> が false）では、前に選んだ方角が今も同じ範囲（指定なしなら同じ向き）に入っていれば保つ。
+        /// 近づく途中で今の方角が範囲に入るたびに発起点が範囲の端へ寄っていかないように（端から 10° 内側の意味がなくなる）。
+        /// </summary>
+        void ChooseAttackBearing(Company c, Company tgt, Order order, bool first)
+        {
+            double bearing;
+            if (order.BearingRad.HasValue)
+            {
+                bearing = order.BearingRad.Value;
+            }
+            else
+            {
+                double current = BearingFrom(tgt, c.Position);
+                double? prev = first ? (double?)null : c.AttackBearing;
+                if (order.Aspect != AttackAspect.None)
+                {
+                    bearing = prev.HasValue && AspectOfBearing(tgt, prev.Value) == order.Aspect
+                        ? prev.Value
+                        : Cheapest(c, tgt, RangeCandidates(tgt, order.Aspect, current), prev, out _);
+                }
+                else if (prev.HasValue && c.Personality != Personality.Agile)
+                {
+                    bearing = prev.Value;
+                }
+                else
+                {
+                    bearing = current;
+                    if (c.Personality == Personality.Agile)
                     {
-                        aspect = AttackAspect.Flank;
-                        side = s;
+                        var now = AspectOfBearing(tgt, current);
+                        double baseCost = PathCost(c, JumpOff(tgt, current));
+                        for (var r = AttackAspect.Rear; r > now; r--)
+                        {
+                            double b = Cheapest(c, tgt, RangeCandidates(tgt, r, current), prev, out double cost);
+                            if (!double.IsInfinity(cost) && cost <= _p.MapRules.AgileFlankCostRatio * baseCost)
+                            {
+                                bearing = b;
+                                break;
+                            }
+                        }
+                        if (prev.HasValue && AspectOfBearing(tgt, prev.Value) == AspectOfBearing(tgt, bearing)) bearing = prev.Value;
                     }
                 }
             }
-            c.AttackChosenAspect = aspect;
-            c.AttackSide = side;
+            // 着く前の選び直しで方角が大きく（20° 以上）変わったらログに残す
+            if (!first && _log.Enabled && !_previewing && Math.Abs(Angles.Wrap(bearing - c.AttackBearing)) * Angles.RadToDeg >= 20)
+                _log.Write(Ev(Time, "attack_bearing_change", c)
+                    .Add("target", tgt.Name)
+                    .Add("aspect", AspectName(AspectOfBearing(tgt, bearing)))
+                    .Add("bearing", Math.Round(Angles.Wrap(bearing) * Angles.RadToDeg, 1))
+                    .ToString());
+            c.AttackBearing = bearing;
+            c.AttackChosenAspect = AspectOfBearing(tgt, bearing);
         }
 
-        /// <summary>左右の側面の発起点のうち、経路コストの小さい側（同じなら左）。</summary>
-        int CheaperFlankSide(Company c, Company tgt, out double cost)
+        static bool SameBearing(double a, double b) => Math.Abs(Angles.Wrap(a - b)) < 0.5 * Angles.DegToRad;
+
+        /// <summary>
+        /// 候補の方角のうち、経路コストの最も安いもの（届かない候補は選ばない。候補が1つならそれ）。
+        /// 前に選んだ方角 <paramref name="prev"/> が候補にあれば、他の候補がその 0.8 倍未満のときだけ替える（P1d の揺れ止め）。
+        /// </summary>
+        double Cheapest(Company c, Company tgt, List<double> candidates, double? prev, out double cost)
         {
-            double left = PathCost(c, JumpOff(tgt, AttackAspect.Flank, +1));
-            double right = PathCost(c, JumpOff(tgt, AttackAspect.Flank, -1));
-            cost = Math.Min(left, right);
-            return left <= right ? +1 : -1;
+            if (candidates.Count == 1)
+            {
+                cost = PathCost(c, JumpOff(tgt, candidates[0]));
+                return candidates[0];
+            }
+            double best = candidates[0];
+            cost = double.PositiveInfinity;
+            double? prevCost = null;
+            double prevB = 0;
+            foreach (double b in candidates)
+            {
+                double k = PathCost(c, JumpOff(tgt, b));
+                if (prev.HasValue && SameBearing(b, prev.Value))
+                {
+                    prevCost = k;
+                    prevB = b;
+                }
+                if (k < cost)
+                {
+                    cost = k;
+                    best = b;
+                }
+            }
+            if (prevCost.HasValue && !double.IsInfinity(prevCost.Value) && !(cost < B.AttackSideSwitchRatio * prevCost.Value))
+            {
+                cost = prevCost.Value;
+                return prevB;
+            }
+            return best;
         }
 
         void FaceToward(Company c, Vec2 p, double maxTurn)
@@ -479,8 +575,9 @@ namespace Battalion.Sim
         }
 
         /// <summary>
-        /// 経路に沿って進む。速度は中心のマスの移動倍率×拘束の×0.5。前進は各区間の向きへ旋回し終えてから進む。
-        /// 後ろ向きの後退は向きを変えずに×0.6で下がる。到着したら指定の向きへ旋回する。
+        /// 経路に沿って進む（P1e の2）。速度は中心のマスの移動倍率×拘束の×0.5×超越の×0.5（味方の矩形と重なる間）に、動き方の倍率を掛ける。
+        /// 接敵中は向きを変えずに動く：進む方角が正面の弧なら前進、横（60〜120°）なら横歩き ×0.5、背後の弧なら後ろ向き ×0.6。
+        /// 接敵していなければ、進む方角へ旋回しながら進む（向きとの差が 20° を超える間は ×0.7）。到着したら指定の向きへ旋回する。
         /// </summary>
         void FollowPath(Company c, double dt, double maxTurn)
         {
@@ -501,17 +598,40 @@ namespace Battalion.Sim
             double mv = _map.MoveMult(_map.TerrainAt(c.Position));
             if (mv <= 0) mv = _map.MoveMult(TerrainMap.Ford); // 通れないマスに押し出された場合の保険
             double speed = _p.Movement.SpeedMps * mv * (c.Pinned ? _p.Pinning.MoveMult : 1.0);
-            if (c.Backward)
+            if (c.PassOverlap) speed *= _p.Movement.PassThroughSpeedMult;
+            double heading = Math.Atan2(to.Y, to.X);
+            if (c.InContact)
             {
-                // 後退は向きを変えずに後ろ向きに下がる（速度×0.6）。背を向けて逃げるのは壊走だけ
-                speed *= _p.Movement.RetreatSpeedMult;
+                // 接敵中は向きを変えない（敵に横腹や背を向けない）。背を向けて逃げるのは壊走だけ
+                double diff = Math.Abs(Angles.Wrap(heading - c.Facing)) * Angles.RadToDeg;
+                if (diff <= _p.Fire.FrontArcDeg + 1e-9)
+                {
+                    c.MoveStyle = MoveStyle.Forward;
+                }
+                else if (diff <= _p.Fire.FlankArcDeg + 1e-9)
+                {
+                    c.MoveStyle = MoveStyle.Sideways;
+                    speed *= _p.Movement.SidewaysSpeedMult;
+                }
+                else
+                {
+                    c.MoveStyle = MoveStyle.Backward;
+                    speed *= _p.Movement.RetreatSpeedMult;
+                }
             }
             else
             {
-                // 進行方向を向いてから進む（旋回が終わるまでは動かない）
-                double heading = Math.Atan2(to.Y, to.X);
+                // 曲がり角で止まらず、旋回しながら進む
                 c.Facing = TurnToward(c.Facing, heading, maxTurn);
-                if (Math.Abs(Angles.Wrap(heading - c.Facing)) > 1e-9) return;
+                if (Math.Abs(Angles.Wrap(heading - c.Facing)) * Angles.RadToDeg > _p.Movement.TurningSlowDeg)
+                {
+                    c.MoveStyle = MoveStyle.Turning;
+                    speed *= _p.Movement.TurningSpeedMult;
+                }
+                else
+                {
+                    c.MoveStyle = MoveStyle.Forward;
+                }
             }
 
             double step = speed * dt;
@@ -586,6 +706,8 @@ namespace Battalion.Sim
                     var d = cb.Position - ca.Position;
                     double dist = d.Length;
                     if (dist >= min || (!ca.MovedThisTick && !cb.MovedThisTick)) continue;
+                    // 隊列の超越の間は押し離さない（P1e の1）
+                    if (ca.Passing.Contains(cb.Id) || cb.Passing.Contains(ca.Id)) continue;
                     var u = dist < 1e-6 ? new Vec2(0, 1) : d * (1.0 / dist);
                     double overlap = min - dist;
                     if (ca.MovedThisTick && cb.MovedThisTick)

@@ -222,6 +222,8 @@ namespace Battalion.View
             string s = StateName(c.State);
             if (c.UnderCommand)
             {
+                string ms = MoveStyleName(c.MoveStyle);
+                if (ms != null) s += "・" + ms;
                 if (c.TurnWaitStart.HasValue) s += "・向き直り待ち";
                 else if (c.FacingOverride.HasValue && Math.Abs(Angles.Wrap(c.FacingOverride.Value - c.Facing)) > 1e-6) s += "・向き直り中";
                 if (c.DisarrayUntil >= _sim.Time) s += "・<color=#ffa040>隊形の乱れ</color>";
@@ -248,13 +250,12 @@ namespace Battalion.View
                 s += $" → {t}";
                 if (o.Type == OrderType.Attack) s += o.OnBreak == AttackOnBreak.Pursue ? "［崩れたら追撃可］" : "［崩れたら確保］";
                 if (o.Type == OrderType.Attack)
-                {
-                    s += $"（{AspectName(c.AttackChosenAspect)}";
-                    if (c.AttackChosenAspect == AttackAspect.Flank) s += c.AttackSide > 0 ? "・左" : "・右";
-                    s += ")";
-                }
+                    s += $"（{AspectName(c.AttackChosenAspect)}・{Compass(c.AttackBearing * Angles.RadToDeg)}から" +
+                         (o.BearingRad.HasValue ? "・方角を指定）" : "）");
+                if (o.Type == OrderType.Pin) s += $"（{PinRangeName(o.PinRange)}）";
             }
             if (o.Moves) s += c.Arrived ? "（到着）" : "（移動中）";
+            if (_sim.PendingOrderOf(c.Id) != null) s += "　→ 新しい命令を次の刻みで受け付ける";
             if (o.Type == OrderType.Entrench && (!o.Moves || c.Arrived))
                 s += $" {Math.Min(100, c.EntrenchProgress / _params.MapRules.EntrenchSec * 100):0}%";
             return s;
@@ -299,7 +300,12 @@ namespace Battalion.View
             if (GUILayout.Button("陣地構築 (Y)", _mode == Mode.Entrench ? _toggleOn : _button)) BeginOrder(OrderType.Entrench);
             GUILayout.EndHorizontal();
 
-            GUILayout.Label("攻撃の方向", _small);
+            GUILayout.Label("拘束の距離（拘束を選んでいる間は D で切り替え）", _small);
+            GUILayout.BeginHorizontal();
+            foreach (var pr in new[] { PinRange.Far, PinRange.Near })
+                if (GUILayout.Button(PinRangeName(pr), _pinRange == pr ? _toggleOn : _button)) _pinRange = pr;
+            GUILayout.EndHorizontal();
+            GUILayout.Label("攻撃の範囲（敵の駒から外へドラッグすれば方角で指定）", _small);
             GUILayout.BeginHorizontal();
             foreach (var (a, key) in new[] { (AttackAspect.None, "0"), (AttackAspect.Front, "F"), (AttackAspect.Flank, "S"), (AttackAspect.Rear, "B") })
                 if (GUILayout.Button($"{AspectName(a)} ({key})", _attackAspect == a ? _toggleOn : _button)) _attackAspect = a;

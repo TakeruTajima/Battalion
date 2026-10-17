@@ -6,7 +6,7 @@ using UnityEngine;
 namespace Battalion.View
 {
     // 地図の上に描くもの：村の目標、射撃線、駒（実寸の矩形、×印、向き、行動の印、バー、明滅）、選んだ中隊の経路と目的地、
-    // 攻撃の側の強調、デバッグ表示、浮かぶ文字（損害の数字・大きな出来事）
+    // 命令の下見、デバッグ表示、浮かぶ文字（損害の数字・大きな出来事）
     public sealed partial class BattleApp
     {
         TextPool _texts;
@@ -32,6 +32,7 @@ namespace Battalion.View
                 if (c.State != CompanyState.LeftBattle) DrawUnit(c, px, now);
             if (_showEscape) DrawEscapes(px);
             DrawHover(px);
+            DrawHoverPreview(px);
             DrawDragPreview(px);
             if (_sightFrom.HasValue) _shapes.Circle(V(_sightFrom.Value), 6 * px, 2 * px, Palette.Selected, 16);
             DrawFloatTexts(px, now);
@@ -288,8 +289,9 @@ namespace Battalion.View
         }
 
         /// <summary>
-        /// 行動の印（形で示す）：移動中は進む向きの山形（後ろ向きに下がるときは後ろへ）、保持は短い横棒、
-        /// 拘束の命令は目標へ向けた杭、陣地構築は正面の辺に沿って進捗に比例して伸びる斜線の帯。
+        /// 行動の印（形で示す）：移動中は進む向きの山形、保持は短い横棒、拘束の命令は目標へ向けた杭、
+        /// 陣地構築は正面の辺に沿って進捗に比例して伸びる斜線の帯。
+        /// 動き方（P1e の2）：横歩きは山形を橙に、後ろ向きは山形の根元に横棒、旋回中は駒の脇に今の向きから進む方角への白い弧。
         /// </summary>
         void DrawAction(Company c, Vec2 pos, double facing, Vec2 fv, Vec2 lv, double hd, double hf, float ex, float ey, float px)
         {
@@ -354,13 +356,22 @@ namespace Battalion.View
                 var u = dir * (1.0 / dir.Length);
                 var n = new Vec2(-u.Y, u.X);
                 double reach = Math.Abs(u.X) * ex + Math.Abs(u.Y) * ey;
+                var col = c.MoveStyle == MoveStyle.Sideways ? new Color32(235, 140, 20, 245) : ink;
                 for (int k = 0; k < 2; k++)
                 {
                     var apex = pos + u * (reach + (16 + 9 * k) * px);
                     var back = apex - u * (8 * px);
-                    _shapes.Line(V(back + n * (7 * px)), V(apex), 2.5f * px, ink);
-                    _shapes.Line(V(back - n * (7 * px)), V(apex), 2.5f * px, ink);
+                    _shapes.Line(V(back + n * (7 * px)), V(apex), 2.5f * px, col);
+                    _shapes.Line(V(back - n * (7 * px)), V(apex), 2.5f * px, col);
                 }
+                if (c.MoveStyle == MoveStyle.Backward)
+                {
+                    // 後ろ向き：山形の根元に横棒（敵に正面を向けたまま下がる）
+                    var bar = pos + u * (reach + 5 * px);
+                    _shapes.Line(V(bar + n * (9 * px)), V(bar - n * (9 * px)), 2.5f * px, ink);
+                }
+                if (c.MoveStyle == MoveStyle.Turning)
+                    DrawArcArrow(pos, facing, Math.Atan2(u.Y, u.X), Mathf.Sqrt(ex * ex + ey * ey) + 10 * px, new Color32(255, 255, 255, 235), px);
                 return;
             }
             if (o.Type == OrderType.Hold || ((o.Type == OrderType.Advance || o.Type == OrderType.Retreat) && c.Arrived))
@@ -404,6 +415,25 @@ namespace Battalion.View
                 var normal = V(Vec2.FromAngle(to));
                 _shapes.Triangle(tip + tangent * 8 * px, tip - tangent * 4 * px + normal * 6 * px, tip - tangent * 4 * px - normal * 6 * px, col);
             }
+        }
+
+        /// <summary>駒の脇の、<paramref name="from"/> から <paramref name="to"/> への矢じり付きの弧（旋回中の印）。</summary>
+        void DrawArcArrow(Vec2 pos, double from, double to, float r, Color32 col, float px)
+        {
+            double sweep = Angles.Wrap(to - from);
+            if (Math.Abs(sweep) < 1e-3) return;
+            int n = Mathf.Clamp((int)(Math.Abs(sweep) / 0.12), 3, 40);
+            Vector2 prev = V(pos + Vec2.FromAngle(from) * r);
+            for (int k = 1; k <= n; k++)
+            {
+                var p = V(pos + Vec2.FromAngle(from + sweep * k / n) * r);
+                _shapes.Line(prev, p, 2.5f * px, col);
+                prev = p;
+            }
+            var tip = V(pos + Vec2.FromAngle(to) * r);
+            var tangent = V(Vec2.FromAngle(to + Math.Sign(sweep) * Math.PI / 2));
+            var normal = V(Vec2.FromAngle(to));
+            _shapes.Triangle(tip + tangent * 7 * px, tip - tangent * 4 * px + normal * 5 * px, tip - tangent * 4 * px - normal * 5 * px, col);
         }
 
         /// <summary>隊形の乱れの印：駒の枠の外側に、ぎざぎざの線（30秒）。</summary>
@@ -524,12 +554,27 @@ namespace Battalion.View
 
         // ---------------------------------------------------------------- 経路・目的地・強調・デバッグ
 
-        /// <summary>選んだ中隊の経路（残りの点の列）と目的地。攻撃・拘束は目標への破線、陣地構築の予定は目的地に斜線の帯。</summary>
+        /// <summary>
+        /// 選んだ中隊の経路（残りの点の列）と目的地。攻撃・拘束は目標への破線、陣地構築の予定は目的地に斜線の帯。
+        /// 出したばかりで受け付け待ちの命令があれば（一時停止中を含む）、その下見を経路として描く（P1e の5）。
+        /// </summary>
         void DrawSelectedPath(float px)
         {
             var c = Selected;
             if (c == null || !c.OnBoard) return;
             Pose(c, out var pos, out _);
+            var pending = c.Side == Side.Blue ? PendingPreview(c) : null;
+            if (pending != null)
+            {
+                var po = _sim.PendingOrderOf(c.Id);
+                DrawPreviewPath(pending, po, px, Palette.Path, Palette.PathShadow);
+                if ((po.Type == OrderType.Attack || po.Type == OrderType.Pin) && po.TargetId >= 0)
+                {
+                    Pose(_sim.Companies[po.TargetId], out var ptp, out _);
+                    _shapes.DashedLine(V(pos), V(ptp), 2 * px, 8 * px, Palette.Hover);
+                }
+                return;
+            }
             var o = c.CurrentOrder;
             if (o.Moves && !c.Arrived && c.Path != null && c.PathIndex < c.Path.Count)
             {
@@ -562,40 +607,16 @@ namespace Battalion.View
             }
         }
 
-        /// <summary>
-        /// 拘束・攻撃の目標を選ぶとき、カーソルの下の敵の駒を強調する。攻撃で側面を選んでいるときは、
-        /// カーソルが長辺の端の 1/3 にあればその側の端を、中央ならその旨を示す（Sim が経路コストで選ぶ）。
-        /// </summary>
+        /// <summary>拘束・攻撃の目標を選ぶとき、カーソルの下の敵の駒（攻撃の方角をドラッグ中は、押した敵の駒）を強調する。</summary>
         void DrawHover(float px)
         {
             if (_mode != Mode.Attack && _mode != Mode.Pin) return;
-            if (MouseOverUi()) return;
-            var m = MouseWorld();
-            var tgt = UnitAt(m, Side.Red);
+            var tgt = _mode == Mode.Attack && _pressing ? _pressTarget : (MouseOverUi() ? null : UnitAt(MouseWorld(), Side.Red));
             if (tgt == null) return;
             Pose(tgt, out var pos, out double facing);
             double hd = _params.Movement.DepthM / 2, hf = _params.Movement.FrontageM / 2;
-            float w = 3 * px;
-
-            if (_mode == Mode.Attack && _attackAspect == AttackAspect.Flank)
-            {
-                int side = UnitGeometry.FlankSideAt(pos, facing, _params.Movement.FrontageM, m);
-                if (side != 0)
-                {
-                    UnitGeometry.Axes(facing, out var fv, out var lv);
-                    double inner = hf / 3, outer = hf + 4 * px;
-                    var a = V(pos + fv * (hd + 4 * px) + lv * (side * inner));
-                    var b = V(pos + fv * (hd + 4 * px) + lv * (side * outer));
-                    var c = V(pos - fv * (hd + 4 * px) + lv * (side * outer));
-                    var d = V(pos - fv * (hd + 4 * px) + lv * (side * inner));
-                    Outline(new[] { a, b, c, d }, w, Palette.Hover);
-                    var mid = V(pos + lv * (side * outer));
-                    _shapes.Arrow(V(pos + lv * (side * (outer + 60))), mid, w, Palette.Hover);
-                    return;
-                }
-            }
             Corners(pos, facing, hd + 4 * px, hf + 4 * px, _q);
-            Outline(_q, w, Palette.Hover);
+            Outline(_q, 3 * px, Palette.Hover);
         }
 
         /// <summary>ドラッグ中の向きの矢印（前進・後退・保持・陣地構築）。</summary>

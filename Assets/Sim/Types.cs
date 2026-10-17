@@ -11,6 +11,12 @@ namespace Battalion.Sim
     public enum Aspect { Front = 0, Flank = 1, Rear = 2 }
 
     /// <summary>
+    /// その刻みの動き方（P1e の2）。前進：向いた方へ進む。横歩き・後ろ向き：接敵中に向きを変えずに横・後ろへ動く。
+    /// 旋回中：接敵していないときに、向きを進む方角へ回しながら進む（差が 20° を超える間）。
+    /// </summary>
+    public enum MoveStyle { None, Forward, Sideways, Backward, Turning }
+
+    /// <summary>
     /// 中隊の主状態。拘束（Pinned）は Normal・Shaken に重なるフラグとして <see cref="Company.Pinned"/> に持つ。
     /// Surrendered と LeftBattle は盤上から取り除かれた状態。
     /// </summary>

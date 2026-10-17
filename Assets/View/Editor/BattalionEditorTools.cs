@@ -117,7 +117,7 @@ namespace Battalion.View.Editor
                 var r1 = sim.Find("R1");
                 sim.Issue(Order.Advance(b1.Id, new Vec2(1975, 1300), -90 * Angles.DegToRad));
                 sim.Issue(Order.Advance(b2.Id, new Vec2(stage == 1 ? 1450 : 1350, 1000), 0));
-                sim.Issue(Order.Attack(b3.Id, r1.Id, AttackAspect.Flank, -1));
+                sim.Issue(Order.Attack(b3.Id, r1.Id, AttackAspect.Flank));
                 sim.Issue(Order.Entrench(b4.Id, new Vec2(900, 1300), 0));
                 // 最後の1分半ぶんの損害と出来事だけを出す（×16 で現実の約1.5秒にあたる長さ）
                 rig.App.StepForCapture(minutes * 120 - 180);
@@ -161,7 +161,7 @@ namespace Battalion.View.Editor
                 b4.Position = new Vec2(1400, 1380);
                 b4.Facing = 0;
                 sim.Issue(Order.Entrench(b4.Id));
-                sim.Issue(Order.Pin(r2.Id, b3.Id));
+                sim.Issue(Order.Pin(r2.Id, b3.Id, PinRange.Near));
                 sim.Issue(Order.Advance(b2.Id, new Vec2(1600, 1000), 0));
                 // 出来事の文字（側面・背面を突かれた等）は残し、最後の1分半ぶんの損害を数字にする
                 rig.App.StepForCapture(60);

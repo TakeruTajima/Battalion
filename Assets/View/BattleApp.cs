@@ -341,6 +341,20 @@ namespace Battalion.View
             }
         }
 
+        string PinRangeName(PinRange r) =>
+            r == PinRange.Near ? $"近い {_params.Behavior.PinDistanceM:0}m" : $"遠い {_params.Behavior.PinDistanceFarM:0}m";
+
+        public static string MoveStyleName(MoveStyle s)
+        {
+            switch (s)
+            {
+                case MoveStyle.Sideways: return "横歩き";
+                case MoveStyle.Backward: return "後ろ向き";
+                case MoveStyle.Turning: return "旋回中";
+                default: return null;
+            }
+        }
+
         List<Company> BlueCompanies() => _sim.Companies.Where(c => c.Side == Side.Blue).ToList();
     }
 }

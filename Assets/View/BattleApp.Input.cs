@@ -16,11 +16,17 @@ namespace Battalion.View
         AttackAspect _attackAspect = AttackAspect.None;
         /// <summary>攻撃の「目標が崩れたら」。初期は確保。選んだ値は次の攻撃にも引き継ぐ。</summary>
         AttackOnBreak _onBreak = AttackOnBreak.Secure;
+        /// <summary>拘束の距離（P1e の3）。初期は遠い。選んだ値は次の拘束にも引き継ぐ。</summary>
+        PinRange _pinRange = PinRange.Far;
 
         bool _pressing;
         Vec2 _pressWorld;
         Vector2 _pressPx;
+        /// <summary>攻撃の命令中にボタンを押した敵の駒（そこから外へドラッグすると方角の指定。P1e の4）。</summary>
+        Company _pressTarget;
         const float DragThresholdPx = 8f;
+        /// <summary>攻撃で、敵の駒から外へこれ以上ドラッグしたら地図の方角での指定にする。</summary>
+        const float AttackDragPx = 20f;
 
         // デバッグ表示と視線確認
         int _exposureMode;      // 0：なし、1：青から見た赤の射界、2：赤から見た青の射界
@@ -34,6 +40,7 @@ namespace Battalion.View
         {
             _mode = Mode.None;
             _pressing = false;
+            _pressTarget = null;
             _sightFrom = null;
             if (_mapView != null) _mapView.ClearOverlay();
         }
@@ -75,6 +82,7 @@ namespace Battalion.View
                 if (Input.GetKeyDown(KeyCode.B)) _attackAspect = AttackAspect.Rear;
                 if (Input.GetKeyDown(KeyCode.C)) ToggleOnBreak();
             }
+            if (_mode == Mode.Pin && Input.GetKeyDown(KeyCode.D)) TogglePinRange();
 
             if (Input.GetKeyDown(KeyCode.L)) ToggleSightTool();
             if (Input.GetKeyDown(KeyCode.F5)) CycleExposure();
@@ -97,6 +105,7 @@ namespace Battalion.View
             }
             _mode = Mode.None;
             _pressing = false;
+            _pressTarget = null;
         }
 
         /// <summary>
@@ -131,6 +140,8 @@ namespace Battalion.View
 
         void ToggleOnBreak() =>
             _onBreak = _onBreak == AttackOnBreak.Secure ? AttackOnBreak.Pursue : AttackOnBreak.Secure;
+
+        void TogglePinRange() => _pinRange = _pinRange == PinRange.Far ? PinRange.Near : PinRange.Far;
 
         void ToggleSightTool()
         {
@@ -174,15 +185,45 @@ namespace Battalion.View
                 _pressing = true;
                 _pressWorld = MouseWorld();
                 _pressPx = Input.mousePosition;
+                _pressTarget = _mode == Mode.Attack ? UnitAt(_pressWorld, Side.Red) : null;
             }
             if (Input.GetMouseButtonUp(0) && _pressing)
             {
                 _pressing = false;
                 var up = MouseWorld();
+                if (_mode == Mode.Attack)
+                {
+                    IssueAttack(up);
+                    return;
+                }
                 bool drag = ((Vector2)Input.mousePosition - _pressPx).magnitude > DragThresholdPx;
                 double? facing = drag ? Math.Atan2(up.Y - _pressWorld.Y, up.X - _pressWorld.X) : (double?)null;
                 OnMapClick(_pressWorld, facing);
             }
+        }
+
+        /// <summary>攻撃の方角のドラッグ中か（敵の駒の上で押して、外へ 20px 以上動かした）。</summary>
+        bool AttackDragging => _pressing && _mode == Mode.Attack && _pressTarget != null
+                               && ((Vector2)Input.mousePosition - _pressPx).magnitude > AttackDragPx;
+
+        /// <summary>目標の中心から見た、カーソルの方角（地図の方角）。</summary>
+        static double BearingTo(Company tgt, Vec2 p) => Simulation.BearingFrom(tgt, p);
+
+        /// <summary>
+        /// 攻撃の命令を出す（P1e の4）。敵の駒の上で押して外へドラッグしたら、目標の中心からその方角を指定する。
+        /// ドラッグしなければ、範囲（指定なし・正面・側面・背面）での指定。
+        /// </summary>
+        void IssueAttack(Vec2 up)
+        {
+            var c = Selected;
+            var tgt = _pressTarget;
+            bool drag = ((Vector2)Input.mousePosition - _pressPx).magnitude > AttackDragPx;
+            _pressTarget = null;
+            if (!CanCommand(c) || tgt == null) return;
+            _sim.Issue(drag
+                ? Order.AttackFrom(c.Id, tgt.Id, BearingTo(tgt, up), _onBreak)
+                : Order.Attack(c.Id, tgt.Id, _attackAspect, _onBreak));
+            _mode = Mode.None;
         }
 
         void OnMapClick(Vec2 at, double? facing)
@@ -219,19 +260,7 @@ namespace Battalion.View
                 {
                     var tgt = UnitAt(at, Side.Red);
                     if (!CanCommand(c) || tgt == null) break;
-                    _sim.Issue(Order.Pin(c.Id, tgt.Id));
-                    _mode = Mode.None;
-                    break;
-                }
-                case Mode.Attack:
-                {
-                    var tgt = UnitAt(at, Side.Red);
-                    if (!CanCommand(c) || tgt == null) break;
-                    int side = _attackAspect == AttackAspect.Flank
-                        ? UnitGeometry.FlankSideAt(tgt.Position, tgt.Facing, _params.Movement.FrontageM, at)
-                        : 0;
-                    // 端をクリックして側を指定したら固定、中央なら Sim が選び、着くまで選び直す（P1d の1）
-                    _sim.Issue(Order.Attack(c.Id, tgt.Id, _attackAspect, side, lockSide: side != 0, onBreak: _onBreak));
+                    _sim.Issue(Order.Pin(c.Id, tgt.Id, _pinRange));
                     _mode = Mode.None;
                     break;
                 }
@@ -280,16 +309,16 @@ namespace Battalion.View
             switch (_mode)
             {
                 case Mode.Advance: return "前進：目的地をクリック（押したままドラッグで到着後の向き）";
-                case Mode.Retreat: return "後退：目的地をクリック（背後なら後ろ向きに下がる。ドラッグで向き）";
+                case Mode.Retreat: return "後退：目的地をクリック（接敵中で背後なら後ろ向きに下がる。ドラッグで向き）";
                 case Mode.HoldFacing: return "保持しました。向きを変えるなら地図をドラッグ（Esc で終わる）";
                 case Mode.Entrench: return "陣地構築：掘る地点をクリック（ドラッグで向き）。その場で掘るなら、もう一度 Y か、この中隊の駒をクリック";
-                case Mode.Pin: return "拘束：目標の敵の駒をクリック";
+                case Mode.Pin:
+                    return $"拘束（{PinRangeName(_pinRange)}）：目標の敵の駒をクリック（D で遠い／近い）";
                 case Mode.Attack:
                 {
                     string brk = _onBreak == AttackOnBreak.Pursue ? "崩れたら追撃可" : "崩れたら確保";
-                    return _attackAspect == AttackAspect.Flank
-                        ? $"攻撃（側面・{brk}）：敵の駒の端をクリックでその側面、中央なら Sim が選ぶ（C で確保／追撃可）"
-                        : $"攻撃（{AspectName(_attackAspect)}・{brk}）：目標の敵の駒をクリック（C で確保／追撃可）";
+                    return $"攻撃（{AspectName(_attackAspect)}・{brk}）：敵の駒から外へドラッグで攻める方角、クリックなら範囲で指定" +
+                           "（0・F・S・B で範囲、C で確保／追撃可）";
                 }
                 case Mode.Sight: return "視線確認：地点か中隊の駒をクリック（緑＝見える、赤＝稜線・遮蔽で見えない）。L か Esc で終わる";
                 default: return null;

@@ -43,10 +43,11 @@ namespace Battalion.Sim
         /// <summary>
         /// <paramref name="start"/> のマスから <paramref name="goal"/> のマスへの経路（両端のマスを含む）。
         /// 届かなければ null。<paramref name="exposure"/> は添字 <c>j * Width + i</c> の露出（null なら全て 0）。
-        /// <paramref name="blocked"/> が true のマスには入らない（目的地のマスは除く。止まっている味方の周りを避けるのに使う）。
+        /// <paramref name="blocked"/> が true のマスには入らない（目的地のマスは除く。敵の周りを避けるのに使う）。
+        /// <paramref name="distanceMult"/> はマスごとの距離のコストの倍率（1 以上。null なら全て 1。止まっている味方の圏に使う）。
         /// </summary>
         public static List<Cell> Find(TerrainMap m, Cell start, Cell goal, bool[] exposure, double threatWeight, double exposureCostM,
-            out double cost, bool[] blocked = null, bool allowPartial = false)
+            out double cost, bool[] blocked = null, bool allowPartial = false, double[] distanceMult = null)
         {
             int w = m.Width;
             var g = new Dictionary<int, double>();
@@ -80,7 +81,8 @@ namespace Battalion.Sim
                         double step = m.CellM * (di != 0 && dj != 0 ? Math.Sqrt(2) : 1.0);
                         int nk = nj * w + ni;
                         double exp = exposure != null && exposure[nk] ? 1.0 : 0.0;
-                        double ng = cur.G + (step / mv + threatWeight * exp * exposureCostM);
+                        double dm = distanceMult != null ? distanceMult[nk] : 1.0;
+                        double ng = cur.G + (step / mv * dm + threatWeight * exp * exposureCostM);
                         if (ng < (g.TryGetValue(nk, out var old) ? old : 1e18))
                         {
                             g[nk] = ng;

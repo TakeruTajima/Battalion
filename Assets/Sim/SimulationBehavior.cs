@@ -101,14 +101,15 @@ namespace Battalion.Sim
                         cells[j * _map.Width + i] = true;
                 });
             }
-            return _enemyCells[s] = cells;
+            if (!_previewing) _enemyCells[s] = cells;
+            return cells;
         }
 
         // ---------------------------------------------------------------- 1. 攻撃の側と方角の固定、4. 追撃
 
         /// <summary>
         /// 攻撃の続き（P1d の1と4）。
-        /// 着く前：30秒ごとに発起点を計算し直す。側を指定していない側面の攻撃は、今の位置から安い側を選び直す（0.8 倍未満のときだけ替える）。
+        /// 着く前：30秒ごとに、攻める方角を選び直して（P1e の4。地図の方角で指定した攻撃はそのまま）発起点を計算し直す。
         /// 着いた後：目標の中心から見た自分の方角を固定し、目標の中心が 50m 以上動いたときだけ、その方角の 250m の点へ動き直す。
         /// 目標が崩れたら、確保か追撃（性格による）に移る。
         /// </summary>
@@ -142,8 +143,8 @@ namespace Battalion.Sim
                 }
                 else if (tickStart >= c.NextReplanTime)
                 {
-                    if (c.AttackChosenAspect == AttackAspect.Flank && !c.AttackSideLocked) ReconsiderFlankSide(c, tgt);
-                    c.MoveGoal = AdjustDestination(c, JumpOff(tgt, c.AttackChosenAspect, c.AttackSide));
+                    ChooseAttackBearing(c, tgt, c.CurrentOrder, false);
+                    c.MoveGoal = AdjustDestination(c, JumpOff(tgt, c.AttackBearing));
                     c.Arrived = false;
                     Plan(c, tickStart);
                 }
@@ -159,19 +160,6 @@ namespace Battalion.Sim
             }
 
             if (c.AttackFixed && c.Arrived && !c.FacingOverride.HasValue) FaceToward(c, tgt.Position, maxTurn);
-        }
-
-        /// <summary>今の側と反対の側の経路コストを比べ、反対が今の 0.8 倍未満なら替える（届かない側は選ばない）。</summary>
-        void ReconsiderFlankSide(Company c, Company tgt)
-        {
-            double cur = PathCost(c, JumpOff(tgt, AttackAspect.Flank, c.AttackSide));
-            double other = PathCost(c, JumpOff(tgt, AttackAspect.Flank, -c.AttackSide));
-            if (!double.IsInfinity(other) && (double.IsInfinity(cur) || other < B.AttackSideSwitchRatio * cur))
-            {
-                c.AttackSide = -c.AttackSide;
-                if (_log.Enabled)
-                    _log.Write(Ev(Time, "attack_side_change", c).Add("target", tgt.Name).Add("side", c.AttackSide).ToString());
-            }
         }
 
         /// <summary>
@@ -288,12 +276,15 @@ namespace Battalion.Sim
 
         // ---------------------------------------------------------------- 3. 拘束
 
-        /// <summary>拘束の命令の始め：今いる方角を覚え、125m の点まで詰める。動揺中と、すでに 125m 以内なら詰めない。</summary>
+        /// <summary>
+        /// 拘束の命令の始め：今いる方角を覚え、拘束の距離（遠い 350m／近い 125m。P1e の3）の点まで詰める。
+        /// 動揺中と、すでにその距離以内なら詰めない。
+        /// </summary>
         void StartPin(Company c, Company tgt, double tickStart)
         {
             var d = c.Position - tgt.Position;
             c.PinBearing = Math.Atan2(d.Y, d.X);
-            if (c.State == CompanyState.Shaken || d.Length <= B.PinDistanceM)
+            if (c.State == CompanyState.Shaken || d.Length <= PinDistance(c))
             {
                 c.Arrived = true;
                 c.Path = null;
@@ -304,18 +295,20 @@ namespace Battalion.Sim
             Plan(c, tickStart);
         }
 
-        Vec2 PinPoint(Company tgt, Company c) => tgt.Position + Vec2.FromAngle(c.PinBearing) * B.PinDistanceM;
+        double PinDistance(Company c) => c.CurrentOrder.PinRange == PinRange.Near ? B.PinDistanceM : B.PinDistanceFarM;
+
+        Vec2 PinPoint(Company tgt, Company c) => tgt.Position + Vec2.FromAngle(c.PinBearing) * PinDistance(c);
 
         /// <summary>
-        /// 拘束の続き：30秒ごとに、目標の今の位置から同じ方角の 125m の点を計算し直す。着いた後は 50m 以上ずれたら動き直す
-        /// （目標に 125m より近ければ動かない）。動揺中は詰めない。着いたら目標に正面を向ける。
+        /// 拘束の続き：30秒ごとに、目標の今の位置から同じ方角の拘束の距離の点を計算し直す。着いた後は 50m 以上ずれたら動き直す
+        /// （目標に拘束の距離より近ければ動かない）。動揺中は詰めない。着いたら目標に正面を向ける。
         /// </summary>
         void UpdatePin(Company c, Company tgt, double tickStart, double maxTurn)
         {
             if (c.State != CompanyState.Shaken && tickStart >= c.NextReplanTime)
             {
                 var goal = PinPoint(tgt, c);
-                bool far = Vec2.Distance(c.Position, tgt.Position) > B.PinDistanceM;
+                bool far = Vec2.Distance(c.Position, tgt.Position) > PinDistance(c);
                 if (!c.Arrived || (far && Vec2.Distance(goal, c.Position) > _p.MapRules.AttackRepositionM))
                 {
                     c.MoveGoal = AdjustDestination(c, goal);

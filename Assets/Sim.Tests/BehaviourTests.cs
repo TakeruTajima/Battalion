@@ -161,15 +161,18 @@ namespace Battalion.Sim.Tests
             var sim = Empty();
             var a = sim.AddCompany("A", Side.Blue, Training.Regular, Personality.Calm, new Vec2(0, 0), 90);
             sim.Issue(Order.Advance(a.Id, new Vec2(120, 0), 90 * Angles.DegToRad));
-            // 90° の旋回に 15 秒（30刻み）。旋回中は動かず、向き終えた刻みから進む
-            for (int i = 0; i < 29; i++) sim.Step();
-            Assert.That(a.Facing, Is.EqualTo(3 * Angles.DegToRad).Within(1e-9));
-            Assert.That(a.Position.X, Is.EqualTo(0).Within(1e-9));
+            // 接敵していないので、旋回しながら進む（P1e の2）。90° の旋回に 15 秒（30刻み）。
+            // 向きと進む方角の差が 20° を超える間（最初の 23 刻み：差は 87°…21°）は ×0.7、その後は普通の速さ
+            for (int i = 0; i < 23; i++) sim.Step();
+            Assert.That(a.MoveStyle, Is.EqualTo(MoveStyle.Turning));
+            Assert.That(a.Position.X, Is.EqualTo(23 * 0.6 * 0.7).Within(1e-9));
             sim.Step();
+            Assert.That(a.MoveStyle, Is.EqualTo(MoveStyle.Forward));
+            Assert.That(a.Position.X, Is.EqualTo(23 * 0.6 * 0.7 + 0.6).Within(1e-9));
+            for (int i = 0; i < 6; i++) sim.Step();
             Assert.That(a.Facing, Is.EqualTo(0).Within(1e-9));
-            Assert.That(a.Position.X, Is.EqualTo(0.6).Within(1e-9));
-            // 120m を秒速 1.2m で 100 秒
-            for (int i = 0; i < 200; i++) sim.Step();
+            // 残りを秒速 1.2m で
+            for (int i = 0; i < 200 && !a.Arrived; i++) sim.Step();
             Assert.That(a.Position.X, Is.EqualTo(120).Within(1e-9));
             Assert.That(a.Arrived, Is.True);
             // 到着後に指定の向きへ旋回
@@ -178,11 +181,12 @@ namespace Battalion.Sim.Tests
         }
 
         [Test]
-        public void RetreatBacksAwayWithoutTurning()
+        public void RetreatInContactBacksAwayWithoutTurning()
         {
             var sim = Empty();
             var a = sim.AddCompany("A", Side.Blue, Training.Regular, Personality.Calm, new Vec2(0, 0), 0);
-            sim.AddCompany("Far", Side.Red, Training.Regular, Personality.Calm, new Vec2(1400, 0), 180);
+            // 接敵中（400m 以内に見える敵）なので、後ろ向きに下がる（P1e の2）。撃ち合いになるが、100 秒では崩れない
+            sim.AddCompany("Near", Side.Red, Training.Regular, Personality.Calm, new Vec2(320, 0), 180);
             // 東を向いたまま西へ 72m 下がる：秒速 1.2m×0.6＝0.72m なので 100 秒（200刻み）
             sim.Issue(Order.Retreat(a.Id, new Vec2(-72, 0)));
             sim.Step();

@@ -59,28 +59,20 @@ namespace Battalion.View.Tests
             Assert.That(c.Alpha, Is.EqualTo(0.5f).Within(1e-6));
         }
 
-        [TestCase(0, 90, 0)]      // 中央
-        [TestCase(0, 40, +1)]     // 西向きの敵：左は南。南寄り（across>33.3）なら +1
-        [TestCase(0, 160, -1)]
-        public void FlankSideFromClickPosition(double x, double y, int expected)
-        {
-            // 敵は (0, 100) にいて西（180°）を向く。左（向きから +90°）は南
-            var center = new Vec2(0, 100);
-            double facing = 180 * Angles.DegToRad;
-            Assert.That(UnitGeometry.FlankSideAt(center, facing, 200, new Vec2(x, y)), Is.EqualTo(expected));
-        }
-
         [Test]
-        public void FlankSideMatchesTheJumpOffSide()
+        public void DraggedBearingPutsTheJumpOffOnTheDragRay()
         {
-            // UnitGeometry の +1 の側が、Sim の JumpOff の +1（敵の左）と同じ側であること
+            // 敵の駒から外へドラッグした点の方角に、250m の発起点が来ること（P1e の4）。結果の向きは目標の向きで決まる
             var p = SimParams.LoadFile(Path.Combine(Application.streamingAssetsPath, "sim_params.json"));
             var sim = new Simulation(p, 1, TerrainMap.FlatCovering(p.Terrain, -1000, -1000, 1000, 1000));
-            var e = sim.AddCompany("E", Side.Red, Training.Regular, Personality.Calm, new Vec2(0, 0), 30);
-            var left = sim.JumpOff(e, AttackAspect.Flank, +1);
-            Assert.That(UnitGeometry.FlankSideAt(e.Position, e.Facing, 200, left), Is.EqualTo(+1));
-            var right = sim.JumpOff(e, AttackAspect.Flank, -1);
-            Assert.That(UnitGeometry.FlankSideAt(e.Position, e.Facing, 200, right), Is.EqualTo(-1));
+            var e = sim.AddCompany("E", Side.Red, Training.Regular, Personality.Calm, new Vec2(100, 50), 180);
+            var dragTo = new Vec2(100 - 60, 50 - 160); // 南南西寄り
+            double b = Simulation.BearingFrom(e, dragTo);
+            var j = sim.JumpOff(e, b);
+            Assert.That(Vec2.Distance(j, e.Position), Is.EqualTo(250).Within(1e-9));
+            var u = (dragTo - e.Position) * (1.0 / Vec2.Distance(dragTo, e.Position));
+            Assert.That(Vec2.Distance(j, e.Position + u * 250), Is.LessThan(1e-9));
+            Assert.That(sim.AspectOfBearing(e, b), Is.EqualTo(AttackAspect.Flank));
         }
 
         [Test]
