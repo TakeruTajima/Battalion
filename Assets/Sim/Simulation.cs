@@ -233,6 +233,8 @@ namespace Battalion.Sim
             public Aspect AspectOnTarget;
             public bool TargetInFrontArc;
             public double Distance;
+            /// <summary>接近戦（互いの矩形の隙間が 50m 以内。P1g.1）。</summary>
+            public bool Close;
         }
 
         /// <summary>撃たれる側 <paramref name="target"/> から見た、位置 <paramref name="from"/> の方向。</summary>
@@ -273,15 +275,24 @@ namespace Battalion.Sim
         }
 
         /// <summary>
-        /// 距離倍率 f_range。50m 以内は接近戦の 2.0、150m 以内は 1.3、400m までは 1.0、それ以遠は 0（撃たない）。
-        /// 接近戦の 2.0 は 1.3 を置き換える（重ねない）。
+        /// 距離倍率 f_range。接近戦（<paramref name="closeCombat"/>）は 2.0、中心どうし 150m 以内は 1.3、400m までは 1.0、
+        /// それ以遠は 0（撃たない）。接近戦の 2.0 は 1.3 を置き換える（重ねない）。
         /// </summary>
-        public double RangeMultiplier(double distance)
+        public double RangeMultiplier(double distance, bool closeCombat)
         {
             if (distance > _p.Fire.RangeMaxM) return 0.0;
-            if (distance <= _p.CloseCombat.RadiusM) return _p.CloseCombat.RangeMult;
+            if (closeCombat) return _p.CloseCombat.RangeMult;
             if (distance <= _p.Fire.RangeCloseM) return _p.Fire.RangeCloseMult;
             return 1.0;
+        }
+
+        /// <summary>
+        /// 接近戦か：互いの矩形の隙間が <c>close_combat.radius_m</c>（50m）以内（P1g.1。P1g までは中心どうしの距離で測っていた）。
+        /// </summary>
+        public bool InCloseCombat(Company a, Company b)
+        {
+            double r = _p.CloseCombat.RadiusM;
+            return UnitRect.Gap(RectOf(a), RectOf(b), r + 1) <= r;
         }
 
         List<Shot> SelectTargets()
@@ -300,6 +311,7 @@ namespace Battalion.Sim
                     AspectOnTarget = AspectOf(target, c.Position),
                     TargetInFrontArc = AspectOf(c, target.Position) == Aspect.Front,
                     Distance = Vec2.Distance(c.Position, target.Position),
+                    Close = InCloseCombat(c, target),
                 });
             }
             return shots;
@@ -340,8 +352,8 @@ namespace Battalion.Sim
                 int a = (int)s.AspectOnTarget;
 
                 double fQuality = _p.Of(u.Training).FireMult;
-                bool close = s.Distance <= _p.CloseCombat.RadiusM;
-                double fRange = RangeMultiplier(s.Distance);
+                bool close = s.Close;
+                double fRange = RangeMultiplier(s.Distance, close);
                 double fTerrain = TerrainDamageMult(tg);
                 double fAspect = _p.Fire.AspectCasualtyMult[a];
                 double fState = 1.0;

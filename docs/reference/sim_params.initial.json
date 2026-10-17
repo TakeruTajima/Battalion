@@ -97,7 +97,7 @@
     "radius_m": 50,
     "range_mult": 2.0,
     "morale_mult": 1.5,
-    "_note": "50m以内は fire.range_close_mult(1.3) を置き換える。重ねない"
+    "_note": "互いの矩形の隙間が radius_m 以内（接近戦）なら、距離倍率を range_mult にし fire.range_close_mult(1.3) を置き換える（重ねない）。士気の減りに morale_mult。150m の 1.3 と射程 400m は中心どうしの距離"
   },
   "movement": {
     "speed_mps": 1.2,
@@ -209,6 +209,10 @@
     "flee_switch_min_gain": 0.05,
     "contact_radius_m": 400,
     "pin_distance_far_m": 350,
-    "attack_range_inset_deg": 10
+    "attack_range_inset_deg": 10,
+    "sight_contact_gap_m": 50,
+    "sight_seek_side_deg": 45,
+    "sight_seek_side_step_deg": 5,
+    "sight_seek_step_m": 10
   }
 }

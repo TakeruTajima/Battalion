@@ -46,7 +46,9 @@ namespace Battalion.Sim.Tests
         [TestCase("S1_1v1_front", 1UL, 729, "033ca5315b4486887dbc3cc6ce79bf7e11cc4c73af037ad43d32131a68f0f864")]
         [TestCase("S3_2v1_front_flank", 7UL, 1089, "d43ba4adddca308c5f0b7bd9a6b9264cde73d8435943d6c226d895485379eba0")]
         [TestCase("S4_2v1_front_rear", 42UL, 1089, "79e8ab8f03f191e58bb28f7413b57327aa9beb3a4000e4a5dc999eb7be8179bc")]
-        [TestCase("CC_1v1_front_50m", 300UL, 730, "28c69ead1ef4f2c04effc8af599dcee60ce82fc7bc53b74e7460e6fe7913f9f4")]
+        // 接近戦は P1g.1 で、接近戦の倍率を中心どうしの距離 50m から矩形の隙間 50m で掛けるように変えたので変わった：最初の壊走（756.5秒）
+        // までは同じで、その後、逃げ始めた A（中心どうし 74m、隙間 24m）が接近戦の倍率で追い撃ちされ、770秒の兵力が 100→98 になる
+        [TestCase("CC_1v1_front_50m", 300UL, 730, "ea38a006e9e27f0ba59ba8ec047285d4a5c57909aca79c017dbd5d3b9a61056b")]
         // S6 だけは P1d で1か所変わった：67.5秒の encircled_start と despair に出る退路の見積もりの最小値（escape_loss）が
         // 0.322975 → 0.333283。最も損害の少なかった方位が青の矩形に詰まる方位として逃げられなくなったため。包囲の判定と以後の行は同じ。
         // P0.2 の値は 524946e32798113c9e00a6d2183f12cacd2a73ff25403a7e84e59bfa0c840367

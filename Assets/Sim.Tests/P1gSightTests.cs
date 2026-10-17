@@ -129,6 +129,33 @@ namespace Battalion.Sim.Tests
             Assert.That(sim.SelectTarget(e), fires ? Is.SameAs(a) : Is.Null);
         }
 
+        // ---------------------------------------------------------------- P1g.1 接近戦の倍率は隙間で
+
+        /// <summary>向かい合った A と E（中心どうし <paramref name="centers"/>）の最初の刻みの、A の射撃の損害の期待値（1分あたり）。</summary>
+        static double ExpectedFireAt(double centers, out bool close)
+        {
+            var sim = Flat();
+            var a = Add(sim, "A", Side.Blue, 0, 0, 0);
+            var e = Add(sim, "E", Side.Red, centers, 0, 180);
+            close = sim.InCloseCombat(a, e);
+            sim.Step();
+            foreach (var f in sim.LastTickFire)
+                if (f.Shooter == a.Id) return f.ExpectedPerMin;
+            throw new AssertionException("A が撃っていない");
+        }
+
+        [Test]
+        public void CloseCombatMultiplierAppliesWithinFiftyMetresGap()
+        {
+            // 奥行 50m どうしが向かい合う：中心どうし 95m は隙間 45m（接近戦）、105m は隙間 55m（接近戦でない）。
+            // どちらも中心どうし 150m 以内なので、P1g までは両方 ×1.3 だった
+            double near = ExpectedFireAt(95, out bool closeNear);
+            double far = ExpectedFireAt(105, out bool closeFar);
+            Assert.That(closeNear, Is.True);
+            Assert.That(closeFar, Is.False);
+            Assert.That(near / far, Is.EqualTo(2.0 / 1.3).Within(1e-9), "×2.0 と ×1.3 の比");
+        }
+
         // ---------------------------------------------------------------- 保持
 
         [Test]

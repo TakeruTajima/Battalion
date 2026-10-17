@@ -167,16 +167,17 @@ namespace Battalion.Sim.Tests
             Assert.That(sim.AspectOf(t, from), Is.EqualTo(expected));
         }
 
-        [TestCase(10, 2.0)]    // 接近戦：2.0 で置き換える（×1.3 と重ねない）
-        [TestCase(50, 2.0)]
-        [TestCase(50.01, 1.3)]
-        [TestCase(150, 1.3)]
-        [TestCase(150.01, 1.0)]
-        [TestCase(400, 1.0)]
-        [TestCase(400.01, 0.0)]
-        public void RangeMultiplierDoesNotStack(double distance, double expected)
+        [TestCase(10, true, 2.0)]     // 接近戦：2.0 で置き換える（×1.3 と重ねない）
+        [TestCase(120, true, 2.0)]    // 接近戦は矩形の隙間で決まる（P1g.1）。中心どうしが 150m 以内でも重ねない
+        [TestCase(50, false, 1.3)]
+        [TestCase(150, false, 1.3)]
+        [TestCase(150.01, false, 1.0)]
+        [TestCase(400, false, 1.0)]
+        [TestCase(400.01, false, 0.0)]
+        [TestCase(400.01, true, 0.0)]
+        public void RangeMultiplierDoesNotStack(double distance, bool close, double expected)
         {
-            Assert.That(Empty().RangeMultiplier(distance), Is.EqualTo(expected));
+            Assert.That(Empty().RangeMultiplier(distance, close), Is.EqualTo(expected));
         }
 
     }
