@@ -73,13 +73,23 @@ namespace Battalion.View
         }
 
         /// <summary>破線（<paramref name="dash"/> の長さで描いて同じ長さだけ空ける）。</summary>
-        public void DashedLine(Vector2 a, Vector2 b, float width, float dash, Color32 col)
+        public void DashedLine(Vector2 a, Vector2 b, float width, float dash, Color32 col) => DashedLine(a, b, width, dash, 0, col);
+
+        /// <summary>
+        /// 破線。<paramref name="phase"/> だけ a から b の向きへずらす（毎フレーム増やすと、破線が b へ向かって流れる）。
+        /// </summary>
+        public void DashedLine(Vector2 a, Vector2 b, float width, float dash, float phase, Color32 col)
         {
             float len = Vector2.Distance(a, b);
-            if (len < 1e-3f) return;
+            if (len < 1e-3f || dash <= 0) return;
             var dir = (b - a) / len;
-            for (float s = 0; s < len; s += dash * 2)
-                Line(a + dir * s, a + dir * Mathf.Min(len, s + dash), width, col);
+            float period = dash * 2;
+            float start = Mathf.Repeat(phase, period) - period;
+            for (float s = start; s < len; s += period)
+            {
+                float s0 = Mathf.Max(0, s), s1 = Mathf.Min(len, s + dash);
+                if (s1 > s0) Line(a + dir * s0, a + dir * s1, width, col);
+            }
         }
 
         public void Polyline(IList<Vector2> pts, float width, Color32 col)

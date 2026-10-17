@@ -8,7 +8,7 @@ namespace Battalion.View
     // 画面の UI（IMGUI）：ステージ選択、上部バー、左パネル（中隊の一覧）、右パネル（詳細と命令）、下部のログ、駒の文字、終了画面
     public sealed partial class BattleApp
     {
-        const float TopH = 34, LeftW = 270, RightW = 300, BottomH = 150;
+        const float TopH = 56, LeftW = 270, RightW = 300, BottomH = 150;
 
         Font _font;
         GUIStyle _label, _small, _bold, _box, _button, _toggleOn, _logImportant, _title;
@@ -33,10 +33,17 @@ namespace Battalion.View
             return _phase == Phase.Ended && !_hideEnd && EndRect.Contains(m);
         }
 
+        static Font _sharedFont;
+
+        /// <summary>日本語を出せる OS のフォント（IMGUI と地図の上の文字で共用）。</summary>
+        static Font UiFont() =>
+            _sharedFont != null ? _sharedFont
+                : _sharedFont = Font.CreateDynamicFontFromOSFont(new[] { "Yu Gothic UI", "Meiryo UI", "Meiryo", "MS Gothic", "Arial" }, 14);
+
         void InitStyles()
         {
             if (_label != null) return;
-            _font = Font.CreateDynamicFontFromOSFont(new[] { "Yu Gothic UI", "Meiryo UI", "Meiryo", "MS Gothic", "Arial" }, 14);
+            _font = UiFont();
             GUI.skin.font = _font;
             _label = new GUIStyle(GUI.skin.label) { fontSize = 13, wordWrap = false, richText = true };
             _label.normal.textColor = new Color(0.92f, 0.92f, 0.92f);
@@ -112,18 +119,22 @@ namespace Battalion.View
 
         void DrawTopBar()
         {
-            GUILayout.BeginArea(new Rect(8, 4, Screen.width - 16, TopH - 6));
+            // 1段目：シナリオ、時刻と残り、一時停止と倍速、自動一時停止
+            GUILayout.BeginArea(new Rect(8, 3, Screen.width - 16, 26));
             GUILayout.BeginHorizontal();
-            GUILayout.Label($"<b>シナリオA ステージ{_scenario.Stage}</b>", _bold, GUILayout.Width(150));
-            GUILayout.Label($"<b>{EventFeed.FormatTime(_sim.Time)}</b> / {_scenario.TimeLimitMin:0}分", _bold, GUILayout.Width(150));
+            GUILayout.Label($"<b>シナリオA ステージ{_scenario.Stage}</b>", _bold, GUILayout.Width(140));
+            double left = Math.Max(0, _scenario.TimeLimitMin * 60 - _sim.Time);
+            GUILayout.Label($"<b>{EventFeed.FormatTime(_sim.Time)}</b>　残り {(int)left / 60:00}:{(int)left % 60:00}", _bold, GUILayout.Width(190));
 
             if (_phase == Phase.Running)
             {
-                if (GUILayout.Button(_clock.Paused ? "再開 (Space)" : "一時停止 (Space)", _clock.Paused ? _toggleOn : _button, GUILayout.Width(150)))
+                if (GUILayout.Button(_clock.Paused ? "再開 (Space)" : "一時停止 (Space)", _clock.Paused ? _toggleOn : _button, GUILayout.Width(130)))
                     _clock.Paused = !_clock.Paused;
-                foreach (var (sp, key) in new[] { (1, "F1"), (2, "F2"), (4, "F3") })
-                    if (GUILayout.Button($"×{sp} ({key})", _clock.Speed == sp ? _toggleOn : _button, GUILayout.Width(74)))
+                GUILayout.Space(6);
+                foreach (var sp in SimClock.Speeds)
+                    if (GUILayout.Button($"×{sp}", _clock.Speed == sp ? _toggleOn : _button, GUILayout.Width(44)))
                         _clock.SetSpeed(sp);
+                GUILayout.Label("Z 遅く／X 速く", _small, GUILayout.Width(96));
             }
             else
             {
@@ -131,12 +142,30 @@ namespace Battalion.View
                 if (_hideEnd && GUILayout.Button("結果を見る", _button, GUILayout.Width(100))) _hideEnd = false;
                 if (GUILayout.Button("ステージ選択へ", _button, GUILayout.Width(120))) BackToSelect();
             }
-
-            GUILayout.Space(16);
-            string exp = _exposureMode == 0 ? "なし" : (_exposureMode == 1 ? "青から見た赤の射界" : "赤から見た青の射界");
-            GUILayout.Label($"露出(F5)：{exp}　引き金(F6)：{(_showTrigger ? "表示" : "なし")}　退路(F7)：{(_showEscape ? "表示" : "なし")}　視線(L)：{(_mode == Mode.Sight ? "使用中" : "なし")}", _small);
+            GUILayout.Space(10);
+            if (GUILayout.Button(_autoPause ? "自動一時停止：入 (P)" : "自動一時停止：切 (P)", _autoPause ? _toggleOn : _button, GUILayout.Width(160)))
+                _autoPause = !_autoPause;
             GUILayout.FlexibleSpace();
             GUILayout.Label($"移動中の被弾×{_params.Terrain.MovingOpenDamageMult:0.0#}　シード {_seed}", _small);
+            GUILayout.EndHorizontal();
+            GUILayout.EndArea();
+
+            // 2段目：勝利条件（今この瞬間に終わったら勝ちか）、止めた理由、デバッグ表示の状態
+            GUILayout.BeginArea(new Rect(8, 30, Screen.width - 16, 24));
+            GUILayout.BeginHorizontal();
+            var o = _objective;
+            string mark(bool b) => b ? "○" : "×";
+            string win = o.WinIfEndedNow ? "<color=#7fb2ff><b>今終われば：勝ち</b></color>" : "<color=#ff9a6a><b>今終われば：負け</b></color>";
+            GUILayout.Label($"勝利条件　村に青の中隊：{mark(o.BlueInVillage)}　250m以内の赤：{mark(o.RedNearVillage)}　→ {win}　（村：{ObjectiveStatus.Name(o.State)}）", _label, GUILayout.Width(560));
+            if (_pauseReason != null && _clock.Paused && _phase == Phase.Running)
+            {
+                var ps = new GUIStyle(_bold);
+                ps.normal.textColor = new Color(1f, 0.85f, 0.2f);
+                GUILayout.Label("一時停止：" + _pauseReason, ps);
+            }
+            GUILayout.FlexibleSpace();
+            string exp = _exposureMode == 0 ? "なし" : (_exposureMode == 1 ? "青から見た赤の射界" : "赤から見た青の射界");
+            GUILayout.Label($"露出(F5)：{exp}　引き金(F6)：{(_showTrigger ? "表示" : "なし")}　退路(F7)：{(_showEscape ? "表示" : "なし")}　視線(L)：{(_mode == Mode.Sight ? "使用中" : "なし")}", _small);
             GUILayout.EndHorizontal();
             GUILayout.EndArea();
         }
@@ -217,7 +246,7 @@ namespace Battalion.View
                 }
             }
             if (o.Moves) s += c.Arrived ? "（到着）" : "（移動中）";
-            if (o.Type == OrderType.Entrench)
+            if (o.Type == OrderType.Entrench && (!o.Moves || c.Arrived))
                 s += $" {Math.Min(100, c.EntrenchProgress / _params.MapRules.EntrenchSec * 100):0}%";
             return s;
         }
@@ -258,7 +287,7 @@ namespace Battalion.View
             GUILayout.BeginHorizontal();
             if (GUILayout.Button("拘束 (R)", _mode == Mode.Pin ? _toggleOn : _button)) BeginOrder(OrderType.Pin);
             if (GUILayout.Button("攻撃 (T)", _mode == Mode.Attack ? _toggleOn : _button)) BeginOrder(OrderType.Attack);
-            if (GUILayout.Button("陣地構築 (Y)", _button)) BeginOrder(OrderType.Entrench);
+            if (GUILayout.Button("陣地構築 (Y)", _mode == Mode.Entrench ? _toggleOn : _button)) BeginOrder(OrderType.Entrench);
             GUILayout.EndHorizontal();
 
             GUILayout.Label("攻撃の方向", _small);
@@ -328,13 +357,15 @@ namespace Battalion.View
             foreach (var c in _sim.Companies)
             {
                 if (c.State == CompanyState.LeftBattle) continue;
-                Pose(c, out var pos, out _);
-                var g = WorldToGui(pos);
-                if (!area.Contains(g)) continue;
+                Pose(c, out var pos, out double facing);
+                if (!area.Contains(WorldToGui(pos))) continue;
+                // 駒の下の兵力・士気のバー（駒の下端から 10〜20 画素）のさらに下に置く
+                Extent(facing, out _, out float ey);
+                var g = WorldToGui(new Vec2(pos.X, pos.Y - ey));
                 string state = c.State == CompanyState.Normal ? "" : StateName(c.State);
                 string text = c.OnBoard ? $"{c.Name} {c.Strength} 士{c.Morale:0} {state}" : $"{c.Name} 降伏";
                 var size = _small.CalcSize(new GUIContent(text));
-                var rect = new Rect(g.x - size.x / 2, g.y + 14, size.x + 4, size.y);
+                var rect = new Rect(g.x - size.x / 2, g.y + 22, size.x + 4, size.y);
                 Fill(rect, new Color(0, 0, 0, 0.55f));
                 GUI.Label(rect, text, _small);
             }
@@ -374,6 +405,7 @@ namespace Battalion.View
             if (_world != null) Destroy(_world.gameObject);
             _world = null;
             _shapes = null;
+            _texts = null;
             _mapView = null;
             _sim = null;
             _selected = -1;

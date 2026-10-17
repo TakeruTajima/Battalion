@@ -9,7 +9,7 @@ namespace Battalion.View
     // 入力：中隊を選ぶ → 命令を選ぶ → 地図をクリック（ドラッグで到着後の向き）
     public sealed partial class BattleApp
     {
-        enum Mode { None, Advance, Retreat, HoldFacing, Pin, Attack, Sight }
+        enum Mode { None, Advance, Retreat, HoldFacing, Pin, Attack, Entrench, Sight }
 
         Mode _mode = Mode.None;
         int _selected = -1;
@@ -49,10 +49,10 @@ namespace Battalion.View
             if (_phase == Phase.Running)
             {
                 if (Input.GetKeyDown(KeyCode.Space)) _clock.Paused = !_clock.Paused;
-                if (Input.GetKeyDown(KeyCode.F1)) _clock.SetSpeed(1);
-                if (Input.GetKeyDown(KeyCode.F2)) _clock.SetSpeed(2);
-                if (Input.GetKeyDown(KeyCode.F3)) _clock.SetSpeed(4);
+                if (Input.GetKeyDown(KeyCode.Z)) _clock.SpeedDown();
+                if (Input.GetKeyDown(KeyCode.X)) _clock.SpeedUp();
             }
+            if (Input.GetKeyDown(KeyCode.P)) _autoPause = !_autoPause;
 
             var blue = BlueCompanies();
             for (int k = 0; k < 4 && k < blue.Count; k++)
@@ -96,11 +96,20 @@ namespace Battalion.View
             _pressing = false;
         }
 
-        /// <summary>命令を選ぶ。保持と陣地構築はすぐに出る（保持はその後ドラッグで向きを指定できる）。</summary>
+        /// <summary>
+        /// 命令を選ぶ。保持はすぐに出る（その後ドラッグで向きを指定できる）。
+        /// 陣地構築は地図をクリックで目的地（ドラッグで向き）。もう一度 Y を押すか、選んだ中隊の駒をクリックすればその場で掘る。
+        /// </summary>
         void BeginOrder(OrderType type)
         {
             var c = Selected;
             if (!CanCommand(c)) return;
+            if (type == OrderType.Entrench && _mode == Mode.Entrench)
+            {
+                _sim.Issue(Order.Entrench(c.Id));
+                _mode = Mode.None;
+                return;
+            }
             switch (type)
             {
                 case OrderType.Advance: _mode = Mode.Advance; break;
@@ -112,8 +121,7 @@ namespace Battalion.View
                     _mode = Mode.HoldFacing;
                     break;
                 case OrderType.Entrench:
-                    _sim.Issue(Order.Entrench(c.Id));
-                    _mode = Mode.None;
+                    _mode = Mode.Entrench;
                     break;
             }
         }
@@ -192,6 +200,15 @@ namespace Battalion.View
                     if (CanCommand(c) && facing.HasValue) _sim.Issue(Order.Hold(c.Id, facing));
                     _mode = Mode.None;
                     break;
+                case Mode.Entrench:
+                {
+                    if (!CanCommand(c)) break;
+                    // 選んだ中隊の駒をクリックしたらその場で、それ以外は目的地へ移動してから掘る
+                    var hit = UnitAt(at, Side.Blue);
+                    _sim.Issue(hit == c && !facing.HasValue ? Order.Entrench(c.Id) : Order.Entrench(c.Id, at, facing));
+                    _mode = Mode.None;
+                    break;
+                }
                 case Mode.Pin:
                 {
                     var tgt = UnitAt(at, Side.Red);
@@ -258,6 +275,7 @@ namespace Battalion.View
                 case Mode.Advance: return "前進：目的地をクリック（押したままドラッグで到着後の向き）";
                 case Mode.Retreat: return "後退：目的地をクリック（背後なら後ろ向きに下がる。ドラッグで向き）";
                 case Mode.HoldFacing: return "保持しました。向きを変えるなら地図をドラッグ（Esc で終わる）";
+                case Mode.Entrench: return "陣地構築：掘る地点をクリック（ドラッグで向き）。その場で掘るなら、もう一度 Y か、この中隊の駒をクリック";
                 case Mode.Pin: return "拘束：目標の敵の駒をクリック";
                 case Mode.Attack:
                     return _attackAspect == AttackAspect.Flank

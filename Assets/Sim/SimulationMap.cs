@@ -126,6 +126,38 @@ namespace Battalion.Sim
         }
 
         // ---------------------------------------------------------------- 表示用の読み取り専用の口
+
+        /// <summary>1回の射撃の記録（表示用）。</summary>
+        public readonly struct FireRecord
+        {
+            public readonly int Shooter;
+            public readonly int Target;
+            /// <summary>撃たれた側から見た射手の向き。</summary>
+            public readonly Aspect Aspect;
+            /// <summary>損害の期待値（1分あたり、その刻みの条件で）。</summary>
+            public readonly double ExpectedPerMin;
+            /// <summary>この刻みの実際の損害。</summary>
+            public readonly int Casualties;
+            /// <summary>この射撃の損害による士気の減り（練度の減りやすさを掛ける前）。</summary>
+            public readonly double MoraleHit;
+            public readonly double Distance;
+
+            public FireRecord(int shooter, int target, Aspect aspect, double expectedPerMin, int casualties, double moraleHit, double distance)
+            {
+                Shooter = shooter;
+                Target = target;
+                Aspect = aspect;
+                ExpectedPerMin = expectedPerMin;
+                Casualties = casualties;
+                MoraleHit = moraleHit;
+                Distance = distance;
+            }
+        }
+
+        readonly List<FireRecord> _fireLog = new List<FireRecord>();
+
+        /// <summary>直前の刻みの射撃の記録（表示用。読むだけ）。次の刻みで書き換わる。</summary>
+        public IReadOnlyList<FireRecord> LastTickFire => _fireLog;
         // Sim の中の「見える範囲」の使い回し（10秒ごとに作り直す）に触らない。表示から何度呼んでも会戦の結果は変わらない。
 
         /// <summary>使い回し中の見える範囲があればそれを、なければその場で作ったもの（保存しない）を返す。</summary>
@@ -162,6 +194,13 @@ namespace Battalion.Sim
                 case OrderType.Retreat:
                     c.MoveGoal = AdjustDestination(c, order.Destination.Value);
                     Plan(c, tickStart);
+                    break;
+                case OrderType.Entrench:
+                    if (order.Destination.HasValue)
+                    {
+                        c.MoveGoal = AdjustDestination(c, order.Destination.Value);
+                        Plan(c, tickStart);
+                    }
                     break;
                 case OrderType.Attack:
                 {
@@ -412,7 +451,8 @@ namespace Battalion.Sim
                 }
                 case OrderType.Advance:
                 case OrderType.Retreat:
-                    if (!c.Arrived && tickStart >= c.NextReplanTime)
+                case OrderType.Entrench:
+                    if (c.CurrentOrder.Moves && !c.Arrived && tickStart >= c.NextReplanTime)
                     {
                         // 引き直しのたびに、味方の今の状態で目的地をずらし直す（止まった味方の近くを目指し続けないように）
                         c.MoveGoal = AdjustDestination(c, c.CurrentOrder.Destination.Value);
@@ -582,9 +622,21 @@ namespace Battalion.Sim
                     continue;
                 }
                 if (c.CurrentOrder.Type != OrderType.Entrench || c.EntrenchProgress >= _p.MapRules.EntrenchSec) continue;
+                if (!ReadyToDig(c)) continue;
                 c.EntrenchProgress = Math.Min(_p.MapRules.EntrenchSec, c.EntrenchProgress + _p.TickSec);
                 if (c.EntrenchProgress >= _p.MapRules.EntrenchSec) CompleteEntrenchment(c, t);
             }
+        }
+
+        /// <summary>
+        /// 掘り始められるか：目的地のある陣地構築なら、着いて、指定の向きへ向き終えていること。目的地がなければ常に。
+        /// </summary>
+        static bool ReadyToDig(Company c)
+        {
+            var o = c.CurrentOrder;
+            if (!o.Destination.HasValue) return true;
+            if (!c.Arrived) return false;
+            return !o.FacingRad.HasValue || Math.Abs(Angles.Wrap(o.FacingRad.Value - c.Facing)) <= 1e-9;
         }
 
         void CompleteEntrenchment(Company c, double t)

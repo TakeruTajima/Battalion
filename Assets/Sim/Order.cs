@@ -53,11 +53,16 @@ namespace Battalion.Sim
         public static Order Pin(int companyId, int targetId) =>
             new Order(OrderType.Pin, companyId, null, null, targetId);
 
-        public static Order Entrench(int companyId) =>
-            new Order(OrderType.Entrench, companyId, null, null);
+        /// <summary>
+        /// 陣地構築。目的地があれば前進と同じく移動し、着いて向きを変え終えたら掘り始める（移動中は進捗が増えない）。
+        /// 目的地がなければその場で掘る。
+        /// </summary>
+        public static Order Entrench(int companyId, Vec2? destination = null, double? facingRad = null) =>
+            new Order(OrderType.Entrench, companyId, destination, facingRad);
 
-        /// <summary>移動を伴う命令か（前進・後退・攻撃）。</summary>
-        public bool Moves => Type == OrderType.Advance || Type == OrderType.Retreat || Type == OrderType.Attack;
+        /// <summary>移動を伴う命令か（前進・後退・攻撃、目的地のある陣地構築）。</summary>
+        public bool Moves => Type == OrderType.Advance || Type == OrderType.Retreat || Type == OrderType.Attack
+                             || (Type == OrderType.Entrench && Destination.HasValue);
 
         public static string Name(OrderType t)
         {

@@ -16,13 +16,14 @@ namespace Battalion.View
             return _sim;
         }
 
-        /// <summary>刻みを進める（補間なし）。</summary>
+        /// <summary>刻みを進める（補間なし）。自動一時停止はしない。</summary>
         public void StepForCapture(int ticks)
         {
             for (int k = 0; k < ticks && _phase == Phase.Running; k++)
             {
                 CapturePrevious();
                 _sim.Step();
+                OnTickStepped();
                 if (CheckEnd()) break;
             }
             CapturePrevious();
@@ -32,6 +33,31 @@ namespace Battalion.View
                 _mapView.PaintTerrain();
             }
             _escapeCache.Clear();
+        }
+
+        /// <summary>たまっている損害を捨てる（撮る直前のしばらくぶんだけを数字にするため）。<paramref name="alsoTexts"/> なら出来事の文字も捨てる。</summary>
+        public void ClearFeedbackForCapture(bool alsoTexts)
+        {
+            foreach (var fx in _fx)
+            {
+                Array.Clear(fx.Damage, 0, 3);
+                fx.DamageWindowStart = -1;
+            }
+            if (alsoTexts) _floats.Clear();
+        }
+
+        /// <summary>たまっている損害を、待たずに数字にする（現実の時間が進まないバッチモードのため）。</summary>
+        public void FlushDamageForCapture()
+        {
+            float now = Time.unscaledTime;
+            foreach (var c in _sim.Companies)
+            {
+                var fx = _fx[c.Id];
+                int total = fx.Damage[0] + fx.Damage[1] + fx.Damage[2];
+                if (total > 0) _floats.Add(DamageText(c.Id, fx.Damage, total, now));
+                Array.Clear(fx.Damage, 0, 3);
+                fx.DamageWindowStart = -1;
+            }
         }
 
         /// <summary>表示の切り替えを設定して、駒と重ねる表示を描き直す。</summary>

@@ -11,7 +11,7 @@ namespace Battalion.View
     {
         public const double GameSecondsPerRealSecond = 4.0;
         public const int MaxTicksPerFrame = 16;
-        public static readonly int[] Speeds = { 1, 2, 4 };
+        public static readonly int[] Speeds = { 1, 2, 4, 8, 16 };
 
         readonly double _tickSec;
         double _accum;
@@ -28,6 +28,20 @@ namespace Battalion.View
         {
             if (Array.IndexOf(Speeds, speed) < 0) throw new ArgumentOutOfRangeException(nameof(speed));
             Speed = speed;
+        }
+
+        /// <summary>一段速く（×16 が上限）。</summary>
+        public void SpeedUp()
+        {
+            int k = Array.IndexOf(Speeds, Speed);
+            if (k < Speeds.Length - 1) Speed = Speeds[k + 1];
+        }
+
+        /// <summary>一段遅く（×1 が下限）。</summary>
+        public void SpeedDown()
+        {
+            int k = Array.IndexOf(Speeds, Speed);
+            if (k > 0) Speed = Speeds[k - 1];
         }
 
         /// <summary>現実の経過秒を受け取り、このフレームに進める刻みの数を返す。</summary>

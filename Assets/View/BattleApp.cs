@@ -91,6 +91,7 @@ namespace Battalion.View
             _loadError = null;
             if (_world != null) Destroy(_world.gameObject);
             _world = new GameObject("World").transform;
+            _texts = null; // 地図の上の文字は World の下に作るので、作り直す
 
             _seed = seed;
             _feed = new EventFeed();
@@ -101,6 +102,7 @@ namespace Battalion.View
             _mapView = new MapRenderer(_sim.Map, _world);
             _shapes = new ShapeMesh("Shapes", 10, _world);
             CapturePrevious();
+            ResetFeedback();
 
             ResetInputState();
             _exposureMode = 0;
@@ -124,13 +126,25 @@ namespace Battalion.View
             HandleMouse();
 
             if (_phase != Phase.Running) return;
+            if (!_clock.Paused) _pauseReason = null;
             int ticks = _clock.Advance(Time.unscaledDeltaTime);
             for (int k = 0; k < ticks; k++)
             {
                 CapturePrevious();
                 _sim.Step();
+                bool stop = OnTickStepped();
                 if (CheckEnd()) break;
+                if (stop)
+                {
+                    // 自動一時停止：何が起きたかを上部バーに出し、このフレームの残りの刻みは進めない。
+                    // 補間の起点を今の刻みにそろえ、止めた状態がそのまま見えるようにする
+                    _clock.Paused = true;
+                    _clock.Reset();
+                    CapturePrevious();
+                    break;
+                }
             }
+            UpdateFeedback();
             if (ticks > 0)
             {
                 _escapeCache.Clear();

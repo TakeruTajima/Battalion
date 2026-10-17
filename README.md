@@ -2,9 +2,9 @@
 
 大隊規模の部隊を指揮するRTSの試作。仕様は [`docs/spec.md`](docs/spec.md)。
 
-現在の段階：**P1b（Unity での表示と操作）まで完了**。報告は [`docs/reports/`](docs/reports/)（P0・P0.1 は `P0_report.md`、P0.2 は `P0.2_report.md`、P1a・P1a.1 は `P1a_report.md`、P1b は `P1b_report.md`。操作の早見表も P1b の報告にある）。
+現在の段階：**P1c（手応えの見える化）まで完了**。報告は [`docs/reports/`](docs/reports/)（P0・P0.1 は `P0_report.md`、P0.2 は `P0.2_report.md`、P1a・P1a.1 は `P1a_report.md`、P1b は `P1b_report.md`、P1c は `P1c_report.md`。操作の早見表は P1b の報告と、変わったところは P1c の報告にある）。
 
-遊び方：Unity 6.3 LTS（6000.3.11f1）で開き、`Assets/Scenes/Battle.unity` を再生する。
+遊び方：Unity 6.3 LTS（6000.3.11f1）で開き、`Assets/Scenes/Battle.unity` を再生する（6.4 など別の版で開くと ProjectSettings とパッケージが書き換わるので、6.3 LTS で開く）。
 
 ## 構成
 

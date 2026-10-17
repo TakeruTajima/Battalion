@@ -112,7 +112,9 @@ namespace Battalion.Sim
 
                 var order = o;
                 // 動揺中は前進・攻撃を拒み、その場で保持する
-                if (c.State == CompanyState.Shaken && (order.Type == OrderType.Advance || order.Type == OrderType.Attack))
+                // 目的地のある陣地構築も移動を伴うので、動揺中は同じく拒む
+                if (c.State == CompanyState.Shaken && (order.Type == OrderType.Advance || order.Type == OrderType.Attack
+                                                       || (order.Type == OrderType.Entrench && order.Destination.HasValue)))
                     order = Order.Hold(c.Id, order.FacingRad);
 
                 if (order.Type == OrderType.Retreat)
@@ -314,6 +316,7 @@ namespace Battalion.Sim
                     firstShooter[i, a] = -1;
 
             // 全射撃の損害を、刻みの開始時点の状態から計算してバッファに積む
+            _fireLog.Clear();
             foreach (var s in shots)
             {
                 var u = _companies[s.Shooter];
@@ -340,6 +343,7 @@ namespace Battalion.Sim
                 cas[tg.Id] += c;
                 double m = (double)c / tg.InitialStrength * 100.0 * _p.Morale.PerPctLoss * _p.Morale.AspectMoraleMult[a];
                 if (close) m *= _p.CloseCombat.MoraleMult;
+                _fireLog.Add(new FireRecord(u.Id, tg.Id, s.AspectOnTarget, lambda / dtMin, c, m, s.Distance));
                 casMorale[tg.Id, a] += m;
                 hit[tg.Id, a] = true;
                 if (firstShooter[tg.Id, a] < 0) firstShooter[tg.Id, a] = u.Id;
@@ -596,7 +600,9 @@ namespace Battalion.Sim
                         var prev = c.State;
                         c.State = want;
                         // 動揺すると前進を止めてその場で保持する
-                        if (want == CompanyState.Shaken && c.CurrentOrder.Type == OrderType.Advance && !c.Arrived)
+                        // 動揺すると前進（目的地のある陣地構築の移動を含む）を止めてその場で保持する
+                        if (want == CompanyState.Shaken && !c.Arrived
+                            && (c.CurrentOrder.Type == OrderType.Advance || (c.CurrentOrder.Type == OrderType.Entrench && c.CurrentOrder.Moves)))
                         {
                             c.CurrentOrder = Order.Hold(c.Id, c.CurrentOrder.FacingRad);
                             c.Arrived = true;
