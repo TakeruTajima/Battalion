@@ -80,8 +80,9 @@ namespace Battalion.Sim
 
         /// <summary>
         /// <paramref name="side"/> の中隊から見て、経路で避けるマス：敵の矩形（降伏を除く）が掛かるマスと、
-        /// 中心が敵の矩形から「動く中隊の半幅（正面幅の半分）＋隙間 10m」以内のマス。動く中隊は幅 200m の矩形なので、
-        /// 中心だけが敵のマスを避けても、横幅で敵の角をかすめて止まってしまうため。
+        /// 中心が敵の矩形から「動く中隊の矩形の半対角（約 103m）＋隙間 10m」以内のマス。動く中隊は幅 200m の矩形なので、
+        /// 中心だけが敵のマスを避けても、横幅で敵の角をかすめて止まってしまうため。P1d は半幅（100m）だったが、
+        /// 接敵中は向きを変えずに斜めに動くので、どの向きでも引っかからない半対角にした（P1e.1）。
         /// 露出の地図と同じく10秒ごとに作り直す（その後に初めて要るときに、その時点の位置で作る）。
         /// </summary>
         bool[] EnemyCells(Side side)
@@ -89,7 +90,8 @@ namespace Battalion.Sim
             int s = (int)side;
             if (_enemyCells[s] != null) return _enemyCells[s];
             var cells = new bool[_map.Width * _map.Height];
-            double clear = _p.Movement.FrontageM / 2 + B.EnemyMinGapM;
+            double clear = Math.Sqrt(_p.Movement.FrontageM * _p.Movement.FrontageM + _p.Movement.DepthM * _p.Movement.DepthM) / 2
+                           + B.EnemyMinGapM;
             foreach (var e in _companies)
             {
                 if (!e.OnBoard || e.Side == side) continue;
@@ -129,10 +131,9 @@ namespace Battalion.Sim
 
             if (!c.AttackFixed)
             {
-                // 着いた：発起点に届いたか、敵の手前で止められて接している（そこで撃ち合う）。
-                // 届かない発起点の手前で止まっただけなら着いたことにせず、30秒ごとに引き直し続ける
-                bool reached = c.Arrived
-                               && (Vec2.Distance(c.Position, c.MoveGoal) <= 1.0 || EnemyGapAt(c, c.Position, c.Facing) < B.EnemyMinGapM + 1.0);
+                // 着いた：発起点に届いた。届かない発起点の手前で止まった、敵の手前で止められた（P1e.1）だけなら
+                // 着いたことにせず、30秒ごとに引き直し続ける
+                bool reached = c.Arrived && Vec2.Distance(c.Position, c.MoveGoal) <= 1.0;
                 if (reached)
                 {
                     // 着いた：目標の中心から見た自分の方角を固定する

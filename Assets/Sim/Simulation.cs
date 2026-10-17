@@ -150,6 +150,7 @@ namespace Battalion.Sim
             {
                 c.MovedThisTick = false;
                 c.MoveStyle = MoveStyle.None;
+                c.BlockedByEnemy = false;
                 if (!c.OnBoard) continue;
 
                 if (c.State == CompanyState.Routed)
@@ -161,11 +162,10 @@ namespace Battalion.Sim
 
                 var before = c.Position;
                 MoveUnderCommand(c, t, tickStart, dt, maxTurn);
-                // 敵の矩形との隙間が 10m 未満になる手前で止まる（P1d の2）。全く進めなければ、そこで着いたことにする
-                // （攻撃ならそこで方角を固定し、拘束ならそこで目標を向いて撃つ。そこは接近戦の距離）
-                if (ClampAgainstEnemies(c, before) && c.Position.X == before.X && c.Position.Y == before.Y
-                    && c.CurrentOrder.Moves && !c.Arrived)
-                    ArriveAt(c);
+                // 敵の矩形との隙間が 10m 未満になる手前で止まる（P1d の2）。全く進めなくても「着いた」扱いにはせず、
+                // 30秒ごとの経路の引き直しを続け、道が空けば進む（P1e.1）
+                c.BlockedByEnemy = ClampAgainstEnemies(c, before) && c.Position.X == before.X && c.Position.Y == before.Y
+                                   && c.CurrentOrder.Moves && !c.Arrived;
                 c.MovedThisTick = c.Position.X != before.X || c.Position.Y != before.Y;
             }
 

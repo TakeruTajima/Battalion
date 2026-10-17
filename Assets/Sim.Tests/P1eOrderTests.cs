@@ -292,6 +292,52 @@ namespace Battalion.Sim.Tests
             Assert.That(side.AttackChosenAspect, Is.Not.EqualTo(AttackAspect.Front));
         }
 
+        // ---------------------------------------------------------------- P1e.1 止められた中隊の動き直し
+
+        [Test]
+        public void PathKeepsHalfDiagonalPlusGapFromEnemyRectangle()
+        {
+            // 経路で敵を避ける範囲は、自分の矩形の半対角（約 103m）＋10m（P1e.1）。P1d の半幅＋10m（110m）なら通れた、
+            // 敵の矩形から 108m の列（y＝25）を通らず、横歩きのまま角に引っかからずに着く
+            var sim = Flat();
+            var a = Add(sim, "A", Side.Blue, 25, 25, 90);   // 北向きのまま東へ動く：横歩き
+            var e = Add(sim, "E", Side.Red, 325, 158, 270); // 南向き：矩形の南の辺は y＝133
+            var goal = new Vec2(625, 25);
+            sim.Issue(Order.Advance(a.Id, goal));
+            double clear = Math.Sqrt(200 * 200 + 50 * 50) / 2 + 10;
+            double minDist = double.MaxValue;
+            bool sideways = false, blocked = false;
+            for (int k = 0; k < 4000 && (k == 0 || !a.Arrived); k++)
+            {
+                Step(sim);
+                if (a.MoveStyle == MoveStyle.Sideways) sideways = true;
+                if (a.BlockedByEnemy) blocked = true;
+                minDist = Math.Min(minDist, sim.RectOf(e).DistanceTo(a.Position));
+            }
+            Assert.That(sideways, Is.True);
+            Assert.That(blocked, Is.False, "角に引っかからない");
+            Assert.That(a.Arrived, Is.True);
+            Assert.That(Vec2.Distance(a.Position, goal), Is.LessThan(1e-6));
+            Assert.That(minDist, Is.GreaterThanOrEqualTo(clear - 1e-6));
+        }
+
+        [Test]
+        public void AttackBlockedShortOfTheJumpOffDoesNotFixTheBearing()
+        {
+            // 発起点の手前で別の敵に止められた攻撃は、方角を固定せず、道が空けば発起点まで進む
+            var sim = Flat();
+            var e = Add(sim, "E", Side.Red, 0, 0, 180);
+            var x = Add(sim, "X", Side.Red, -360, 0, 0);  // 発起点（-250, 0）の手前をふさぐ敵
+            var a = Add(sim, "A", Side.Blue, -440, 0, 0); // X のすぐ後ろ（隙間 30m）
+            sim.Issue(Order.Attack(a.Id, e.Id, AttackAspect.Front));
+            Run(sim, 40);
+            Assert.That(a.AttackFixed, Is.False, "止められただけでは着いたことにしない");
+            x.State = CompanyState.Surrendered;
+            for (int k = 0; k < 4000 && !a.AttackFixed; k++) Step(sim);
+            Assert.That(a.AttackFixed, Is.True);
+            Assert.That(Vec2.Distance(a.Position, sim.JumpOff(e, Math.PI)), Is.LessThan(1e-6));
+        }
+
         // ---------------------------------------------------------------- 5. 下見
 
         [Test]

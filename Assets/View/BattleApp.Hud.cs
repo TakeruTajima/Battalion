@@ -224,6 +224,7 @@ namespace Battalion.View
             {
                 string ms = MoveStyleName(c.MoveStyle);
                 if (ms != null) s += "・" + ms;
+                if (c.BlockedByEnemy) s += "・敵に阻まれて停止";
                 if (c.TurnWaitStart.HasValue) s += "・向き直り待ち";
                 else if (c.FacingOverride.HasValue && Math.Abs(Angles.Wrap(c.FacingOverride.Value - c.Facing)) > 1e-6) s += "・向き直り中";
                 if (c.DisarrayUntil >= _sim.Time) s += "・<color=#ffa040>隊形の乱れ</color>";

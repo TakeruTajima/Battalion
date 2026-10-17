@@ -85,7 +85,7 @@ namespace Battalion.Sim.Tests
             var e = Add(sim, "E", Side.Red, 300, 0, 180);
             sim.Issue(Order.Advance(a.Id, new Vec2(300, 0))); // 目的地は敵の中心
             double minGap = double.MaxValue;
-            for (int k = 0; k < 3000 && (k == 0 || !a.Arrived); k++)
+            for (int k = 0; k < 3000 && (k == 0 || !a.BlockedByEnemy); k++)
             {
                 Freeze(a, e);
                 e.LastFlankHitTime = double.NegativeInfinity; // 敵が向き直って矩形が回らないように
@@ -94,7 +94,14 @@ namespace Battalion.Sim.Tests
             }
             Assert.That(minGap, Is.GreaterThanOrEqualTo(10 - 1e-6));
             Assert.That(UnitRect.Gap(sim.RectOf(a), sim.RectOf(e)), Is.EqualTo(10).Within(0.05), "手前で止まる");
-            Assert.That(a.Arrived, Is.True, "進めなくなったら着いたことにする");
+            Assert.That(a.BlockedByEnemy, Is.True);
+            Assert.That(a.Arrived, Is.False, "進めなくなっても着いたことにはしない（P1e.1）");
+
+            // 道が空けば（敵がいなくなれば）、30秒ごとの引き直しで進み直す
+            e.State = CompanyState.Surrendered;
+            for (int k = 0; k < 400 && !a.Arrived; k++) { Freeze(a); sim.Step(); }
+            Assert.That(a.Arrived, Is.True);
+            Assert.That(Vec2.Distance(a.Position, new Vec2(300, 0)), Is.LessThan(1e-6), "元の目的地に着く");
         }
 
         [Test]

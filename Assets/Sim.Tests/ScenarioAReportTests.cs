@@ -26,10 +26,13 @@ namespace Battalion.Sim.Tests
             public readonly double X, Y, FacingDeg;
             public readonly PlannedKind Kind;
             public readonly string Target;
+            /// <summary>条件つきの命令（P1e.1）：この中隊が指揮下でなくなったら出す（null なら時刻だけで出す）。</summary>
+            public readonly string WhenBroken;
 
             public PlannedOrder(double atSec, string unit, double x, double y, double facingDeg,
-                PlannedKind kind = PlannedKind.Advance, string target = null)
+                PlannedKind kind = PlannedKind.Advance, string target = null, string whenBroken = null)
             {
+                WhenBroken = whenBroken;
                 AtSec = atSec;
                 Unit = unit;
                 X = x;
@@ -45,7 +48,7 @@ namespace Battalion.Sim.Tests
 
         /// <summary>
         /// 「拘束＋迂回」（P1e の6）：B2 が R1 を拘束し、B1 が R1 を側面の範囲で攻撃、B4 が 2分後に続く。B3 は B2 の南で火力支援。
-        /// 攻撃は追撃なし（確保）。
+        /// 攻撃は追撃なし（確保）。R1 が指揮下でなくなったら、B3 と B4 は村の中心へ前進する（P1e.1）。
         /// </summary>
         public static PlannedOrder[] PinAndFlank(int stage, bool near)
         {
@@ -56,6 +59,8 @@ namespace Battalion.Sim.Tests
                 T(0, "B1", PlannedKind.AttackFlank, "R1"),
                 T(120, "B4", PlannedKind.AttackFlank, "R1"),
                 O(0, "B3", fx, fy, 0),
+                new PlannedOrder(0, "B3", MapScenario.VillageCenter.X, MapScenario.VillageCenter.Y, 0, whenBroken: "R1"),
+                new PlannedOrder(0, "B4", MapScenario.VillageCenter.X, MapScenario.VillageCenter.Y, 0, whenBroken: "R1"),
             };
         }
 
@@ -143,7 +148,8 @@ namespace Battalion.Sim.Tests
         {
             var counter = new RoutCounter();
             var sim = sc.Build(TestUtil.Params, seed, counter);
-            var orders = plan.OrderBy(o => o.AtSec).ToList();
+            var orders = plan.Where(o => o.WhenBroken == null).OrderBy(o => o.AtSec).ToList();
+            var conditional = plan.Where(o => o.WhenBroken != null).ToList();
             int next = 0;
             double? redAllBroken = null;
             var fixedAt = new Dictionary<string, double>();
@@ -153,14 +159,14 @@ namespace Battalion.Sim.Tests
                 while (next < orders.Count && orders[next].AtSec <= sim.Time)
                 {
                     var o = orders[next++];
-                    var c = sim.Find(o.Unit);
-                    switch (o.Kind)
-                    {
-                        case PlannedKind.PinFar: sim.Issue(Order.Pin(c.Id, sim.Find(o.Target).Id, PinRange.Far)); break;
-                        case PlannedKind.PinNear: sim.Issue(Order.Pin(c.Id, sim.Find(o.Target).Id, PinRange.Near)); break;
-                        case PlannedKind.AttackFlank: sim.Issue(Order.Attack(c.Id, sim.Find(o.Target).Id, AttackAspect.Flank)); break;
-                        default: sim.Issue(Order.Advance(c.Id, new Vec2(o.X, o.Y), o.FacingDeg * Angles.DegToRad)); break;
-                    }
+                    Issue(sim, o);
+                }
+                for (int k = conditional.Count - 1; k >= 0; k--)
+                {
+                    var o = conditional[k];
+                    if (o.AtSec > sim.Time || sim.Find(o.WhenBroken).UnderCommand) continue;
+                    conditional.RemoveAt(k);
+                    Issue(sim, o);
                 }
                 sim.Step();
                 foreach (var c in sim.Companies)
@@ -171,6 +177,23 @@ namespace Battalion.Sim.Tests
                 bool blueLeft = sim.Companies.Any(c => c.Side == Side.Blue && c.OnBoard);
                 if (!redLeft || !blueLeft) break;
             }
+            return Summarize(sc, sim, counter, redAllBroken, fixedAt);
+        }
+
+        static void Issue(Simulation sim, PlannedOrder o)
+        {
+            var c = sim.Find(o.Unit);
+            switch (o.Kind)
+            {
+                case PlannedKind.PinFar: sim.Issue(Order.Pin(c.Id, sim.Find(o.Target).Id, PinRange.Far)); break;
+                case PlannedKind.PinNear: sim.Issue(Order.Pin(c.Id, sim.Find(o.Target).Id, PinRange.Near)); break;
+                case PlannedKind.AttackFlank: sim.Issue(Order.Attack(c.Id, sim.Find(o.Target).Id, AttackAspect.Flank)); break;
+                default: sim.Issue(Order.Advance(c.Id, new Vec2(o.X, o.Y), o.FacingDeg * Angles.DegToRad)); break;
+            }
+        }
+
+        static RunResult Summarize(MapScenario sc, Simulation sim, RoutCounter counter, double? redAllBroken, Dictionary<string, double> fixedAt)
+        {
             var blue = sim.Companies.Where(c => c.Side == Side.Blue).ToList();
             var red = sim.Companies.Where(c => c.Side == Side.Red).ToList();
             var result = new RunResult

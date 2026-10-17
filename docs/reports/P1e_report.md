@@ -6,8 +6,8 @@
 
 | 基準 | 結果 |
 | --- | --- |
-| Unity 6.3 LTS（6000.3.11f1）でテストが全て通る | EditMode 188件全て通過（Sim 170件＋View 18件） |
-| .NET でテストが全て通る | 170件全て通過（通し実行の2件を含む） |
+| Unity 6.3 LTS（6000.3.11f1）でテストが全て通る | EditMode 188件全て通過（Sim 178件＋View 10件。※P1e.1 で訂正） |
+| .NET でテストが全て通る | 178件全て通過（通し実行の2件を含む）。※P1e.1 で数え直して訂正（当初 170件と書いていた） |
 | S1〜S6 の扱い | 下の「S1〜S6」。値は P1d と同じ |
 | 通し実行の表と理由 | 下の「通し実行」 |
 | `Sim` が UnityEngine を参照しない | `Battalion.Sim.asmdef` は `noEngineReferences: true` のまま。.NET（netstandard2.1）で単独にビルドできる |
