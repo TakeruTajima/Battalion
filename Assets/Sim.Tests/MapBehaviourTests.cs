@@ -267,7 +267,8 @@ namespace Battalion.Sim.Tests
             Run(sim, 20);
             Assert.That(a.Facing, Is.EqualTo(Math.PI / 2).Within(1e-9), "目標に正面を向ける");
             Assert.That(a.TargetId, Is.EqualTo(t.Id), "近い敵がいても拘束の目標を撃つ");
-            Assert.That(a.Position.X, Is.EqualTo(0));
+            Assert.That(a.Position.X, Is.EqualTo(0).Within(1e-6), "P1d から、拘束は目標へ向かって（北へ）詰める");
+            Assert.That(a.Position.Y, Is.GreaterThan(0));
         }
 
         // ---------------------------------------------------------------- 視線と地形

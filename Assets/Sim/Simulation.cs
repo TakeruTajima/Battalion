@@ -90,6 +90,7 @@ namespace Battalion.Sim
             UpdateFortified();
             var shots = SelectTargets();
             Resolve(shots, t, tickStart);
+            UpdateFacingReaction(t);
             Transitions(t);
 
             if (_log.Enabled && Tick % _snapshotEveryTicks == 0)
@@ -157,6 +158,11 @@ namespace Battalion.Sim
 
                 var before = c.Position;
                 MoveUnderCommand(c, t, tickStart, dt, maxTurn);
+                // 敵の矩形との隙間が 10m 未満になる手前で止まる（P1d の2）。全く進めなければ、そこで着いたことにする
+                // （攻撃ならそこで方角を固定し、拘束ならそこで目標を向いて撃つ。そこは接近戦の距離）
+                if (ClampAgainstEnemies(c, before) && c.Position.X == before.X && c.Position.Y == before.Y
+                    && c.CurrentOrder.Moves && !c.Arrived)
+                    ArriveAt(c);
                 c.MovedThisTick = c.Position.X != before.X || c.Position.Y != before.Y;
             }
 
@@ -178,11 +184,18 @@ namespace Battalion.Sim
 
             double heading = c.FleeDirection.Value;
             c.Facing = Angles.Wrap(heading);
-            var next = c.Position + Vec2.FromAngle(heading) * (_p.Rout.FleeSpeedMps * dt);
+            // 味方と重なっている間は遅くなる（すり抜け。P1d の6）
+            double speed = _p.Rout.FleeSpeedMps * (OverlapsFriend(c, out _) ? _p.Behavior.RoutPassSpeedMult : 1.0);
+            var next = c.Position + Vec2.FromAngle(heading) * (speed * dt);
             // 川に突き当たったら、その刻みは動かない（5秒ごとの見積もりで方位が変わる）
             if (_map.Contains(next) && !_map.Passable(next)) return;
+            var before = c.Position;
             c.Position = next;
+            // 敵はすり抜けられない（ふさがれたら止まる。P1d の2）
+            ClampAgainstEnemies(c, before);
+            if (c.Position.X == before.X && c.Position.Y == before.Y) return;
             c.MovedThisTick = true;
+            ApplyPassThrough(c, t);
 
             if (!_map.Contains(c.Position))
             {
@@ -331,6 +344,8 @@ namespace Battalion.Sim
                 double fState = 1.0;
                 if (u.State == CompanyState.Shaken) fState *= _p.Fire.ShakenMult;
                 if (!s.TargetInFrontArc) fState *= _p.Fire.NonFrontTargetMult;
+                // 隊形の乱れ（壊走中の味方にすり抜けられた。P1d の6）
+                if (u.DisarrayUntil >= t) fState *= _p.Behavior.DisarrayFireMult;
                 // 砲撃による制圧（×0.5）は P3
 
                 double fExtra = 1.0;
@@ -504,12 +519,20 @@ namespace Battalion.Sim
             var sight = new bool[foes.Count][];
             for (int f = 0; f < foes.Count; f++) sight[f] = visibleCellsFrom(foes[f]);
 
+            // 敵の矩形（降伏を除く）。逃げる中隊の矩形との隙間が 10m 未満に詰まる方位は、そこで逃げられない（P1d の2。動きの止め方と同じ）
+            var blockers = new List<UnitRect>();
+            foreach (var e in _companies)
+                if (BlocksAsEnemy(e, c)) blockers.Add(RectOf(e));
+            double minGap = _p.Behavior.EnemyMinGapM;
+
             var loss = new double[ep.EscapeDirs];
             for (int k = 0; k < ep.EscapeDirs; k++)
             {
-                var u = Vec2.FromAngle(EscapeDirection(k));
+                double dirRad = EscapeDirection(k);
+                var u = Vec2.FromAngle(dirRad);
                 double sum = 0;
                 bool blocked = false;
+                int blockStep = FirstEnemyBlockedStep(c, blockers, u, dirRad, stride, steps, minGap);
                 for (int s = 1; s <= steps; s++)
                 {
                     var p = c.Position + u * (s * stride);
@@ -517,6 +540,8 @@ namespace Battalion.Sim
                     if (!_map.Contains(p)) break;
                     // 川に突き当たる方位は逃げられない
                     if (!_map.Passable(p)) { blocked = true; break; }
+                    // 敵の矩形に突き当たる方位も逃げられない（離れていく分には構わない）
+                    if (s >= blockStep) { blocked = true; break; }
                     int cell = _map.IndexOf(p);
                     for (int f = 0; f < foes.Count; f++)
                     {
@@ -546,6 +571,59 @@ namespace Battalion.Sim
         }
 
         /// <summary>
+        /// その方位へ逃げたとき、敵の矩形に 10m より詰まる最初の点の番号（1〜）。詰まらなければ steps+1。
+        /// 矩形どうしの隙間の計算は重いので、5点おきに調べ、詰まった所から1点ずつ戻って最初の点を探す。
+        /// 届く範囲（逃げる距離＋両方の矩形の大きさ）に敵がいなければ調べない。
+        /// </summary>
+        int FirstEnemyBlockedStep(Company c, List<UnitRect> blockers, Vec2 u, double dirRad, double stride, int steps, double minGap)
+        {
+            if (blockers.Count == 0) return steps + 1;
+            double reach = steps * stride + 2 * blockers[0].Radius + minGap + 1;
+            bool any = false;
+            foreach (var r in blockers)
+                if (Vec2.Distance(c.Position, r.Center) <= reach) { any = true; break; }
+            if (!any) return steps + 1;
+
+            // 敵ごとに、今の位置での隙間（ここから詰まる方位がふさがる）
+            var here = RectAt(c.Position, dirRad);
+            var gap0 = new double[blockers.Count];
+            for (int b = 0; b < blockers.Count; b++) gap0[b] = UnitRect.Gap(here, blockers[b], minGap + 1);
+            bool At(int s) => BlockedByEnemy(blockers, gap0, c.Position, RectAt(c.Position + u * (s * stride), dirRad), minGap);
+
+            const int coarse = 5;
+            int prev = 0;
+            for (int s = coarse; ; s += coarse)
+            {
+                int k = Math.Min(s, steps);
+                if (At(k))
+                {
+                    for (int j = prev + 1; j < k; j++)
+                        if (At(j)) return j;
+                    return k;
+                }
+                if (k == steps) return steps + 1;
+                prev = k;
+            }
+        }
+
+        /// <summary>
+        /// 逃げる中隊の矩形 <paramref name="me"/> が、どれかの敵の矩形に 10m より詰まるか：隙間が 10m 未満で、出発点より狭まる
+        /// （接していて隙間 0 のままなら、中心が近づく）。離れていく動きはふさがない。
+        /// </summary>
+        static bool BlockedByEnemy(List<UnitRect> rects, double[] gap0, Vec2 from, in UnitRect me, double minGap)
+        {
+            for (int b = 0; b < rects.Count; b++)
+            {
+                double gap = UnitRect.Gap(me, rects[b], minGap + 1);
+                if (gap >= minGap) continue;
+                if (gap < gap0[b]) return true;
+                if (gap <= 1e-9 && gap0[b] <= 1e-9
+                    && Vec2.Distance(me.Center, rects[b].Center) < Vec2.Distance(from, rects[b].Center)) return true;
+            }
+            return false;
+        }
+
+        /// <summary>
         /// 600m 以内に盤上の敵がいれば true と、その中心の平均位置から自分へ向かう向き（遠ざかる向き）を返す。
         /// 平均位置と自分が重なるときは向きを零ベクトルにする。
         /// </summary>
@@ -571,7 +649,13 @@ namespace Battalion.Sim
             var est = EstimateEscape(c);
             c.EscapeLoss = est.MinLoss;
             c.NoEscape = est.MinLoss >= _p.Encirclement.EscapeLossThreshold;
-            c.FleeDirection = EscapeDirection(est.Best);
+            // 揺れ止め（P1d の7）：壊走中は、新しい最小の方位の見積もり損害が今の方位より 0.05 以上小さいときだけ替える
+            int k = est.Best;
+            if (c.State == CompanyState.Routed && c.FleeDirIndex >= 0
+                && est.Loss[c.FleeDirIndex] - est.MinLoss < _p.Behavior.FleeSwitchMinGain)
+                k = c.FleeDirIndex;
+            c.FleeDirIndex = k;
+            c.FleeDirection = EscapeDirection(k);
             c.NextEscapeCheckTime = now + _p.Encirclement.CheckIntervalSec;
         }
 
@@ -607,6 +691,12 @@ namespace Battalion.Sim
                             c.CurrentOrder = Order.Hold(c.Id, c.CurrentOrder.FacingRad);
                             c.Arrived = true;
                         }
+                        // 動揺した拘束は詰めるのをやめ、その場で目標を向いて撃つ（P1d の3）
+                        if (want == CompanyState.Shaken && !c.Arrived && c.CurrentOrder.Type == OrderType.Pin)
+                        {
+                            c.Arrived = true;
+                            c.Path = null;
+                        }
                         if (_log.Enabled) LogStateChange(c, prev, t);
                     }
                 }
@@ -637,6 +727,7 @@ namespace Battalion.Sim
                         // 敵が近づいたら再び逃げる（連鎖のショックは与えない）。逃げる方向はその場で見積もり直す
                         c.State = CompanyState.Routed;
                         c.RallyClearSec = 0;
+                        c.FleeDirIndex = -1; // 前の方位は古いので、揺れ止めを掛けずに選び直す
                         RefreshEscape(c, t);
                         if (_log.Enabled) LogStateChange(c, CompanyState.Rallying, t);
                     }

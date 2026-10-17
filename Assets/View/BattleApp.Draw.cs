@@ -243,6 +243,7 @@ namespace Battalion.View
             }
 
             DrawMuzzle(c, pos, fv, lv, hd, hf, px, now);
+            DrawDisarray(c, pos, facing, px);
             if (c.UnderCommand) DrawAction(c, pos, facing, fv, lv, hd, hf, ex, ey, px);
             DrawBars(c, pos, ey, px);
         }
@@ -297,6 +298,33 @@ namespace Battalion.View
             var moved = c.Position - _prevPos[c.Id];
             bool moving = moved.Length > 1e-6 || (o.Moves && !c.Arrived);
 
+            // 向き直り（P1d の5）：待ちの間は点線の弧、旋回中は実線の弧の矢印
+            DrawTurn(c, pos, facing, ex, ey, px);
+
+            // 追撃中（P1d の4）：赤い山形と、追っている中隊への細い破線
+            if (c.Pursuing && c.PursuitTargetId >= 0)
+            {
+                var pt = _sim.Companies[c.PursuitTargetId];
+                Pose(pt, out var tp, out _);
+                var red = new Color32(220, 40, 30, 240);
+                _shapes.DashedLine(V(pos), V(tp), 1.5f * px, 6 * px, red);
+                var dir = tp - pos;
+                if (dir.Length > 1e-6)
+                {
+                    var u = dir * (1.0 / dir.Length);
+                    var n = new Vec2(-u.Y, u.X);
+                    double reach = Math.Abs(u.X) * ex + Math.Abs(u.Y) * ey;
+                    for (int k = 0; k < 2; k++)
+                    {
+                        var apex = pos + u * (reach + (16 + 9 * k) * px);
+                        var back = apex - u * (8 * px);
+                        _shapes.Line(V(back + n * (7 * px)), V(apex), 3f * px, red);
+                        _shapes.Line(V(back - n * (7 * px)), V(apex), 3f * px, red);
+                    }
+                }
+                return;
+            }
+
             if (o.Type == OrderType.Entrench && (!o.Moves || c.Arrived))
             {
                 double frac = Math.Min(1.0, c.EntrenchProgress / _params.MapRules.EntrenchSec);
@@ -340,6 +368,67 @@ namespace Battalion.View
                 // 保持：駒の右に短い横棒
                 var p = V(pos) + new Vector2(ex + 12 * px, 0);
                 _shapes.Line(p, p + new Vector2(14 * px, 0), 3 * px, ink);
+            }
+        }
+
+        /// <summary>向き直りの印：駒の脇に、今の向きから向き直る向きへの弧（待ちの間は点線、旋回中は実線で矢じり付き）。</summary>
+        void DrawTurn(Company c, Vec2 pos, double facing, float ex, float ey, float px)
+        {
+            bool waiting = c.TurnWaitStart.HasValue;
+            bool turning = c.FacingOverride.HasValue && Math.Abs(Angles.Wrap(c.FacingOverride.Value - c.Facing)) > 1e-6;
+            if (!waiting && !turning) return;
+            float r = Mathf.Sqrt(ex * ex + ey * ey) + 14 * px;
+            double from = facing;
+            double to;
+            if (turning) to = c.FacingOverride.Value;
+            else
+            {
+                var s = _sim.Companies[Math.Max(0, c.LastFlankShooter)].Position - pos;
+                to = Math.Atan2(s.Y, s.X);
+            }
+            double sweep = Angles.Wrap(to - from);
+            int n = Mathf.Clamp((int)(Math.Abs(sweep) / 0.12), 3, 40);
+            var col = new Color32(255, 230, 90, 240);
+            Vector2 prev = V(pos + Vec2.FromAngle(from) * r);
+            for (int k = 1; k <= n; k++)
+            {
+                double a = from + sweep * k / n;
+                var p = V(pos + Vec2.FromAngle(a) * r);
+                if (!waiting || k % 2 == 0) _shapes.Line(prev, p, (turning ? 3f : 2f) * px, col);
+                prev = p;
+            }
+            if (turning)
+            {
+                var tip = V(pos + Vec2.FromAngle(to) * r);
+                var tangent = V(Vec2.FromAngle(to + Math.Sign(sweep) * Math.PI / 2));
+                var normal = V(Vec2.FromAngle(to));
+                _shapes.Triangle(tip + tangent * 8 * px, tip - tangent * 4 * px + normal * 6 * px, tip - tangent * 4 * px - normal * 6 * px, col);
+            }
+        }
+
+        /// <summary>隊形の乱れの印：駒の枠の外側に、ぎざぎざの線（30秒）。</summary>
+        void DrawDisarray(Company c, Vec2 pos, double facing, float px)
+        {
+            if (c.DisarrayUntil < _sim.Time || !c.UnderCommand) return;
+            double hd = _params.Movement.DepthM / 2 + 6 * px, hf = _params.Movement.FrontageM / 2 + 6 * px;
+            Corners(pos, facing, hd, hf, _q);
+            var col = new Color32(255, 140, 40, 230);
+            float amp = 4 * px;
+            for (int k = 0; k < 4; k++)
+            {
+                var a = _q[k];
+                var b = _q[(k + 1) % 4];
+                float len = Vector2.Distance(a, b);
+                var dir = (b - a) / len;
+                var nrm = new Vector2(-dir.y, dir.x);
+                int teeth = Mathf.Max(2, (int)(len / (10 * px)));
+                Vector2 prev = a;
+                for (int t = 1; t <= teeth; t++)
+                {
+                    var p = a + dir * (len * t / teeth) + nrm * (t % 2 == 0 ? 0 : amp);
+                    _shapes.Line(prev, p, 1.5f * px, col);
+                    prev = p;
+                }
             }
         }
 

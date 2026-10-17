@@ -167,5 +167,40 @@
     "entrench_damage_mult": 0.3,
     "entrench_half_width_cells": 2,
     "blocked_escape_loss": 1.0
+  },
+  "behavior": {
+    "_note": "P1d の行動の規則。pursuit_limit_mult の 0 は追わない、turn_front_clear_m の -1 は向き直らない",
+    "attack_side_switch_ratio": 0.8,
+    "enemy_min_gap_m": 10,
+    "pin_distance_m": 125,
+    "pursuit_keep_distance_m": 100,
+    "pursuit_limit_m": 600,
+    "pursuit_limit_mult": {
+      "cautious": 0,
+      "calm": 1.0,
+      "agile": 1.0,
+      "reckless": 1.5
+    },
+    "pursuit_calm_clear_radius_m": 400,
+    "pursuit_replan_sec": 5,
+    "secure_face_enemy_radius_m": 400,
+    "turn_front_clear_m": {
+      "cautious": 400,
+      "calm": 400,
+      "agile": 150,
+      "reckless": -1
+    },
+    "turn_front_needs_sight": {
+      "cautious": true,
+      "calm": true,
+      "agile": false,
+      "reckless": false
+    },
+    "turn_cancel_quiet_sec": 10,
+    "rout_pass_speed_mult": 0.5,
+    "rout_pass_morale_hit": 5,
+    "disarray_sec": 30,
+    "disarray_fire_mult": 0.5,
+    "flee_switch_min_gain": 0.05
   }
 }

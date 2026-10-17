@@ -58,6 +58,33 @@ namespace Battalion.Sim
         /// <summary>経路の脅威の重みを性格の値から置き換える（予備隊の台本で 0）。null なら性格の値。</summary>
         public double? ThreatWeightOverride;
 
+        // ---- P1d：行動の規則
+        /// <summary>攻撃の側をプレイヤーが指定したか（指定していなければ、着くまで選び直す）。</summary>
+        public bool AttackSideLocked;
+        /// <summary>攻撃で発起点に着いた後：目標の中心から見た自分の方角（地図の方角）と、そのときの目標の中心。</summary>
+        public bool AttackFixed;
+        public double AttackFixedBearing;
+        public Vec2 AttackFixedTargetPos;
+        /// <summary>拘束：命令を受けたときの、目標の中心から見た自分の方角。</summary>
+        public double PinBearing;
+        /// <summary>追撃中か。追っている中隊、追撃を始めた地点、限界の距離、次に経路を引き直す時刻。</summary>
+        public bool Pursuing;
+        public int PursuitTargetId = -1;
+        public Vec2 PursuitStart;
+        public double PursuitLimitM;
+        public double NextPursuitPlan;
+        /// <summary>向き直り：向き直った（向き直っている）向き。新しい命令が出るまで保つ。null なら向き直っていない。</summary>
+        public double? FacingOverride;
+        /// <summary>向き直りの待ちを始めた時刻（null なら待っていない）、最後に側面・背面から撃たれた時刻と、撃ってきた中隊。</summary>
+        public double? TurnWaitStart;
+        public double LastFlankHitTime = double.NegativeInfinity;
+        public int LastFlankShooter = -1;
+        /// <summary>隊形の乱れ（壊走中の味方にすり抜けられた）が続く時刻。すり抜けられた壊走中の中隊。</summary>
+        public double DisarrayUntil = double.NegativeInfinity;
+        public readonly System.Collections.Generic.HashSet<int> PassedBy = new System.Collections.Generic.HashSet<int>();
+        /// <summary>今の逃げる方位の添字（揺れ止めに使う。−1 はまだない）。</summary>
+        public int FleeDirIndex = -1;
+
         /// <summary>その刻みに位置が変わったか（塹壕の被弾倍率と陣地構築に使う）。</summary>
         public bool MovedThisTick;
         /// <summary>陣地構築の進捗（秒）。動くと 0 に戻る。</summary>

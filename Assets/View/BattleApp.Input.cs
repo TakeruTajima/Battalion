@@ -14,6 +14,8 @@ namespace Battalion.View
         Mode _mode = Mode.None;
         int _selected = -1;
         AttackAspect _attackAspect = AttackAspect.None;
+        /// <summary>攻撃の「目標が崩れたら」。初期は確保。選んだ値は次の攻撃にも引き継ぐ。</summary>
+        AttackOnBreak _onBreak = AttackOnBreak.Secure;
 
         bool _pressing;
         Vec2 _pressWorld;
@@ -71,6 +73,7 @@ namespace Battalion.View
                 if (Input.GetKeyDown(KeyCode.F)) _attackAspect = AttackAspect.Front;
                 if (Input.GetKeyDown(KeyCode.S)) _attackAspect = AttackAspect.Flank;
                 if (Input.GetKeyDown(KeyCode.B)) _attackAspect = AttackAspect.Rear;
+                if (Input.GetKeyDown(KeyCode.C)) ToggleOnBreak();
             }
 
             if (Input.GetKeyDown(KeyCode.L)) ToggleSightTool();
@@ -125,6 +128,9 @@ namespace Battalion.View
                     break;
             }
         }
+
+        void ToggleOnBreak() =>
+            _onBreak = _onBreak == AttackOnBreak.Secure ? AttackOnBreak.Pursue : AttackOnBreak.Secure;
 
         void ToggleSightTool()
         {
@@ -224,7 +230,8 @@ namespace Battalion.View
                     int side = _attackAspect == AttackAspect.Flank
                         ? UnitGeometry.FlankSideAt(tgt.Position, tgt.Facing, _params.Movement.FrontageM, at)
                         : 0;
-                    _sim.Issue(Order.Attack(c.Id, tgt.Id, _attackAspect, side));
+                    // 端をクリックして側を指定したら固定、中央なら Sim が選び、着くまで選び直す（P1d の1）
+                    _sim.Issue(Order.Attack(c.Id, tgt.Id, _attackAspect, side, lockSide: side != 0, onBreak: _onBreak));
                     _mode = Mode.None;
                     break;
                 }
@@ -278,9 +285,12 @@ namespace Battalion.View
                 case Mode.Entrench: return "陣地構築：掘る地点をクリック（ドラッグで向き）。その場で掘るなら、もう一度 Y か、この中隊の駒をクリック";
                 case Mode.Pin: return "拘束：目標の敵の駒をクリック";
                 case Mode.Attack:
+                {
+                    string brk = _onBreak == AttackOnBreak.Pursue ? "崩れたら追撃可" : "崩れたら確保";
                     return _attackAspect == AttackAspect.Flank
-                        ? "攻撃（側面）：敵の駒の端をクリックでその側面、中央なら Sim が選ぶ"
-                        : $"攻撃（{AspectName(_attackAspect)}）：目標の敵の駒をクリック";
+                        ? $"攻撃（側面・{brk}）：敵の駒の端をクリックでその側面、中央なら Sim が選ぶ（C で確保／追撃可）"
+                        : $"攻撃（{AspectName(_attackAspect)}・{brk}）：目標の敵の駒をクリック（C で確保／追撃可）";
+                }
                 case Mode.Sight: return "視線確認：地点か中隊の駒をクリック（緑＝見える、赤＝稜線・遮蔽で見えない）。L か Esc で終わる";
                 default: return null;
             }

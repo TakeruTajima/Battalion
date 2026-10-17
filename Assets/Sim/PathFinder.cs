@@ -46,7 +46,7 @@ namespace Battalion.Sim
         /// <paramref name="blocked"/> が true のマスには入らない（目的地のマスは除く。止まっている味方の周りを避けるのに使う）。
         /// </summary>
         public static List<Cell> Find(TerrainMap m, Cell start, Cell goal, bool[] exposure, double threatWeight, double exposureCostM,
-            out double cost, bool[] blocked = null)
+            out double cost, bool[] blocked = null, bool allowPartial = false)
         {
             int w = m.Width;
             var g = new Dictionary<int, double>();
@@ -93,8 +93,27 @@ namespace Battalion.Sim
             }
             if (!found && sk != gk)
             {
-                cost = double.PositiveInfinity;
-                return null;
+                if (!allowPartial)
+                {
+                    cost = double.PositiveInfinity;
+                    return null;
+                }
+                // 届かない：探索で訪れたマスのうち、目的地に最も近いマス（直線距離。同じなら経路コストの小さい方）までの経路
+                int bestK = sk;
+                double bestH = double.MaxValue, bestG = double.MaxValue;
+                foreach (var kv in g)
+                {
+                    int ci = kv.Key % w, cj = kv.Key / w;
+                    double h = Hypot(goal.I - ci, goal.J - cj);
+                    if (h < bestH - 1e-12 || (Math.Abs(h - bestH) <= 1e-12 && kv.Value < bestG))
+                    {
+                        bestH = h;
+                        bestG = kv.Value;
+                        bestK = kv.Key;
+                    }
+                }
+                gk = bestK;
+                goal = new Cell(bestK % w, bestK / w);
             }
             var path = new List<Cell> { goal };
             int k = gk;

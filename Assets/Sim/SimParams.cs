@@ -22,6 +22,7 @@ namespace Battalion.Sim
         public TerrainParams Terrain = new TerrainParams();
         public SightParams Sight = new SightParams();
         public MapRulesParams MapRules = new MapRulesParams();
+        public BehaviorParams Behavior = new BehaviorParams();
 
         public TrainingParams Of(Training t) => TrainingTable[t];
 
@@ -197,6 +198,44 @@ namespace Battalion.Sim
             public double ThreatWeight(Personality p) => ThreatWeightByPersonality[p];
         }
 
+        /// <summary>P1d の行動の規則（"behavior"）。</summary>
+        public sealed class BehaviorParams
+        {
+            /// <summary>攻撃の側の選び直し：もう一方の側の経路コストが今の側のこの倍未満のときだけ替える。</summary>
+            public double AttackSideSwitchRatio;
+            /// <summary>動いている中隊は、自分の矩形と敵の矩形の隙間がこれ未満になる手前で止まる。</summary>
+            public double EnemyMinGapM;
+            /// <summary>拘束：目標の中心から、今いる方角へこの距離の点まで詰める。</summary>
+            public double PinDistanceM;
+            /// <summary>追撃：壊走中の目標からこの距離を保って追う。</summary>
+            public double PursuitKeepDistanceM;
+            /// <summary>追撃の限界（追撃を始めた地点から）。性格ごとの倍率を掛ける。</summary>
+            public double PursuitLimitM;
+            /// <summary>性格ごとの追撃の限界の倍率。0 は追わない（確保）。</summary>
+            public readonly Dictionary<Personality, double> PursuitLimitMult = new Dictionary<Personality, double>();
+            /// <summary>冷静は、この距離以内に指揮下の敵がいなければ追い、追っている間に現れたら止まる。</summary>
+            public double PursuitCalmClearRadiusM;
+            /// <summary>追撃の経路を引き直す間隔（逃げる目標に置いていかれないよう、通常の30秒より短い）。</summary>
+            public double PursuitReplanSec;
+            /// <summary>確保の向き：この距離以内に指揮下の敵がいれば最も近いその敵の方を向く。</summary>
+            public double SecureFaceEnemyRadiusM;
+            /// <summary>向き直り：性格ごとに、正面の弧のこの距離以内に敵がいなければ向き直る。−1 は向き直らない。</summary>
+            public readonly Dictionary<Personality, double> TurnFrontClearM = new Dictionary<Personality, double>();
+            /// <summary>向き直り：正面の弧の敵を数えるのに視線が要るか。</summary>
+            public readonly Dictionary<Personality, bool> TurnFrontNeedsSight = new Dictionary<Personality, bool>();
+            /// <summary>向き直りの待ちの間に、この秒数だけ側面・背面から撃たれなければ待ちを取り消す。</summary>
+            public double TurnCancelQuietSec;
+            /// <summary>壊走中の中隊が味方と重なっている間の速さの倍率。</summary>
+            public double RoutPassSpeedMult;
+            /// <summary>すり抜けられた味方の士気の減り（その壊走中の中隊ごとに一度だけ）。</summary>
+            public double RoutPassMoraleHit;
+            /// <summary>隊形の乱れの長さと、その間の射撃効率の倍率。</summary>
+            public double DisarraySec;
+            public double DisarrayFireMult;
+            /// <summary>壊走中の方位は、新しい最小の方位の見積もり損害が今の方位よりこれ以上小さいときだけ替える。</summary>
+            public double FleeSwitchMinGain;
+        }
+
         public static SimParams LoadFile(string path) => FromJson(File.ReadAllText(path));
 
         public static SimParams FromJson(string json)
@@ -314,7 +353,37 @@ namespace Battalion.Sim
             p.MapRules.EntrenchHalfWidthCells = (int)mr.D("entrench_half_width_cells");
             p.MapRules.BlockedEscapeLoss = mr.D("blocked_escape_loss");
 
+            var be = root["behavior"];
+            p.Behavior.AttackSideSwitchRatio = be.D("attack_side_switch_ratio");
+            p.Behavior.EnemyMinGapM = be.D("enemy_min_gap_m");
+            p.Behavior.PinDistanceM = be.D("pin_distance_m");
+            p.Behavior.PursuitKeepDistanceM = be.D("pursuit_keep_distance_m");
+            p.Behavior.PursuitLimitM = be.D("pursuit_limit_m");
+            ReadPersonalityTable(be["pursuit_limit_mult"], p.Behavior.PursuitLimitMult);
+            p.Behavior.PursuitCalmClearRadiusM = be.D("pursuit_calm_clear_radius_m");
+            p.Behavior.PursuitReplanSec = be.D("pursuit_replan_sec");
+            p.Behavior.SecureFaceEnemyRadiusM = be.D("secure_face_enemy_radius_m");
+            ReadPersonalityTable(be["turn_front_clear_m"], p.Behavior.TurnFrontClearM);
+            var ns = be["turn_front_needs_sight"];
+            foreach (var (key, pers) in PersonalityKeys) p.Behavior.TurnFrontNeedsSight[pers] = ns[key].Bool;
+            p.Behavior.TurnCancelQuietSec = be.D("turn_cancel_quiet_sec");
+            p.Behavior.RoutPassSpeedMult = be.D("rout_pass_speed_mult");
+            p.Behavior.RoutPassMoraleHit = be.D("rout_pass_morale_hit");
+            p.Behavior.DisarraySec = be.D("disarray_sec");
+            p.Behavior.DisarrayFireMult = be.D("disarray_fire_mult");
+            p.Behavior.FleeSwitchMinGain = be.D("flee_switch_min_gain");
+
             return p;
+        }
+
+        static readonly (string key, Personality pers)[] PersonalityKeys =
+        {
+            ("cautious", Personality.Cautious), ("calm", Personality.Calm), ("agile", Personality.Agile), ("reckless", Personality.Reckless),
+        };
+
+        static void ReadPersonalityTable(JsonValue v, Dictionary<Personality, double> into)
+        {
+            foreach (var (key, pers) in PersonalityKeys) into[pers] = v.D(key);
         }
 
         /// <summary>1文字のキーから数値への表。"_" で始まるキー（注記）は読み飛ばす。</summary>

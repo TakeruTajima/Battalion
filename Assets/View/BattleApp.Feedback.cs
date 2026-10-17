@@ -165,6 +165,23 @@ namespace Battalion.View
                     text = "陣地完成";
                     col = new Color(0.85f, 0.75f, 0.55f);
                     break;
+                case EventFeed.Kind.TargetBroken:
+                    text = h.Other == "pursue" ? "追撃" : "確保";
+                    col = h.Other == "pursue" ? new Color(1f, 0.45f, 0.35f) : new Color(0.75f, 0.9f, 1f);
+                    if (blue) reasons.Add($"{c.Name} の攻撃の目標が崩れた（{text}）");
+                    break;
+                case EventFeed.Kind.PursuitEnd:
+                    text = "追撃やめ";
+                    col = new Color(0.75f, 0.9f, 1f);
+                    break;
+                case EventFeed.Kind.Turn:
+                    text = "向き直る";
+                    col = new Color(1f, 0.95f, 0.6f);
+                    break;
+                case EventFeed.Kind.Disarray:
+                    text = "隊形の乱れ";
+                    col = new Color(1f, 0.6f, 0.2f);
+                    break;
             }
             if (text != null)
                 _floats.Add(new FloatText { UnitId = c.Id, Text = text, Color = col, Start = now, Duration = BigTextSec, Big = true });

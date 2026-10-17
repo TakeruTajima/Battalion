@@ -164,7 +164,8 @@ namespace Battalion.Sim
             var left = new Vec2(-Math.Sin(target.Facing), Math.Cos(target.Facing));
             int side = (r3.Position - target.Position).Dot(left) > 0 ? +1 : -1;
             r3.ThreatWeightOverride = sim.Params.MapRules.ScriptedThreatWeight;
-            sim.Issue(Order.Attack(r3.Id, target.Id, AttackAspect.Flank, side));
+            // 最初の側は R3 の側。固定はせず、着くまで経路を引き直すたびに安い側を選び直す（P1d の1）
+            sim.Issue(Order.Attack(r3.Id, target.Id, AttackAspect.Flank, side, lockSide: false));
             sim.LogScriptEvent(tickStart + sim.Params.TickSec, "reserve_counterattack", r3, target);
         }
     }

@@ -5,6 +5,9 @@ namespace Battalion.Sim
     /// <summary>攻撃の方向（目標の敵から見た向き）。None は「指定なし」（正面。ただし機敏は側面を選ぶことがある）。</summary>
     public enum AttackAspect { None, Front, Flank, Rear }
 
+    /// <summary>攻撃の目標が崩れたら（P1d）：確保（その場で固める）／追撃可（性格で追うかを決める）。</summary>
+    public enum AttackOnBreak { Secure, Pursue }
+
     /// <summary>
     /// 命令オブジェクト。プレイヤーも敵AIも同じ形でシミュレーションに渡す。
     /// <see cref="Simulation.Issue"/> で渡した命令は次の刻みの最初に即時適用される（伝令の遅延は P2）。
@@ -21,13 +24,20 @@ namespace Battalion.Sim
         public int TargetId { get; }
         public AttackAspect Aspect { get; }
         /// <summary>
-        /// 攻撃で側面を指定したときに、側を固定する（+1 は目標の左、−1 は右、0 は経路コストの小さい側を選ぶ）。
-        /// 予備隊の台本が「R3 の側の側面」を指定するのに使う。
+        /// 攻撃で側面のときの最初の側（+1 は目標の左、−1 は右、0 は経路コストの小さい側を選ぶ）。
         /// </summary>
         public int FlankSide { get; }
+        /// <summary>
+        /// 側をプレイヤーが指定したか（駒の端をクリックした）。指定した側は守る。指定していなければ、発起点に着くまで
+        /// 経路を引き直すたびに安い側を選び直す（予備隊の台本、機敏、中央のクリック）。
+        /// </summary>
+        public bool FlankSideLocked { get; }
+        /// <summary>攻撃の目標が崩れたら：確保／追撃可。</summary>
+        public AttackOnBreak OnBreak { get; }
 
         Order(OrderType type, int companyId, Vec2? destination, double? facingRad,
-            int targetId = -1, AttackAspect aspect = AttackAspect.None, int flankSide = 0)
+            int targetId = -1, AttackAspect aspect = AttackAspect.None, int flankSide = 0,
+            bool flankSideLocked = false, AttackOnBreak onBreak = AttackOnBreak.Secure)
         {
             Type = type;
             CompanyId = companyId;
@@ -36,6 +46,8 @@ namespace Battalion.Sim
             TargetId = targetId;
             Aspect = aspect;
             FlankSide = flankSide;
+            FlankSideLocked = flankSideLocked;
+            OnBreak = onBreak;
         }
 
         public static Order Hold(int companyId, double? facingRad = null) =>
@@ -47,8 +59,14 @@ namespace Battalion.Sim
         public static Order Retreat(int companyId, Vec2 destination, double? facingRad = null) =>
             new Order(OrderType.Retreat, companyId, destination, facingRad);
 
-        public static Order Attack(int companyId, int targetId, AttackAspect aspect = AttackAspect.None, int flankSide = 0) =>
-            new Order(OrderType.Attack, companyId, null, null, targetId, aspect, flankSide);
+        /// <summary>
+        /// 攻撃。<paramref name="lockSide"/> を省くと、側を指定したとき（<paramref name="flankSide"/> が 0 でない）は固定する。
+        /// 予備隊の台本は、最初の側を決めるが固定しない（false）。
+        /// </summary>
+        public static Order Attack(int companyId, int targetId, AttackAspect aspect = AttackAspect.None, int flankSide = 0,
+            bool? lockSide = null, AttackOnBreak onBreak = AttackOnBreak.Secure) =>
+            new Order(OrderType.Attack, companyId, null, null, targetId, aspect, flankSide,
+                aspect == AttackAspect.Flank && flankSide != 0 && (lockSide ?? true), onBreak);
 
         public static Order Pin(int companyId, int targetId) =>
             new Order(OrderType.Pin, companyId, null, null, targetId);
@@ -60,8 +78,8 @@ namespace Battalion.Sim
         public static Order Entrench(int companyId, Vec2? destination = null, double? facingRad = null) =>
             new Order(OrderType.Entrench, companyId, destination, facingRad);
 
-        /// <summary>移動を伴う命令か（前進・後退・攻撃、目的地のある陣地構築）。</summary>
-        public bool Moves => Type == OrderType.Advance || Type == OrderType.Retreat || Type == OrderType.Attack
+        /// <summary>移動を伴う命令か（前進・後退・攻撃・拘束（詰める）、目的地のある陣地構築）。</summary>
+        public bool Moves => Type == OrderType.Advance || Type == OrderType.Retreat || Type == OrderType.Attack || Type == OrderType.Pin
                              || (Type == OrderType.Entrench && Destination.HasValue);
 
         public static string Name(OrderType t)

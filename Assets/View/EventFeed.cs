@@ -26,7 +26,11 @@ namespace Battalion.View
         }
 
         /// <summary>駒の上に出す出来事の種類。</summary>
-        public enum Kind { FlankHit, RearHit, Encircled, Routed, Surrendered, RallyStart, RallyComplete, Counterattack, Entrenched, LeftBattle }
+        public enum Kind
+        {
+            FlankHit, RearHit, Encircled, Routed, Surrendered, RallyStart, RallyComplete, Counterattack, Entrenched, LeftBattle,
+            TargetBroken, PursuitEnd, Turn, Disarray,
+        }
 
         /// <summary>駒の上に出す出来事。表示側が読んだら <see cref="Recent"/> を空にする。</summary>
         public readonly struct Happening
@@ -110,6 +114,29 @@ namespace Battalion.View
                     TerrainChanged = true;
                     Add(t, $"{unit} 陣地が完成", false);
                     Happen(t, Kind.Entrenched, unit, null);
+                    break;
+                case "target_broken":
+                {
+                    bool pursue = v["decision"].String == "pursue";
+                    Add(t, $"{unit} の攻撃の目標 {v["target"].String} が崩れた：{(pursue ? "追撃する" : "確保する")}", true);
+                    Happen(t, Kind.TargetBroken, unit, pursue ? "pursue" : "secure");
+                    break;
+                }
+                case "pursuit_end":
+                {
+                    string why = v["reason"].String;
+                    string text = why == "limit" ? "限界まで追った" : why == "enemy_near" ? "敵が近づいた" : "目標が逃げ切った";
+                    Add(t, $"{unit} 追撃をやめて確保（{text}）", false);
+                    Happen(t, Kind.PursuitEnd, unit, null);
+                    break;
+                }
+                case "turn_start":
+                    Add(t, $"{unit} {v["toward"].String} の方へ向き直る", false);
+                    Happen(t, Kind.Turn, unit, v["toward"].String);
+                    break;
+                case "disarray":
+                    Add(t, $"{unit} 隊形が乱れた（壊走中の {v["by"].String} にすり抜けられた）", true);
+                    Happen(t, Kind.Disarray, unit, v["by"].String);
                     break;
                 case "state_change":
                     if (v["to"].String == "shaken" && v["from"].String == "normal") Add(t, $"{unit} 動揺", false);

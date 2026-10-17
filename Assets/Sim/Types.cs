@@ -69,6 +69,8 @@ namespace Battalion.Sim
         public double Recovery;
         /// <summary>仕様の要因一覧にない追加分類。拘束中の後退（離脱）開始時の −10。</summary>
         public double Disengage;
+        /// <summary>壊走中の味方にすり抜けられた（隊形の乱れ）。P1d。</summary>
+        public double Disarray;
 
         public void AddAspect(Aspect a, double delta)
         {
@@ -91,7 +93,8 @@ namespace Battalion.Sim
                 .Add("neighbor_rout", NeighborRout)
                 .Add("under_fire", UnderFire)
                 .Add("recovery", Recovery)
-                .Add("disengage", Disengage);
+                .Add("disengage", Disengage)
+                .Add("disarray", Disarray);
         }
     }
 }

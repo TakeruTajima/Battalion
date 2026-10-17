@@ -222,6 +222,9 @@ namespace Battalion.View
             string s = StateName(c.State);
             if (c.UnderCommand)
             {
+                if (c.TurnWaitStart.HasValue) s += "・向き直り待ち";
+                else if (c.FacingOverride.HasValue && Math.Abs(Angles.Wrap(c.FacingOverride.Value - c.Facing)) > 1e-6) s += "・向き直り中";
+                if (c.DisarrayUntil >= _sim.Time) s += "・<color=#ffa040>隊形の乱れ</color>";
                 if (c.Pinned) s += "・拘束";
                 if (c.Encircled) s += "・<color=#ff6060>包囲</color>";
                 if (c.Fortified) s += "・籠城";
@@ -234,10 +237,16 @@ namespace Battalion.View
             if (!c.UnderCommand) return "—";
             var o = c.CurrentOrder;
             string s = OrderName(o.Type);
+            if (c.Pursuing)
+            {
+                var pt = c.PursuitTargetId >= 0 ? _sim.Companies[c.PursuitTargetId].Name : "?";
+                return $"追撃中 → {pt}（始めた地点から {Vec2.Distance(c.Position, c.PursuitStart):0}／{c.PursuitLimitM:0}m）";
+            }
             if (o.Type == OrderType.Attack || o.Type == OrderType.Pin)
             {
                 var t = o.TargetId >= 0 ? _sim.Companies[o.TargetId].Name : "?";
                 s += $" → {t}";
+                if (o.Type == OrderType.Attack) s += o.OnBreak == AttackOnBreak.Pursue ? "［崩れたら追撃可］" : "［崩れたら確保］";
                 if (o.Type == OrderType.Attack)
                 {
                     s += $"（{AspectName(c.AttackChosenAspect)}";
@@ -294,6 +303,11 @@ namespace Battalion.View
             GUILayout.BeginHorizontal();
             foreach (var (a, key) in new[] { (AttackAspect.None, "0"), (AttackAspect.Front, "F"), (AttackAspect.Flank, "S"), (AttackAspect.Rear, "B") })
                 if (GUILayout.Button($"{AspectName(a)} ({key})", _attackAspect == a ? _toggleOn : _button)) _attackAspect = a;
+            GUILayout.EndHorizontal();
+            GUILayout.Label("攻撃の目標が崩れたら（C で切り替え）", _small);
+            GUILayout.BeginHorizontal();
+            if (GUILayout.Button("確保", _onBreak == AttackOnBreak.Secure ? _toggleOn : _button)) _onBreak = AttackOnBreak.Secure;
+            if (GUILayout.Button("追撃可", _onBreak == AttackOnBreak.Pursue ? _toggleOn : _button)) _onBreak = AttackOnBreak.Pursue;
             GUILayout.EndHorizontal();
             GUI.enabled = true;
 

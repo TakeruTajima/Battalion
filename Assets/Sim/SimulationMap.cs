@@ -77,6 +77,7 @@ namespace Battalion.Sim
         {
             _sight.Clear();
             _exposure[0] = _exposure[1] = null;
+            _enemyCells[0] = _enemyCells[1] = null;
             foreach (var c in _companies)
                 if (IsShooter(c)) _sight[c.Id] = BuildSight(c);
         }
@@ -187,6 +188,13 @@ namespace Battalion.Sim
             c.Backward = false;
             c.AttackChosenAspect = AttackAspect.None;
             c.AttackSide = 0;
+            c.AttackSideLocked = false;
+            c.AttackFixed = false;
+            c.Pursuing = false;
+            c.PursuitTargetId = -1;
+            // 向き直った向きは新しい命令が出るまで（P1d の5）
+            c.FacingOverride = null;
+            c.TurnWaitStart = null;
 
             switch (order.Type)
             {
@@ -211,6 +219,7 @@ namespace Battalion.Sim
                         break;
                     }
                     ChooseAttackAspect(c, tgt, order);
+                    c.AttackSideLocked = order.FlankSideLocked;
                     c.MoveGoal = AdjustDestination(c, JumpOff(tgt, c.AttackChosenAspect, c.AttackSide));
                     Plan(c, tickStart);
                     if (_log.Enabled)
@@ -224,8 +233,12 @@ namespace Battalion.Sim
                     break;
                 }
                 case OrderType.Pin:
-                    if (EnemyOf(c, order.TargetId) == null) HoldInPlace(c);
+                {
+                    var tgt = EnemyOf(c, order.TargetId);
+                    if (tgt == null) HoldInPlace(c);
+                    else StartPin(c, tgt, tickStart);
                     break;
+                }
             }
         }
 
@@ -279,7 +292,11 @@ namespace Battalion.Sim
             if (c.CurrentOrder.Type == OrderType.Retreat) c.Backward = InRearArc(c, c.MoveGoal);
         }
 
-        List<PathFinder.Cell> FindPath(Company c, Vec2 goal, out double cost)
+        /// <summary>
+        /// 経路を引く。<paramref name="allowPartial"/> なら、届かないときは届くところまでの経路を返す（移動に使う）。
+        /// 経路コストを比べるとき（攻撃の側を選ぶ等）は、届かない経路を安く見せないように false にする。
+        /// </summary>
+        List<PathFinder.Cell> FindPath(Company c, Vec2 goal, out double cost, bool allowPartial = true)
         {
             _map.CellOf(c.Position, out int si, out int sj);
             _map.CellOf(goal, out int gi, out int gj);
@@ -287,11 +304,20 @@ namespace Battalion.Sim
             var end = new PathFinder.Cell(gi, gj);
             var exposure = ExposureFor(c.Side);
             double w = ThreatWeightOf(c);
-            // 止まっている味方は押されないので、その周り（中心から 200m 未満のマス）を避けて引く。
-            // 避けると届かない場合（味方に囲まれている等）は、避けずに引き直す
+            // 敵の矩形が掛かるマスは通らない（P1d の2）。止まっている味方は押されないので、その周り（中心から 200m 未満のマス）も避ける。
+            // 味方の周りを避けると届かなければ、敵だけを避けて引き直す。それでも届かなければ、届くところまでの経路を引く
             double ec = _p.MapRules.ExposureCostM;
-            var path = PathFinder.Find(_map, start, end, exposure, w, ec, out cost, StationaryFriendZone(c));
-            return path ?? PathFinder.Find(_map, start, end, exposure, w, ec, out cost);
+            var enemy = EnemyCells(c.Side);
+            var friend = StationaryFriendZone(c);
+            bool[] both = enemy;
+            if (friend != null)
+            {
+                both = (bool[])enemy.Clone();
+                for (int k = 0; k < both.Length; k++) both[k] |= friend[k];
+            }
+            return PathFinder.Find(_map, start, end, exposure, w, ec, out cost, both)
+                   ?? PathFinder.Find(_map, start, end, exposure, w, ec, out cost, enemy)
+                   ?? (allowPartial ? PathFinder.Find(_map, start, end, exposure, w, ec, out cost, enemy, allowPartial: true) : null);
         }
 
         /// <summary>
@@ -318,7 +344,7 @@ namespace Battalion.Sim
 
         double PathCost(Company c, Vec2 rawGoal)
         {
-            var cells = FindPath(c, AdjustDestination(c, rawGoal), out double cost);
+            var cells = FindPath(c, AdjustDestination(c, rawGoal), out double cost, allowPartial: false);
             return cells == null ? double.PositiveInfinity : cost;
         }
 
@@ -382,35 +408,6 @@ namespace Battalion.Sim
             return left <= right ? +1 : -1;
         }
 
-        /// <summary>
-        /// 攻撃の続き。目標が指揮下でなくなったら（壊走・降伏など）その場で保持する。
-        /// 30秒ごとに敵の今の位置と向きで発起点を計算し直す（選んだ方向と側は変えない）。着いた後は、発起点が 50m より離れたらまた動く。
-        /// </summary>
-        void UpdateAttack(Company c, double tickStart, double maxTurn)
-        {
-            var tgt = EnemyOf(c, c.CurrentOrder.TargetId);
-            if (tgt == null || !tgt.UnderCommand)
-            {
-                HoldInPlace(c);
-                return;
-            }
-            if (tickStart >= c.NextReplanTime)
-            {
-                var goal = AdjustDestination(c, JumpOff(tgt, c.AttackChosenAspect, c.AttackSide));
-                if (!c.Arrived || Vec2.Distance(goal, c.Position) > _p.MapRules.AttackRepositionM)
-                {
-                    c.MoveGoal = goal;
-                    c.Arrived = false;
-                    Plan(c, tickStart);
-                }
-                else
-                {
-                    c.NextReplanTime = tickStart + _p.MapRules.ReplanSec;
-                }
-            }
-            if (c.Arrived) FaceToward(c, tgt.Position, maxTurn);
-        }
-
         void FaceToward(Company c, Vec2 p, double maxTurn)
         {
             var d = p - c.Position;
@@ -418,11 +415,15 @@ namespace Battalion.Sim
             c.Facing = TurnToward(c.Facing, Math.Atan2(d.Y, d.X), maxTurn);
         }
 
-        /// <summary>拘束の命令中と、攻撃で発起点に着いた後に、優先して撃つ命令の目標。</summary>
+        /// <summary>
+        /// 優先して撃つ命令の目標：拘束の命令中、攻撃で発起点に着いた後（向き直った後は除く）、追撃中は追っている中隊。
+        /// </summary>
         Company OrderTarget(Company c)
         {
             var o = c.CurrentOrder;
-            if (o.Type == OrderType.Pin || (o.Type == OrderType.Attack && c.Arrived)) return EnemyOf(c, o.TargetId);
+            if (c.Pursuing) return EnemyOf(c, c.PursuitTargetId);
+            if (o.Type == OrderType.Pin) return EnemyOf(c, o.TargetId);
+            if (o.Type == OrderType.Attack && c.Arrived && !c.FacingOverride.HasValue) return EnemyOf(c, o.TargetId);
             return null;
         }
 
@@ -440,14 +441,19 @@ namespace Battalion.Sim
             switch (c.CurrentOrder.Type)
             {
                 case OrderType.Attack:
-                    UpdateAttack(c, tickStart, maxTurn);
+                    UpdateAttack(c, t, tickStart, maxTurn);
                     break;
                 case OrderType.Pin:
                 {
                     var tgt = EnemyOf(c, c.CurrentOrder.TargetId);
-                    if (tgt == null) HoldInPlace(c);
-                    else FaceToward(c, tgt.Position, maxTurn);
-                    return;
+                    if (tgt == null)
+                    {
+                        HoldInPlace(c);
+                        break;
+                    }
+                    UpdatePin(c, tgt, tickStart, maxTurn);
+                    if (c.Arrived || c.State == CompanyState.Shaken) return;
+                    break;
                 }
                 case OrderType.Advance:
                 case OrderType.Retreat:
@@ -464,7 +470,9 @@ namespace Battalion.Sim
             var o = c.CurrentOrder;
             if (!o.Moves || c.Arrived)
             {
-                if (o.FacingRad.HasValue) c.Facing = TurnToward(c.Facing, o.FacingRad.Value, maxTurn);
+                // 向き直った向き（P1d の5）があればそれを、なければ命令の向きを保つ
+                if (c.FacingOverride.HasValue) c.Facing = TurnToward(c.Facing, c.FacingOverride.Value, maxTurn);
+                else if (o.FacingRad.HasValue) c.Facing = TurnToward(c.Facing, o.FacingRad.Value, maxTurn);
                 return;
             }
             FollowPath(c, dt, maxTurn);
@@ -601,8 +609,11 @@ namespace Battalion.Sim
         {
             var p = c.Position + delta;
             if (!_map.Contains(p) || !_map.Passable(p)) return;
+            var before = c.Position;
             c.Position = p;
-            c.MovedThisTick = true;
+            // 押し離しでも敵の矩形に 10m より近づかない（P1d の2）
+            ClampAgainstEnemies(c, before);
+            if (c.Position.X != before.X || c.Position.Y != before.Y) c.MovedThisTick = true;
         }
 
         // ---------------------------------------------------------------- 陣地構築と地形の効果
@@ -636,7 +647,8 @@ namespace Battalion.Sim
             var o = c.CurrentOrder;
             if (!o.Destination.HasValue) return true;
             if (!c.Arrived) return false;
-            return !o.FacingRad.HasValue || Math.Abs(Angles.Wrap(o.FacingRad.Value - c.Facing)) <= 1e-9;
+            double? want = c.FacingOverride ?? o.FacingRad;
+            return !want.HasValue || Math.Abs(Angles.Wrap(want.Value - c.Facing)) <= 1e-9;
         }
 
         void CompleteEntrenchment(Company c, double t)

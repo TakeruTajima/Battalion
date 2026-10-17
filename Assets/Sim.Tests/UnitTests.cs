@@ -242,7 +242,12 @@ namespace Battalion.Sim.Tests
             sim.AddCompany("F", Side.Red, Training.Regular, Personality.Calm, new Vec2(0, 1000), 0); // 500m 逃げても 400m 以内に入らない
             r.State = CompanyState.Routed;
             g.State = CompanyState.Rallying;
-            Assert.That(sim.EstimateEscape(c).Loss.Max(), Is.EqualTo(0));
+            // 撃たない敵は損害に数えない。ただし P1d から、壊走中・再集結中の敵の矩形も逃げ道をふさぐ（東西は 1.0）
+            var loss = sim.EstimateEscape(c).Loss;
+            Assert.That(loss.All(l => l == 0 || l == 1.0), Is.True, string.Join(", ", loss));
+            Assert.That(loss[4], Is.EqualTo(0), "北：撃つ敵の射程に入らない");
+            Assert.That(loss[0], Is.EqualTo(1.0), "東：壊走中の R の矩形でふさがる");
+            Assert.That(loss[8], Is.EqualTo(1.0), "西：再集結中の G の矩形でふさがる");
         }
 
         [Test]
