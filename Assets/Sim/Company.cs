@@ -108,6 +108,13 @@ namespace Battalion.Sim
         /// <summary>新しい命令書が届いた時点で命令待ちだったか（表示用。その命令書が始まるまで命令待ちのまま。P2b.1）。</summary>
         public bool AwaitingWhenDelivered;
 
+        // ---- P2b.2：壊走・動揺と命令書
+        /// <summary>壊走中・再集結中に届いて預かっている命令書（指揮下に戻ったら練度の遅れの後に始める）。null ならなし。</summary>
+        public OrderSheet HeldSheet;
+        /// <summary>動揺で今の段を止めているか（その場で保持）と、止めた段の命令（正常に戻ったら同じ目的地で再開する）。</summary>
+        public bool ShakenHalt;
+        public Order HaltedOrder;
+
         // ---- P1g：目標が見えないときの判断
         /// <summary>目標が見えないため、見える位置を探して動いているか（着いたら false）。</summary>
         public bool SeekingSight;

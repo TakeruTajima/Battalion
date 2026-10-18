@@ -48,7 +48,8 @@ namespace Battalion.View
 
         Company Selected => _selected >= 0 && _selected < _sim.Companies.Count ? _sim.Companies[_selected] : null;
 
-        bool CanCommand(Company c) => c != null && c.Side == Side.Blue && c.UnderCommand && _phase == Phase.Running;
+        /// <summary>命令書を組んで送れるか。壊走中・再集結中の中隊にも送れる（届いたら預かり、指揮下に戻ってから始める。P2b.2）。</summary>
+        bool CanCommand(Company c) => c != null && c.Side == Side.Blue && c.OnBoard && _phase == Phase.Running;
 
         // ---------------------------------------------------------------- キー
 

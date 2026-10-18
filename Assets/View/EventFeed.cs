@@ -53,6 +53,7 @@ namespace Battalion.View
         public readonly List<Entry> Entries = new List<Entry>();
         public readonly List<Happening> Recent = new List<Happening>();
         public readonly HashSet<string> EverRouted = new HashSet<string>();
+        readonly HashSet<string> _sheetAborted = new HashSet<string>();
         /// <summary>陣地が完成した（地形のテクスチャを塗り直す合図）。</summary>
         public bool TerrainChanged;
 
@@ -76,12 +77,20 @@ namespace Battalion.View
                     Add(t, $"{unit} 背面を突かれた（{v["by"].String} から）", true);
                     Happen(t, Kind.RearHit, unit, v["by"].String);
                     break;
+                case "sheet_aborted":
+                    // 壊走で命令書を中断した（P2b.2）。この直後の rout の行で「壊走（命令書は中断）」と出す
+                    if (v["side"].String == "blue") _sheetAborted.Add(unit);
+                    break;
+                case "halt_resume":
+                    if (v["side"].String == "blue") Add(t, $"{unit} 動揺から回復、止めていた段を再開", false);
+                    break;
                 case "rout":
                     EverRouted.Add(unit);
                     bool enc = v.TryGet("encircled", out var e) && e.Bool;
+                    bool aborted = _sheetAborted.Remove(unit);
                     if (!enc)
                     {
-                        Add(t, $"{unit} 壊走", true);
+                        Add(t, aborted ? $"{unit} 壊走（命令書は中断）" : $"{unit} 壊走", true);
                         Happen(t, Kind.Routed, unit, null);
                     }
                     break;

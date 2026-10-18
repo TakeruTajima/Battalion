@@ -18,6 +18,12 @@ namespace Battalion.Sim
             var c = _companies[sheet.CompanyId];
             // 出した順を進める（後から着いた古い伝令の命令書を捨てるため）。開始待ちの段はこの命令書に置き換わる
             c.ReceivedSeq = ++_orderSeq;
+            if (c.OnBoard && !c.UnderCommand)
+            {
+                // 壊走中・再集結中は預かる（P2b.2）
+                c.HeldSheet = sheet;
+                return;
+            }
             c.ActiveSheet = sheet;
             c.StageIndex = 0;
             c.StageStarted = true;
@@ -62,7 +68,7 @@ namespace Battalion.Sim
             var sheet = c.ActiveSheet;
             if (sheet == null) return true;
             if (c.StartWaitOrder != null && c.StageIndex == 0 && !c.StageStarted) return c.AwaitingWhenDelivered;
-            if (c.StartWaitOrder != null || !c.StageStarted) return false;
+            if (c.StartWaitOrder != null || !c.StageStarted || c.ShakenHalt) return false;
             if (c.StageIndex + 1 < sheet.Stages.Count) return false;
             return StageComplete(c, sheet.Stages[c.StageIndex].Order);
         }
@@ -86,6 +92,8 @@ namespace Battalion.Sim
                 c.StageIndex++;
                 c.StageStarted = false;
                 c.StageCompleted = false;
+                c.ShakenHalt = false;
+                c.HaltedOrder = null;
                 c.StartWaitOrder = next.Order;
                 c.StartWaitAt = t + _p.Of(c.Training).OrderStartSec;
                 if (_log.Enabled)

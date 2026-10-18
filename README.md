@@ -2,7 +2,7 @@
 
 大隊規模の部隊を指揮するRTSの試作。仕様は [`docs/spec.md`](docs/spec.md)。
 
-現在の段階：**P2b.1（命令書の操作と命令待ちの表示）まで完了**（P1 はタグ `proto-p1-map` で完了）。報告は [`docs/reports/`](docs/reports/)（P0・P0.1 は `P0_report.md`、P0.2 は `P0.2_report.md`、P1a・P1a.1 は `P1a_report.md`、P1b は `P1b_report.md`、P1c は `P1c_report.md`、P1d は `P1d_report.md`、P1e は `P1e_report.md`、P1e.1 は `P1e.1_report.md`、P1e.2 は `P1e.2_report.md`、P1f は `P1f_report.md`（画像は `P1f/`）、P1g は `P1g_report.md`、P1g.1 は `P1g.1_report.md`、P2a は `P2a_report.md`（画像は `P2a/`）、P2b は `P2b_report.md`（画像は `P2b/`）、P2b.1 は `P2b.1_report.md`（画像は `P2b.1/`）。操作の早見表は P1b の報告と、変わったところは P1c・P1d・P1e・P1f・P2a・P2b・P2b.1 の報告にある）。
+現在の段階：**P2b.2（壊走・動揺と命令書）まで完了**（P1 はタグ `proto-p1-map` で完了）。報告は [`docs/reports/`](docs/reports/)（P0・P0.1 は `P0_report.md`、P0.2 は `P0.2_report.md`、P1a・P1a.1 は `P1a_report.md`、P1b は `P1b_report.md`、P1c は `P1c_report.md`、P1d は `P1d_report.md`、P1e は `P1e_report.md`、P1e.1 は `P1e.1_report.md`、P1e.2 は `P1e.2_report.md`、P1f は `P1f_report.md`（画像は `P1f/`）、P1g は `P1g_report.md`、P1g.1 は `P1g.1_report.md`、P2a は `P2a_report.md`（画像は `P2a/`）、P2b は `P2b_report.md`（画像は `P2b/`）、P2b.1 は `P2b.1_report.md`（画像は `P2b.1/`）、P2b.2 は `P2b.2_report.md`。操作の早見表は P1b の報告と、変わったところは P1c・P1d・P1e・P1f・P2a・P2b・P2b.1 の報告にある）。
 
 遊び方：Unity 6.3 LTS（6000.3.11f1）で開き、`Assets/Scenes/Battle.unity` を再生する（6.4 など別の版で開くと ProjectSettings とパッケージが書き換わるので、6.3 LTS で開く）。
 

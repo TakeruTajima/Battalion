@@ -173,6 +173,9 @@ namespace Battalion.View
         /// <summary>駒と左パネルの段の印「2/3　次：信号弾 緑」（命令書が2段以上のときだけ）。</summary>
         string StageTag(Company c)
         {
+            // 預かり中・動揺で停止中（P2b.2）
+            if (c.HeldSheet != null) return "命令書を預かり中（再集結後に開始）";
+            if (c.ShakenHalt) return "動揺で停止中" + (c.ActiveSheet != null && c.ActiveSheet.Stages.Count > 1 ? $"　{c.StageIndex + 1}/{c.ActiveSheet.Stages.Count}" : "");
             var sh = c.ActiveSheet;
             if (sh == null || sh.Stages.Count < 2) return null;
             string s = $"{c.StageIndex + 1}/{sh.Stages.Count}";
@@ -344,6 +347,17 @@ namespace Battalion.View
                 }
             }
 
+            // ---- 預かり中（壊走中・再集結中に届いた命令書。P2b.2）
+            if (c.HeldSheet != null)
+            {
+                GUILayout.Label("預かり中（再集結後に開始）", _small);
+                for (int k = 0; k < c.HeldSheet.Stages.Count; k++)
+                {
+                    var st = c.HeldSheet.Stages[k];
+                    GUILayout.Label($"　第{k + 1}段　{StageOrderText(st.Order)}" + (k > 0 ? $"［{TriggerText(st.Trigger)}］" : ""), _small);
+                }
+            }
+
             // ---- 実行中
             var sh = c.ActiveSheet;
             if (sh != null)
@@ -354,6 +368,7 @@ namespace Battalion.View
                     var st = sh.Stages[k];
                     string line = $"{(k == c.StageIndex ? "▶" : "　")}第{k + 1}段　{StageOrderText(st.Order)}" + (k > 0 ? $"［{TriggerText(st.Trigger)}］" : "");
                     if (k == c.StageIndex && c.StartWaitOrder != null) line += $"　開始まで {Math.Max(0, c.StartWaitAt - _sim.Time):0}秒";
+                    else if (k == c.StageIndex && c.ShakenHalt) line += "　<color=#ffb060>動揺で停止中</color>";
                     var style = k == c.StageIndex ? _bold : _small;
                     var prev = GUI.contentColor;
                     if (k < c.StageIndex) GUI.contentColor = new Color(1, 1, 1, 0.45f);

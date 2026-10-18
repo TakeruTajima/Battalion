@@ -415,7 +415,16 @@ namespace Battalion.Sim
                 _log.Write(Ev(t, "runner_delivered", c).Add("runner", r.Id).Add("side", SideName(r.Side)).Add("stale", stale)
                     .Add("stages", r.Sheet.Stages.Count).ToString());
             if (stale) return;
+            if (!c.UnderCommand)
+            {
+                // 壊走中・再集結中：預かり、指揮下に戻ったら始める（P2b.2）。預かっている間に別の命令書が届いたら置き換える
+                c.ReceivedSeq = r.Seq;
+                c.HeldSheet = r.Sheet;
+                return;
+            }
             c.AwaitingWhenDelivered = AwaitingOrders(c);
+            c.ShakenHalt = false;
+            c.HaltedOrder = null;
             c.ReceivedSeq = r.Seq;
             c.ActiveSheet = r.Sheet;
             c.StageIndex = 0;

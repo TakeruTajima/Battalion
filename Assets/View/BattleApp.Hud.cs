@@ -239,7 +239,9 @@ namespace Battalion.View
                 if (c.Encircled) s += "・<color=#ff6060>包囲</color>";
                 if (c.Fortified) s += "・籠城";
                 if (c.Side == Side.Blue && _sim.AwaitingOrders(c)) s += "・<color=#c8c8c8>命令待ち</color>";
+                if (c.ShakenHalt) s += "・<color=#ffb060>動揺で停止中</color>";
             }
+            else if (c.HeldSheet != null) s += "・命令書を預かり中（再集結後に開始）";
             return s;
         }
 
