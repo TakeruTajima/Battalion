@@ -48,14 +48,17 @@ namespace Battalion.Sim
 
         readonly HashSet<int> _passingWas = new HashSet<int>();
 
-        /// <summary>400m 以内に、視線の通る指揮下の敵がいるか（壊走中・再集結中の敵は数えない）。</summary>
+        /// <summary>
+        /// 400m 以内に、視線の通る指揮下の敵がいるか（壊走中・再集結中の敵は数えない）。
+        /// 接触の距離（矩形の隙間 50m 以内）の指揮下の敵は、視線を問わずに数える（撃ち合いの規則と揃える。P2c.1.1）。
+        /// </summary>
         bool EnemyInContact(Company c)
         {
             foreach (var e in _companies)
             {
                 if (!e.OnBoard || e.Side == c.Side || !e.UnderCommand) continue;
                 if (Vec2.Distance(c.Position, e.Position) > B.ContactRadiusM) continue;
-                if (LineOfSight.Visible(_map, _p.Sight, c.Position, e.Position)) return true;
+                if (InFireContact(c, e) || LineOfSight.Visible(_map, _p.Sight, c.Position, e.Position)) return true;
             }
             return false;
         }
