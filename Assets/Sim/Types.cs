@@ -22,6 +22,12 @@ namespace Battalion.Sim
     /// </summary>
     public enum CompanyState { Normal, Shaken, Routed, Rallying, Surrendered, LeftBattle }
 
+    /// <summary>全ての中隊長の自律行動の小さな動き（P2c）：なし／物陰へ寄る／崩した敵の陣地に入る。</summary>
+    public enum AutoMove { None, Cover, EnterPosition }
+
+    /// <summary>性格の独断（P2c）：なし／猪突の追撃（確保の字面で追う）／猪突の続けての攻撃／機敏の回り込み。</summary>
+    public enum IndependentAct { None, Pursuit, Attack, Flank }
+
     public static class Names
     {
         public static string Of(CompanyState s)
@@ -48,6 +54,17 @@ namespace Battalion.Sim
         }
 
         public static string Of(Side s) => s == Side.Blue ? "blue" : "red";
+
+        public static string Of(Personality p)
+        {
+            switch (p)
+            {
+                case Personality.Cautious: return "cautious";
+                case Personality.Reckless: return "reckless";
+                case Personality.Agile: return "agile";
+                default: return "calm";
+            }
+        }
 
         public static string Of(Training t)
         {

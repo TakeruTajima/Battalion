@@ -218,9 +218,9 @@ namespace Battalion.Sim
                     var tgt = EnemyOf(c, order.TargetId);
                     if (tgt == null || !tgt.UnderCommand)
                     {
-                        // 目標がもう指揮下でない：攻撃は始めた時点で完了（P2b の「完了したら」）
+                        // 目標がもう指揮下でない：攻撃は始めた時点で完了（P2b の「完了したら」）。独断の攻撃は段の完了に数えない（P2c）
                         HoldInPlace(c);
-                        c.StageCompleted = true;
+                        if (c.Independent == IndependentAct.None) c.StageCompleted = true;
                         break;
                     }
                     ChooseAttackBearing(c, tgt, order, true);
@@ -539,6 +539,12 @@ namespace Battalion.Sim
 
         void MoveUnderCommand(Company c, double t, double tickStart, double dt, double maxTurn)
         {
+            // 自律行動の小さな動き（物陰へ寄る・陣地に入る。P2c）：命令は変えずに経路に沿って動く
+            if (c.AutoMove != AutoMove.None)
+            {
+                FollowPath(c, dt, maxTurn);
+                return;
+            }
             switch (c.CurrentOrder.Type)
             {
                 case OrderType.Attack:
@@ -572,7 +578,9 @@ namespace Battalion.Sim
             if (!o.Moves || c.Arrived)
             {
                 // 向き直った向き（P1d の5）があればそれを、なければ命令の向きを保つ
+                // 撃てる目標がないときは最も近い敵の方（P2c）
                 if (c.FacingOverride.HasValue) c.Facing = TurnToward(c.Facing, c.FacingOverride.Value, maxTurn);
+                else if (c.AutoFacing.HasValue) c.Facing = TurnToward(c.Facing, c.AutoFacing.Value, maxTurn);
                 else if (o.FacingRad.HasValue) c.Facing = TurnToward(c.Facing, o.FacingRad.Value, maxTurn);
                 return;
             }
@@ -607,7 +615,8 @@ namespace Battalion.Sim
             double heading = Math.Atan2(to.Y, to.X);
             // 阻まれている間に向き直った中隊（P1e.2）は、向き直った向きへ回り、その向きのまま動く（接敵中と同じ扱い）
             if (c.FacingOverride.HasValue) c.Facing = TurnToward(c.Facing, c.FacingOverride.Value, maxTurn);
-            if (c.InContact || c.FacingOverride.HasValue)
+            // 自律行動の小さな動き（P2c）も向きを変えずに動く（撃ってくる敵に横腹や背を向けない）
+            if (c.InContact || c.FacingOverride.HasValue || c.AutoMove != AutoMove.None)
             {
                 // 接敵中は向きを変えない（敵に横腹や背を向けない）。背を向けて逃げるのは壊走だけ
                 double diff = Math.Abs(Angles.Wrap(heading - c.Facing)) * Angles.RadToDeg;
@@ -818,6 +827,8 @@ namespace Battalion.Sim
             if (!c.MovedThisTick && c.EntrenchProgress > 0 && f > _p.MapRules.EntrenchDamageMult)
                 f += (_p.MapRules.EntrenchDamageMult - f) * Math.Min(1.0, c.EntrenchProgress / _p.MapRules.EntrenchSec);
             if (c.MovedThisTick && IsOpenGround(ch)) f *= _p.Terrain.MovingOpenDamageMult;
+            // 浅い掩体（P2c）
+            f *= ScrapeMult(c, ch);
             return f;
         }
 

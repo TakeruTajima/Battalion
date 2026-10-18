@@ -15,6 +15,9 @@ namespace Battalion.Sim.Tests
     {
         public const int Runs = 20;
 
+        /// <summary>通し実行に使うパラメータを差し替える（原因の切り分け用。null なら sim_params.json）。</summary>
+        public static SimParams ParamsForRuns;
+
         /// <summary>作戦の命令の種類（P1e で拘束・攻撃を足した）。</summary>
         public enum PlannedKind { Advance, PinFar, PinNear, AttackFlank }
 
@@ -98,7 +101,10 @@ namespace Battalion.Sim.Tests
         /// B3：第1段 B2 の南で火力支援、第2段 村の中心へ前進（信号弾 白）。
         /// 信号弾は、緑を迂回役が待機地点に着く頃の T+18:00 に、白を R1 が指揮下でなくなった刻みに打つ。
         /// </summary>
-        public static void StagedPinAndFlankStart(Simulation sim, int stage)
+        public static void StagedPinAndFlankStart(Simulation sim, int stage) => StagedPinAndFlankStart(sim, stage, Discretion.Delegate);
+
+        /// <summary>「拘束＋迂回（段階つき）」の命令書。<paramref name="d"/> は全ての段の裁量（P2c）。</summary>
+        public static void StagedPinAndFlankStart(Simulation sim, int stage, Discretion d)
         {
             double fx = stage == 1 ? 1450 : 1350, fy = stage == 1 ? 800 : 900;
             var waitB1 = stage == 1 ? new Vec2(1500, 1450) : new Vec2(1400, 1550);
@@ -108,7 +114,7 @@ namespace Battalion.Sim.Tests
             int b1 = sim.Find("B1").Id, b2 = sim.Find("B2").Id, b3 = sim.Find("B3").Id, b4 = sim.Find("B4").Id;
             var white = StageTrigger.OnFlare(FlareColor.White);
             var green = StageTrigger.OnFlare(FlareColor.Green);
-            OrderSheet S(params Stage[] s) => new OrderSheet(s);
+            OrderSheet S(params Stage[] s) => new OrderSheet(s.Select(x => x.With(d)));
             sim.SendSheet(S(new Stage(Order.Pin(b2, r1, PinRange.Far), StageTrigger.None),
                 new Stage(Order.Advance(b2, village, 0), white)));
             foreach (var (id, wait) in new[] { (b1, waitB1), (b4, waitB4) })
@@ -152,6 +158,9 @@ namespace Battalion.Sim.Tests
             /// 戻さず、この状態で会戦を終えて勝ちとするので、その勝ち方に当たる。なければ null。
             /// </summary>
             public double? RedAllBrokenMin;
+            /// <summary>自律行動・独断の回数（青。P2c）。キーは independent の kind（pursue／attack／flank／cover／no_pursuit）と
+            /// auto_cover（独断でない物陰）、scrape_start、enter_position、independent_end。赤は red: を付ける。</summary>
+            public readonly Dictionary<string, int> Autonomy = new Dictionary<string, int>();
             /// <summary>中隊ごとの最初の壊走の時刻、最初の向き直りの時刻、攻撃で発起点に着いた（方角を固定した）時刻（分）。</summary>
             public readonly Dictionary<string, double> FirstRoutMin = new Dictionary<string, double>();
             public readonly Dictionary<string, double> FirstTurnMin = new Dictionary<string, double>();
@@ -164,10 +173,28 @@ namespace Battalion.Sim.Tests
             /// <summary>最初の壊走・向き直りの時刻（秒）。</summary>
             public readonly Dictionary<string, double> RoutAt = new Dictionary<string, double>();
             public readonly Dictionary<string, double> TurnAt = new Dictionary<string, double>();
+            public readonly Dictionary<string, int> Autonomy = new Dictionary<string, int>();
             public bool Enabled => true;
+
+            static readonly string[] AutonomyTypes =
+                { "\"type\":\"independent\"", "\"type\":\"independent_end\"", "\"type\":\"auto_cover\"", "\"type\":\"scrape_start\"", "\"type\":\"enter_position\"" };
 
             public void Write(string jsonLine)
             {
+                // 自律行動・独断の回数（P2c）
+                foreach (var key in AutonomyTypes)
+                {
+                    if (jsonLine.IndexOf(key, StringComparison.Ordinal) < 0) continue;
+                    var v = JsonValue.Parse(jsonLine);
+                    string type = v["type"].String;
+                    string name = type == "independent" ? v["kind"].String
+                        : type == "auto_cover" && v["independent"].Bool ? null
+                        : type;
+                    if (name == null) break;
+                    if (v["side"].String != "blue") name = "red:" + name;
+                    Autonomy[name] = (Autonomy.TryGetValue(name, out int n) ? n : 0) + 1;
+                    break;
+                }
                 // "type":"rout" と "type":"turn_start" の行だけ見る（"unit" はその直後に出る）
                 Note(jsonLine, "\"type\":\"rout\",\"unit\":\"", RoutAt, Routed);
                 Note(jsonLine, "\"type\":\"turn_start\",\"unit\":\"", TurnAt, null);
@@ -187,10 +214,14 @@ namespace Battalion.Sim.Tests
         public static RunResult RunOne(MapScenario sc, PlannedOrder[] plan, ulong seed) => RunOne(sc, plan, seed, null, null);
 
         /// <summary>作戦を1回回す。<paramref name="start"/> は会戦開始前に1回、<paramref name="tick"/> は毎刻みの前に呼ぶ（段階つきの作戦。P2b）。</summary>
-        public static RunResult RunOne(MapScenario sc, PlannedOrder[] plan, ulong seed, Action<Simulation> start, Action<Simulation> tick)
+        public static RunResult RunOne(MapScenario sc, PlannedOrder[] plan, ulong seed, Action<Simulation> start, Action<Simulation> tick) =>
+            RunOne(sc, plan, seed, start, tick, Discretion.Delegate);
+
+        /// <summary>作戦を1回回す。<paramref name="d"/> は作戦の命令の裁量（P2c。段階つきの作戦は <paramref name="start"/> の中で渡す）。</summary>
+        public static RunResult RunOne(MapScenario sc, PlannedOrder[] plan, ulong seed, Action<Simulation> start, Action<Simulation> tick, Discretion d)
         {
             var counter = new RoutCounter();
-            var sim = sc.Build(TestUtil.Params, seed, counter);
+            var sim = sc.Build(ParamsForRuns ?? TestUtil.Params, seed, counter);
             start?.Invoke(sim);
             var orders = plan.Where(o => o.WhenBroken == null).OrderBy(o => o.AtSec).ToList();
             var conditional = plan.Where(o => o.WhenBroken != null).ToList();
@@ -201,12 +232,12 @@ namespace Battalion.Sim.Tests
             while (sim.Time < endSec)
             {
                 // 命令は伝令で出す（P2a）。時刻 0（会戦開始前）の命令は伝令を使わずに届く。判断枠がなければ、空くまで毎刻み出し直す
-                while (next < orders.Count && orders[next].AtSec <= sim.Time && Issue(sim, orders[next])) next++;
+                while (next < orders.Count && orders[next].AtSec <= sim.Time && Issue(sim, orders[next], d)) next++;
                 for (int k = conditional.Count - 1; k >= 0; k--)
                 {
                     var o = conditional[k];
                     if (o.AtSec > sim.Time || sim.Find(o.WhenBroken).UnderCommand) continue;
-                    if (Issue(sim, o)) conditional.RemoveAt(k);
+                    if (Issue(sim, o, d)) conditional.RemoveAt(k);
                 }
                 tick?.Invoke(sim);
                 sim.Step();
@@ -223,6 +254,12 @@ namespace Battalion.Sim.Tests
 
         /// <summary>作戦の命令を伝令で出す（P2a）。出せた（判断枠があった）ら true。</summary>
         public static bool Issue(Simulation sim, PlannedOrder o) => sim.SendOrder(ToOrder(sim, o)) != SendResult.NoSlot;
+
+        /// <summary>作戦の命令を、裁量 <paramref name="d"/> の1段の命令書として伝令で出す（P2c）。</summary>
+        public static bool Issue(Simulation sim, PlannedOrder o, Discretion d) =>
+            d == Discretion.Delegate
+                ? Issue(sim, o)
+                : sim.SendSheet(new OrderSheet(new[] { new Stage(ToOrder(sim, o), StageTrigger.None, d) })) != SendResult.NoSlot;
 
         public static Order ToOrder(Simulation sim, PlannedOrder o)
         {
@@ -255,7 +292,47 @@ namespace Battalion.Sim.Tests
             foreach (var kv in counter.RoutAt) result.FirstRoutMin[kv.Key] = kv.Value / 60;
             foreach (var kv in counter.TurnAt) result.FirstTurnMin[kv.Key] = kv.Value / 60;
             foreach (var kv in fixedAt) result.AttackFixedMin[kv.Key] = kv.Value;
+            foreach (var kv in counter.Autonomy) result.Autonomy[kv.Key] = kv.Value;
             return result;
+        }
+
+        /// <summary>
+        /// P2c：作戦ごとに、任せた版と全中隊を厳命にした版（各20回）の結果と、独断・自律行動の1回あたりの回数を並べる。
+        /// 独断：猪突の追撃（確保の字面で追う）・続けて攻撃、機敏の回り込み、慎重の後退（物陰へ）・追撃せず、独断の限度で停止。
+        /// 全ての中隊長：物陰へ寄る、浅い掩体（掘り始め）、崩した敵の陣地に入る。赤は物陰・浅い掩体・陣地の合計。
+        /// </summary>
+        [Test]
+        public void DelegatedVersusStrictWithAutonomyCounts()
+        {
+            var sb = new StringBuilder();
+            sb.AppendLine("| ステージ | 作戦 | 裁量 | 勝率 | 青の損害率 | 崩れた青 | 崩れた赤 | 猪突 追撃 | 猪突 続けて攻撃 | 機敏 回り込み | 慎重 後退 | 慎重 追撃せず | 限度で停止 | 物陰 | 浅い掩体 | 陣地に入る | 赤の自律 |");
+            sb.AppendLine("| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |");
+            foreach (int stage in new[] { 1, 2 })
+            {
+                var sc = MapScenario.LoadFile(TestUtil.PathOf($"maps/scenario_a{stage}.json"));
+                int st = stage;
+                foreach (var d in new[] { Discretion.Delegate, Discretion.Strict })
+                {
+                    var all = PlansWithPinAndFlank(stage).Select(p => (p.name, p.orders, (Action<Simulation>)null, (Action<Simulation>)null)).ToList();
+                    var dd = d;
+                    all.Add((StagedPlanName, new PlannedOrder[0], s => StagedPinAndFlankStart(s, st, dd), StagedPinAndFlankTick));
+                    foreach (var (name, plan, start, tick) in all)
+                    {
+                        var rs = Enumerable.Range(1, Runs).Select(s => RunOne(sc, plan, (ulong)s, start, tick, d)).ToList();
+                        string A(params string[] keys) =>
+                            rs.Average(r => keys.Sum(k => r.Autonomy.TryGetValue(k, out int n) ? n : 0)).ToString("0.00");
+                        sb.AppendLine($"| {stage} | {name} | {(d == Discretion.Strict ? "厳命" : "任せる")} | " +
+                                      $"{rs.Average(r => r.Win ? 1.0 : 0.0):0.00} | {rs.Average(r => r.BlueLoss):0.000} | " +
+                                      $"{rs.Average(r => r.BlueBroken):0.00} | {rs.Average(r => r.RedBroken):0.00} | " +
+                                      $"{A("pursue")} | {A("attack")} | {A("flank")} | {A("cover")} | {A("no_pursuit")} | {A("independent_end")} | " +
+                                      $"{A("auto_cover")} | {A("scrape_start")} | {A("enter_position")} | " +
+                                      $"{A("red:auto_cover", "red:scrape_start", "red:enter_position")} |");
+                    }
+                }
+            }
+            TestContext.WriteLine("回数は1回の会戦あたりの平均（20回）。慎重の後退は独断で 100m を越える・後ろへ寄る物陰。物陰は独断でないもの");
+            TestContext.WriteLine(sb.ToString());
+            Assert.Pass();
         }
 
         [Test]

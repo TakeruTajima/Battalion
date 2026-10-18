@@ -25,6 +25,46 @@ namespace Battalion.Sim
         public BehaviorParams Behavior = new BehaviorParams();
         public RunnersParams Runners = new RunnersParams();
         public OrdersParams Orders = new OrdersParams();
+        public AutonomyParams Autonomy = new AutonomyParams();
+
+        /// <summary>P2c の中隊長の自律行動（"autonomy"）。</summary>
+        public sealed class AutonomyParams
+        {
+            /// <summary>全ての中隊長の自律行動は、持ち場からこの距離を出ない。</summary>
+            public double PostRadiusM;
+            /// <summary>撃てる目標がないとき、この距離以内で最も近い指揮下の敵の方を向く。</summary>
+            public double FaceEnemyRadiusM;
+            /// <summary>被弾倍率がこれ以上の所（開けた所）でこの秒数撃たれ続けたら物陰を探す。</summary>
+            public double CoverUnderFireSec;
+            public double CoverOpenMult;
+            /// <summary>物陰の候補：被弾倍率が今のこの倍以下のマス。</summary>
+            public double CoverMultRatio;
+            /// <summary>撃たれ「続けた」の途切れ：この秒数撃たれなければ数え直す。</summary>
+            public double CoverFireGapSec;
+            /// <summary>物陰が見つからなかったときに探し直すまで。</summary>
+            public double CoverRetrySec;
+            /// <summary>物陰の候補から、今撃ってきている敵の中心からこの距離以内のマスを除く。</summary>
+            public double CoverMinShooterDistM;
+            /// <summary>浅い掩体：この秒数動かず、この秒数撃たれていなければ掘り始め、掘り始めてこの秒数で被弾倍率がこの値になる。</summary>
+            public double ScrapeStillSec;
+            public double ScrapeQuietSec;
+            public double ScrapeDigSec;
+            public double ScrapeDamageMult;
+            /// <summary>崩した敵の陣地（塹壕・村）が、確保した地点からこの距離以内なら入る。</summary>
+            public double EnterPositionRadiusM;
+            /// <summary>任せるのとき、前進・攻撃を拒む士気（慎重は「未満」、ほかは「以下」）。厳命は morale.shaken_threshold。</summary>
+            public readonly Dictionary<Personality, double> AdvanceRefuseMorale = new Dictionary<Personality, double>();
+            /// <summary>猪突：追撃の後に、この距離以内の動揺・壊走中の敵へ続けて攻めかかる。</summary>
+            public double RecklessFollowupRadiusM;
+            /// <summary>機敏：この距離以内の、別の味方に正面から撃たれている敵の側面へ回り込む。経路と、持ち場からの発起点の限度。</summary>
+            public double AgileWatchRadiusM;
+            public double AgilePathMaxM;
+            public double AgilePostLimitM;
+            /// <summary>機敏の見回りの間隔。</summary>
+            public double AgileCheckSec;
+            /// <summary>慎重（任せる）：物陰を探す範囲（後ろ向きも可）。</summary>
+            public double CautiousCoverRadiusM;
+        }
 
         /// <summary>P2b の命令書（"orders"）。</summary>
         public sealed class OrdersParams
@@ -443,6 +483,28 @@ namespace Battalion.Sim
             p.Runners.PathThreatWeight = rn.D("path_threat_weight");
             p.Runners.ReplanSec = rn.D("replan_sec");
             p.Orders.MaxStages = (int)root["orders"].D("max_stages");
+
+            var au = root["autonomy"];
+            p.Autonomy.PostRadiusM = au.D("post_radius_m");
+            p.Autonomy.FaceEnemyRadiusM = au.D("face_enemy_radius_m");
+            p.Autonomy.CoverUnderFireSec = au.D("cover_under_fire_sec");
+            p.Autonomy.CoverOpenMult = au.D("cover_open_mult");
+            p.Autonomy.CoverMultRatio = au.D("cover_mult_ratio");
+            p.Autonomy.CoverFireGapSec = au.D("cover_fire_gap_sec");
+            p.Autonomy.CoverRetrySec = au.D("cover_retry_sec");
+            p.Autonomy.CoverMinShooterDistM = au.D("cover_min_shooter_dist_m");
+            p.Autonomy.ScrapeStillSec = au.D("scrape_still_sec");
+            p.Autonomy.ScrapeQuietSec = au.D("scrape_quiet_sec");
+            p.Autonomy.ScrapeDigSec = au.D("scrape_dig_sec");
+            p.Autonomy.ScrapeDamageMult = au.D("scrape_damage_mult");
+            p.Autonomy.EnterPositionRadiusM = au.D("enter_position_radius_m");
+            ReadPersonalityTable(au["advance_refuse_morale"], p.Autonomy.AdvanceRefuseMorale);
+            p.Autonomy.RecklessFollowupRadiusM = au.D("reckless_followup_radius_m");
+            p.Autonomy.AgileWatchRadiusM = au.D("agile_watch_radius_m");
+            p.Autonomy.AgilePathMaxM = au.D("agile_path_max_m");
+            p.Autonomy.AgilePostLimitM = au.D("agile_post_limit_m");
+            p.Autonomy.AgileCheckSec = au.D("agile_check_sec");
+            p.Autonomy.CautiousCoverRadiusM = au.D("cautious_cover_radius_m");
 
             return p;
         }

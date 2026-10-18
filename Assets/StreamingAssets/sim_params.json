@@ -228,5 +228,28 @@
   "orders": {
     "_note": "P2b の段階つき命令",
     "max_stages": 3
+  },
+  "autonomy": {
+    "_note": "P2c の中隊長の自律行動。advance_refuse_morale は任せるのときの値（慎重は未満、ほかは以下）。厳命は morale.shaken_threshold。猪突の 900m は behavior.pursuit_limit_m × pursuit_limit_mult.reckless",
+    "post_radius_m": 100,
+    "face_enemy_radius_m": 600,
+    "cover_under_fire_sec": 30,
+    "cover_open_mult": 1.0,
+    "cover_mult_ratio": 0.7,
+    "cover_fire_gap_sec": 10,
+    "cover_retry_sec": 30,
+    "cover_min_shooter_dist_m": 150,
+    "scrape_still_sec": 120,
+    "scrape_quiet_sec": 60,
+    "scrape_dig_sec": 300,
+    "scrape_damage_mult": 0.6,
+    "enter_position_radius_m": 200,
+    "advance_refuse_morale": { "cautious": 60, "calm": 50, "agile": 50, "reckless": 40 },
+    "reckless_followup_radius_m": 400,
+    "agile_watch_radius_m": 500,
+    "agile_path_max_m": 600,
+    "agile_post_limit_m": 600,
+    "agile_check_sec": 5,
+    "cautious_cover_radius_m": 200
   }
 }

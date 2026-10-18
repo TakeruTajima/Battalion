@@ -113,8 +113,8 @@ namespace Battalion.Sim
             try
             {
                 var o = order;
-                if (c.State == CompanyState.Shaken && (o.Type == OrderType.Advance || o.Type == OrderType.Attack
-                                                       || (o.Type == OrderType.Entrench && o.Destination.HasValue)))
+                if (RefusesAdvance(c) && (o.Type == OrderType.Advance || o.Type == OrderType.Attack
+                                          || (o.Type == OrderType.Entrench && o.Destination.HasValue)))
                     o = Order.Hold(c.Id, o.FacingRad);
                 StartOrder(c, o, Time, Time);
                 if (o.Type == OrderType.Attack && c.CurrentOrder.Type == OrderType.Attack)

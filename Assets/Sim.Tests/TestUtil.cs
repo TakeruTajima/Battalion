@@ -9,6 +9,18 @@ namespace Battalion.Sim.Tests
     public static class TestUtil
     {
         public const string ParamsRelPath = "Assets/StreamingAssets/sim_params.json";
+
+        /// <summary>sim_params.json の文字列を置き換えて読んだパラメータ（テストで一部の値だけ変えるため）。</summary>
+        public static SimParams ParamsWith(params (string from, string to)[] replacements)
+        {
+            var s = File.ReadAllText(PathOf(ParamsRelPath));
+            foreach (var (a, b) in replacements)
+            {
+                if (!s.Contains(a)) throw new ArgumentException("sim_params.json にない: " + a);
+                s = s.Replace(a, b);
+            }
+            return SimParams.FromJson(s);
+        }
         public const string InitialParamsRelPath = "docs/reference/sim_params.initial.json";
         public const string ReferenceResultsRelPath = "docs/reference/reference_results.json";
 

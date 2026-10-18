@@ -206,7 +206,8 @@ namespace Battalion.Sim.Tests
         [TestCase(Personality.Calm, AttackOnBreak.Pursue, true)]
         [TestCase(Personality.Agile, AttackOnBreak.Pursue, true)]
         [TestCase(Personality.Reckless, AttackOnBreak.Pursue, true)]
-        [TestCase(Personality.Reckless, AttackOnBreak.Secure, false)]
+        // P2c：任せた猪突は「確保」でも独断で追う（限度 900m）。厳命なら確保（P2cTests）
+        [TestCase(Personality.Reckless, AttackOnBreak.Secure, true)]
         public void PursuitDependsOnPermissionAndPersonality(Personality pers, AttackOnBreak onBreak, bool pursues)
         {
             var (_, a, _) = BrokenTarget(pers, onBreak);

@@ -30,6 +30,7 @@ namespace Battalion.View
         {
             FlankHit, RearHit, Encircled, Routed, Surrendered, RallyStart, RallyComplete, Counterattack, Entrenched, LeftBattle,
             TargetBroken, PursuitEnd, Turn, Disarray, SeekSight, Receipt, ReceiptOverdue, StageAdvance,
+            Independent, Autonomy,
         }
 
         /// <summary>駒の上に出す出来事。表示側が読んだら <see cref="Recent"/> を空にする。</summary>
@@ -178,6 +179,45 @@ namespace Battalion.View
                     Happen(t, Kind.SeekSight, unit, v["target"].String);
                     break;
                 }
+                // ---- P2c：自律行動と独断
+                case "independent":
+                {
+                    string who = $"{unit}（{PersonalityJa(v["personality"].String)}）";
+                    string tgt = v.TryGet("target", out var tv) ? tv.String : null;
+                    string ts = v.TryGet("target_state", out var sv) ? StateJa(sv.String) : "";
+                    string text, tag;
+                    switch (v["kind"].String)
+                    {
+                        case "pursue": text = $"{who}独断で追撃（{tgt}）"; tag = "独断：追撃"; break;
+                        case "attack": text = $"{who}独断で攻撃（{ts}の {tgt}）"; tag = "独断：攻撃"; break;
+                        case "flank": text = $"{who}独断で側面へ（{tgt}）"; tag = "独断：側面へ"; break;
+                        case "cover": text = $"{who}独断で後退（物陰へ）"; tag = "独断：後退"; break;
+                        case "no_pursuit": text = $"{who}追撃せず確保（損害を嫌う）"; tag = "追撃せず"; break;
+                        default: text = $"{who}独断"; tag = "独断"; break;
+                    }
+                    Add(t, text, true);
+                    Happen(t, Kind.Independent, unit, tag);
+                    break;
+                }
+                case "independent_end":
+                    Add(t, $"{unit}（{PersonalityJa(v["personality"].String)}）持ち場から遠く離れた、止まって命令待ち", true);
+                    Happen(t, Kind.Autonomy, unit, "独断の限度");
+                    break;
+                case "auto_cover":
+                    if (v["independent"].Bool) break; // 独断の後退は宣言で出した
+                    if (v["side"].String != "blue") break;
+                    Add(t, $"{unit} 物陰へ（開けた所で被弾）", false);
+                    Happen(t, Kind.Autonomy, unit, "物陰へ");
+                    break;
+                case "scrape_done":
+                    if (v["side"].String != "blue") break;
+                    Add(t, $"{unit} 浅い掩体を掘り終えた（止まって静か）", false);
+                    break;
+                case "enter_position":
+                    if (v["side"].String != "blue") break;
+                    Add(t, $"{unit} 崩した敵の陣地に入る", false);
+                    Happen(t, Kind.Autonomy, unit, "陣地に入る");
+                    break;
                 case "state_change":
                     if (v["to"].String == "shaken" && v["from"].String == "normal") Add(t, $"{unit} 動揺", false);
                     break;
@@ -185,6 +225,10 @@ namespace Battalion.View
         }
 
         static string FlareJa(string c) => c == "red" ? "赤" : c == "green" ? "緑" : "白";
+
+        static string PersonalityJa(string p) => p == "cautious" ? "慎重" : p == "reckless" ? "猪突" : p == "agile" ? "機敏" : "冷静";
+
+        static string StateJa(string s) => s == "shaken" ? "動揺中" : s == "routed" ? "壊走中" : s == "normal" ? "正常" : s;
 
         void Add(double t, string text, bool important) => Entries.Add(new Entry(t, text, important));
         void Happen(double t, Kind k, string unit, string other) => Recent.Add(new Happening(t, k, unit, other));

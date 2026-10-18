@@ -131,6 +131,43 @@ namespace Battalion.Sim
         /// <summary>陣地構築の進捗（秒）。動くと 0 に戻る。</summary>
         public double EntrenchProgress;
 
+        // ---- P2c：中隊長の自律行動
+        /// <summary>持ち場：中隊が今守っている地点。全ての中隊長の自律行動はここから 100m を出ない。</summary>
+        public Vec2 PostPoint;
+        /// <summary>持ち場が決まったか（移動の命令は、着いて止まった位置で決まる）。</summary>
+        public bool PostSettled = true;
+        /// <summary>今の段の裁量（段の命令が始まった刻みに写す。命令書を終えた後も最後の段のまま）。</summary>
+        public Discretion Discretion;
+        /// <summary>自律行動の小さな動き（命令は変えずに、目的地と経路だけ引いて動く）。</summary>
+        public AutoMove AutoMove;
+        public double AutoMoveSince;
+        /// <summary>撃てる目標がないときに向く向き（null なら命令の向き）。</summary>
+        public double? AutoFacing;
+        /// <summary>開けた所で、止まって撃たれ続けている始まりの時刻（null なら撃たれ続けていない）。</summary>
+        public double? UnderFireSince;
+        /// <summary>物陰へ寄る：練度の遅れの待ちを始めた時刻、寄る先、独断（慎重の広い範囲・後ろ向き）か、次に探す時刻。</summary>
+        public double? CoverWaitStart;
+        public Vec2 CoverGoal;
+        public bool CoverIndependent;
+        public double NextCoverSearch = double.NegativeInfinity;
+        /// <summary>最後に動いた時刻と、浅い掩体の進捗（秒）。動くと 0 に戻る。</summary>
+        public double StillSince;
+        public double ScrapeProgress;
+        /// <summary>独断の種類と、独断を始める前の持ち場（限度はここから測る）。</summary>
+        public IndependentAct Independent;
+        public Vec2 IndependentOrigin;
+        /// <summary>機敏の回り込み：練度の遅れの後に始める攻撃の命令と時刻、次に見回る時刻。</summary>
+        public Order IndependentWaitOrder;
+        public double IndependentWaitAt;
+        public double NextAgileCheck = double.NegativeInfinity;
+        /// <summary>独断を限度で止めた（命令待ち。新しい命令が始まるまで）。</summary>
+        public bool IndependentStopped;
+        /// <summary>攻撃の目標が指揮下でなくなった刻みの、目標の中心（崩した敵の陣地に入るのに使う）。</summary>
+        public Vec2? BrokenTargetPos;
+        /// <summary>崩した敵の陣地に入る：経路が引けなかった（逃げる敵がまだ近い等）ときの入る先と、次に引き直す時刻。</summary>
+        public Vec2? EnterGoal;
+        public double NextEnterTry;
+
         /// <summary>直前の刻みで狙った目標の ID（-1 はなし）。</summary>
         public int TargetId = -1;
 
@@ -159,6 +196,7 @@ namespace Battalion.Sim
             Facing = Angles.Wrap(facingRad);
             CurrentOrder = Order.Hold(id);
             Arrived = true;
+            PostPoint = position;
         }
 
         /// <summary>盤上にいる（降伏・離脱していない）。</summary>

@@ -65,6 +65,8 @@ namespace Battalion.Sim
         public bool AwaitingOrders(Company c)
         {
             if (!c.OnBoard || !c.UnderCommand) return false;
+            // 独断を限度で止めた（P2c）
+            if (c.IndependentStopped && c.StartWaitOrder == null) return true;
             var sheet = c.ActiveSheet;
             if (sheet == null) return true;
             if (c.StartWaitOrder != null && c.StageIndex == 0 && !c.StageStarted) return c.AwaitingWhenDelivered;
@@ -102,6 +104,14 @@ namespace Battalion.Sim
             }
         }
 
+        /// <summary>独断で命令を替える前に、今の段がもう完了していれば完了を残す（P2c）。</summary>
+        void LatchStageComplete(Company c)
+        {
+            var sh = c.ActiveSheet;
+            if (sh == null || !c.StageStarted || c.StartWaitOrder != null || c.StageIndex >= sh.Stages.Count) return;
+            if (StageComplete(c, sh.Stages[c.StageIndex].Order)) c.StageCompleted = true;
+        }
+
         bool TriggerMet(Company c, Order current, StageTrigger trigger, double t)
         {
             switch (trigger.Kind)
@@ -122,13 +132,14 @@ namespace Battalion.Sim
         {
             switch (stageOrder.Type)
             {
+                // 独断で命令が替わっても、それまでに完了していれば完了のまま（P2c。StageCompleted に残す）
                 case OrderType.Advance:
                 case OrderType.Retreat:
-                    return ReferenceEquals(c.CurrentOrder, stageOrder) && c.Arrived && !c.BlockedByEnemy;
+                    return c.StageCompleted || (ReferenceEquals(c.CurrentOrder, stageOrder) && c.Arrived && !c.BlockedByEnemy);
                 case OrderType.Attack:
                     return c.StageCompleted;
                 case OrderType.Entrench:
-                    return ReferenceEquals(c.CurrentOrder, stageOrder) && c.EntrenchProgress >= _p.MapRules.EntrenchSec;
+                    return c.StageCompleted || (ReferenceEquals(c.CurrentOrder, stageOrder) && c.EntrenchProgress >= _p.MapRules.EntrenchSec);
                 default:
                     return false;
             }

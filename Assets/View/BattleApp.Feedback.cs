@@ -196,6 +196,15 @@ namespace Battalion.View
                     text = h.Other;
                     col = new Color(0.85f, 0.95f, 0.75f);
                     break;
+                case EventFeed.Kind.Independent:
+                    // 独断の宣言（P2c）：橙
+                    text = h.Other;
+                    col = IndependentColor;
+                    break;
+                case EventFeed.Kind.Autonomy:
+                    text = h.Other;
+                    col = new Color(0.75f, 1f, 0.8f);
+                    break;
                 case EventFeed.Kind.SeekSight:
                     // 目標が見えないため見える位置を探す（P1g）。自動一時停止の理由には足さない
                     text = "見える位置へ";

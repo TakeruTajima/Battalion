@@ -49,17 +49,33 @@ namespace Battalion.Sim
         }
     }
 
-    /// <summary>命令書の1段（P2b）。今の命令1つと、この段へ移る条件（第1段は条件なし）。</summary>
+    /// <summary>
+    /// 裁量（P2c）：任せる（性格の独断を許す。初めの値）／厳命（独断しない。命令の字面どおり）。
+    /// </summary>
+    public enum Discretion { Delegate, Strict }
+
+    /// <summary>命令書の1段（P2b）。今の命令1つと、この段へ移る条件（第1段は条件なし）と、裁量（P2c）。</summary>
     public sealed class Stage
     {
         public Order Order { get; }
         public StageTrigger Trigger { get; }
+        public Discretion Discretion { get; }
 
-        public Stage(Order order, StageTrigger trigger)
+        public Stage(Order order, StageTrigger trigger, Discretion discretion = Discretion.Delegate)
         {
             Order = order;
             Trigger = trigger;
+            Discretion = discretion;
         }
+
+        /// <summary>命令だけ替えた段（条件・裁量はそのまま）。</summary>
+        public Stage With(Order order) => new Stage(order, Trigger, Discretion);
+
+        /// <summary>条件だけ替えた段（命令・裁量はそのまま）。</summary>
+        public Stage With(StageTrigger trigger) => new Stage(Order, trigger, Discretion);
+
+        /// <summary>裁量だけ替えた段（命令・条件はそのまま）。</summary>
+        public Stage With(Discretion discretion) => new Stage(Order, Trigger, discretion);
     }
 
     /// <summary>

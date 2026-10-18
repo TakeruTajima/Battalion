@@ -26,7 +26,7 @@ namespace Battalion.Sim
         {
             var d = new OrderSheetDraft(sheet.CompanyId);
             for (int k = fromStage; k < sheet.Stages.Count; k++)
-                d._stages.Add(new Stage(sheet.Stages[k].Order, k == fromStage ? StageTrigger.None : sheet.Stages[k].Trigger));
+                d._stages.Add(k == fromStage ? sheet.Stages[k].With(StageTrigger.None) : sheet.Stages[k]);
             return d;
         }
 
@@ -65,14 +65,21 @@ namespace Battalion.Sim
         public void SetOrder(int index, Order order)
         {
             if (index < 0 || index >= _stages.Count) return;
-            _stages[index] = new Stage(order, _stages[index].Trigger);
+            _stages[index] = _stages[index].With(order);
+        }
+
+        /// <summary>段の裁量を変える（P2c）。</summary>
+        public void SetDiscretion(int index, Discretion discretion)
+        {
+            if (index < 0 || index >= _stages.Count) return;
+            _stages[index] = _stages[index].With(discretion);
         }
 
         /// <summary>段の移る条件を変える（第1段には付けない）。</summary>
         public void SetTrigger(int index, StageTrigger trigger)
         {
             if (index <= 0 || index >= _stages.Count) return;
-            _stages[index] = new Stage(_stages[index].Order, trigger);
+            _stages[index] = _stages[index].With(trigger);
         }
 
         /// <summary>段を消す。第1段を消したら、新しい第1段の条件は外す。</summary>
@@ -95,8 +102,8 @@ namespace Battalion.Sim
             var a = _stages[index - 1];
             var b = _stages[index];
             bool topSwap = index - 1 == 0;
-            _stages[index - 1] = topSwap ? new Stage(b.Order, StageTrigger.None) : b;
-            _stages[index] = topSwap ? new Stage(a.Order, StageTrigger.None) : a;
+            _stages[index - 1] = topSwap ? b.With(StageTrigger.None) : b;
+            _stages[index] = topSwap ? a.With(StageTrigger.None) : a;
             if (Selected == index) Selected = index - 1;
             else if (Selected == index - 1) Selected = index;
         }
@@ -106,7 +113,7 @@ namespace Battalion.Sim
         void FixFirst()
         {
             if (_stages.Count > 0 && _stages[0].Trigger.Kind != TriggerKind.None)
-                _stages[0] = new Stage(_stages[0].Order, StageTrigger.None);
+                _stages[0] = _stages[0].With(StageTrigger.None);
         }
 
         /// <summary>
@@ -117,7 +124,7 @@ namespace Battalion.Sim
         {
             var list = new List<(int, Stage)>();
             foreach (var (s, k) in Indexed())
-                if (s.Order != null) list.Add((k, list.Count == 0 ? new Stage(s.Order, StageTrigger.None) : s));
+                if (s.Order != null) list.Add((k, list.Count == 0 ? s.With(StageTrigger.None) : s));
             return list;
         }
 

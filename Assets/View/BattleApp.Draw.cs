@@ -37,6 +37,7 @@ namespace Battalion.View
             if (_showEscape) DrawEscapes(px);
             DrawRunners(px);
             DrawRunnerTags(px);
+            DrawAutonomyTags(px);
             DrawHover(px);
             DrawHoverPreview(px);
             DrawDragPreview(px);
@@ -310,12 +311,12 @@ namespace Battalion.View
             // 向き直り（P1d の5）：待ちの間は点線の弧、旋回中は実線の弧の矢印
             DrawTurn(c, pos, facing, ex, ey, px);
 
-            // 追撃中（P1d の4）：赤い山形と、追っている中隊への細い破線
+            // 追撃中（P1d の4）：赤い山形と、追っている中隊への細い破線（独断の追撃は橙。P2c）
             if (c.Pursuing && c.PursuitTargetId >= 0)
             {
                 var pt = _sim.Companies[c.PursuitTargetId];
                 Pose(pt, out var tp, out _);
-                var red = new Color32(220, 40, 30, 240);
+                var red = c.Independent != IndependentAct.None ? IndependentColor32 : new Color32(220, 40, 30, 240);
                 _shapes.DashedLine(V(pos), V(tp), 1.5f * px, 6 * px, red);
                 var dir = tp - pos;
                 if (dir.Length > 1e-6)
@@ -363,7 +364,9 @@ namespace Battalion.View
                 var u = dir * (1.0 / dir.Length);
                 var n = new Vec2(-u.Y, u.X);
                 double reach = Math.Abs(u.X) * ex + Math.Abs(u.Y) * ey;
-                var col = c.MoveStyle == MoveStyle.Sideways ? new Color32(235, 140, 20, 245) : ink;
+                // 独断中（P2c）は山形を橙に
+                bool independent = c.Independent != IndependentAct.None || (c.AutoMove == AutoMove.Cover && c.CoverIndependent);
+                var col = independent ? IndependentColor32 : c.MoveStyle == MoveStyle.Sideways ? new Color32(235, 140, 20, 245) : ink;
                 for (int k = 0; k < 2; k++)
                 {
                     var apex = pos + u * (reach + (16 + 9 * k) * px);
@@ -381,6 +384,12 @@ namespace Battalion.View
                     DrawArcArrow(pos, facing, Math.Atan2(u.Y, u.X), Mathf.Sqrt(ex * ex + ey * ey) + 10 * px, new Color32(255, 255, 255, 235), px);
                 if (c.SeekingSight) DrawEye(pos + u * (reach + 46 * px), px);
                 return;
+            }
+            // 浅い掩体（P2c）：正面の辺に沿って、進捗に比例して伸びる薄い斜線の帯
+            if (c.ScrapeProgress > 0)
+            {
+                double frac = Math.Min(1.0, c.ScrapeProgress / _params.Autonomy.ScrapeDigSec);
+                DrawHatch(pos + fv * (hd + 7 * px), lv, hf, frac, 5 * px, px, new Color32(175, 150, 105, 230));
             }
             if (o.Type == OrderType.Hold || ((o.Type == OrderType.Advance || o.Type == OrderType.Retreat) && c.Arrived))
             {

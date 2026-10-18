@@ -175,7 +175,7 @@ namespace Battalion.View
         {
             // 預かり中・動揺で停止中（P2b.2）
             if (c.HeldSheet != null) return "命令書を預かり中（再集結後に開始）";
-            if (c.ShakenHalt) return "動揺で停止中" + (c.ActiveSheet != null && c.ActiveSheet.Stages.Count > 1 ? $"　{c.StageIndex + 1}/{c.ActiveSheet.Stages.Count}" : "");
+            if (c.ShakenHalt) return HaltText(c) + (c.ActiveSheet != null && c.ActiveSheet.Stages.Count > 1 ? $"　{c.StageIndex + 1}/{c.ActiveSheet.Stages.Count}" : "");
             var sh = c.ActiveSheet;
             if (sh == null || sh.Stages.Count < 2) return null;
             string s = $"{c.StageIndex + 1}/{sh.Stages.Count}";
@@ -235,6 +235,16 @@ namespace Battalion.View
                     var box = new GUIStyle(_button) { alignment = TextAnchor.MiddleLeft, wordWrap = true };
                     string head = (d.Selected == k ? "▶" : "　") + $"第{k + 1}段　{StageOrderText(st.Order)}";
                     if (GUILayout.Button(head, d.Selected == k ? _toggleOn : box)) d.Selected = k;
+                    // 裁量（P2c）：任せる（初めの値）／厳命
+                    if (st.Order != null)
+                    {
+                        GUILayout.BeginHorizontal();
+                        GUILayout.Label("裁量", _small, GUILayout.Width(30));
+                        if (GUILayout.Button("任せる", st.Discretion == Discretion.Delegate ? _toggleOn : _button)) SetDiscretion(d, k, Discretion.Delegate);
+                        if (GUILayout.Button("厳命", st.Discretion == Discretion.Strict ? _toggleOn : _button)) SetDiscretion(d, k, Discretion.Strict);
+                        GUILayout.Label(st.Discretion == Discretion.Strict ? "独断しない（字面どおり）" : $"{PersonalityName(c.Personality)}の独断を許す", _small);
+                        GUILayout.EndHorizontal();
+                    }
                     if (k > 0)
                     {
                         GUILayout.BeginHorizontal();
@@ -320,7 +330,7 @@ namespace Battalion.View
                 for (int k = 0; k < r.Sheet.Stages.Count; k++)
                 {
                     var st = r.Sheet.Stages[k];
-                    GUILayout.Label($"　第{k + 1}段　{StageOrderText(st.Order)}" + (k > 0 ? $"［{TriggerText(st.Trigger)}］" : ""), _small);
+                    GUILayout.Label($"　第{k + 1}段　{StageOrderText(st.Order)}" + (k > 0 ? $"［{TriggerText(st.Trigger)}］" : "") + StrictMark(st), _small);
                     if (transitProblems != null && transitProblems[k] != null)
                     {
                         // 準備中の命令書に使用済みの色の条件が残っている（P2b.1）：［直す］で直すか［取り消す］
@@ -354,7 +364,7 @@ namespace Battalion.View
                 for (int k = 0; k < c.HeldSheet.Stages.Count; k++)
                 {
                     var st = c.HeldSheet.Stages[k];
-                    GUILayout.Label($"　第{k + 1}段　{StageOrderText(st.Order)}" + (k > 0 ? $"［{TriggerText(st.Trigger)}］" : ""), _small);
+                    GUILayout.Label($"　第{k + 1}段　{StageOrderText(st.Order)}" + (k > 0 ? $"［{TriggerText(st.Trigger)}］" : "") + StrictMark(st), _small);
                 }
             }
 
@@ -366,9 +376,9 @@ namespace Battalion.View
                 for (int k = 0; k < sh.Stages.Count; k++)
                 {
                     var st = sh.Stages[k];
-                    string line = $"{(k == c.StageIndex ? "▶" : "　")}第{k + 1}段　{StageOrderText(st.Order)}" + (k > 0 ? $"［{TriggerText(st.Trigger)}］" : "");
+                    string line = $"{(k == c.StageIndex ? "▶" : "　")}第{k + 1}段　{StageOrderText(st.Order)}" + (k > 0 ? $"［{TriggerText(st.Trigger)}］" : "") + StrictMark(st);
                     if (k == c.StageIndex && c.StartWaitOrder != null) line += $"　開始まで {Math.Max(0, c.StartWaitAt - _sim.Time):0}秒";
-                    else if (k == c.StageIndex && c.ShakenHalt) line += "　<color=#ffb060>動揺で停止中</color>";
+                    else if (k == c.StageIndex && c.ShakenHalt) line += $"　<color=#ffb060>{HaltText(c)}</color>";
                     var style = k == c.StageIndex ? _bold : _small;
                     var prev = GUI.contentColor;
                     if (k < c.StageIndex) GUI.contentColor = new Color(1, 1, 1, 0.45f);
@@ -379,6 +389,15 @@ namespace Battalion.View
         }
 
         double RunnerTagEta(Runner r) => _sim.RunnerEta(r);
+
+        void SetDiscretion(OrderSheetDraft d, int k, Discretion v)
+        {
+            d.SetDiscretion(k, v);
+            _draftVersion++;
+        }
+
+        /// <summary>厳命の段の印（P2c）。</summary>
+        static string StrictMark(Stage st) => st.Discretion == Discretion.Strict ? "<color=#ff8080>［厳命］</color>" : "";
 
         void SetTrigger(OrderSheetDraft d, int k, StageTrigger t)
         {
@@ -412,7 +431,7 @@ namespace Battalion.View
                 {
                     // 実行中：今の段から後（今の段は始まった時刻、または開始待ちの時刻から）
                     var rest = new List<Stage>();
-                    for (int k = c.StageIndex; k < sh.Stages.Count; k++) rest.Add(k == c.StageIndex ? new Stage(sh.Stages[k].Order, StageTrigger.None) : sh.Stages[k]);
+                    for (int k = c.StageIndex; k < sh.Stages.Count; k++) rest.Add(k == c.StageIndex ? sh.Stages[k].With(StageTrigger.None) : sh.Stages[k]);
                     double start = c.StartWaitOrder != null ? c.StartWaitAt : _sim.Time;
                     _sheetPreviews.Add((_sim.PreviewSheet(rest, start), c.StageIndex + 1, SheetKind.Active));
                 }

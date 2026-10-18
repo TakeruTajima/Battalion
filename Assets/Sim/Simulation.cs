@@ -99,6 +99,7 @@ namespace Battalion.Sim
             UpdateFacingReaction(t);
             Transitions(t);
             UpdateStages(t);
+            UpdateAutonomy(t);
 
             if (_log.Enabled && Tick % _snapshotEveryTicks == 0)
                 foreach (var c in _companies)
@@ -121,10 +122,13 @@ namespace Battalion.Sim
                 var order = o;
                 c.ShakenHalt = false;
                 c.HaltedOrder = null;
-                // 動揺中は前進・攻撃を拒み、その場で保持する
-                // 目的地のある陣地構築も移動を伴うので、動揺中は同じく拒む
-                if (c.State == CompanyState.Shaken && (order.Type == OrderType.Advance || order.Type == OrderType.Attack
-                                                       || (order.Type == OrderType.Entrench && order.Destination.HasValue)))
+                // 段の裁量を写し、自律行動・独断をやめる（P2c）
+                c.Discretion = DiscretionOf(c, o);
+                ClearAutonomy(c);
+                // 動揺中は前進・攻撃を拒み、その場で保持する（拒む士気は性格と裁量で決まる。P2c）
+                // 目的地のある陣地構築も移動を伴うので、同じく拒む
+                if (RefusesAdvance(c) && (order.Type == OrderType.Advance || order.Type == OrderType.Attack
+                                          || (order.Type == OrderType.Entrench && order.Destination.HasValue)))
                 {
                     order = Order.Hold(c.Id, order.FacingRad);
                     // 拒んだ段は捨てずに「動揺で停止中」とし、正常に戻ったら始める（P2b.2）
@@ -148,6 +152,9 @@ namespace Battalion.Sim
                 }
 
                 StartOrder(c, order, t, tickStart);
+                // 持ち場：動かない命令は今の位置。動く命令は着いて止まった位置（UpdateAutonomy で決める。P2c）
+                c.PostSettled = !c.CurrentOrder.Moves || c.Arrived;
+                if (c.PostSettled) c.PostPoint = c.Position;
             }
         }
 
@@ -712,26 +719,6 @@ namespace Battalion.Sim
                     {
                         var prev = c.State;
                         c.State = want;
-                        // 動揺すると前進を止めてその場で保持する
-                        // 動揺すると前進（目的地のある陣地構築の移動を含む）を止めてその場で保持する
-                        if (want == CompanyState.Shaken && !c.Arrived
-                            && (c.CurrentOrder.Type == OrderType.Advance || (c.CurrentOrder.Type == OrderType.Entrench && c.CurrentOrder.Moves)))
-                        {
-                            // 今の段は捨てずに「動揺で停止中」とする（P2b.2）
-                            c.ShakenHalt = true;
-                            c.HaltedOrder = c.CurrentOrder;
-                            c.CurrentOrder = Order.Hold(c.Id, c.CurrentOrder.FacingRad);
-                            c.Arrived = true;
-                        }
-                        // 正常に戻ったら（士気50超）、動揺で止めた段を練度の遅れの後に同じ目的地で再開する（P2b.2）
-                        if (want == CompanyState.Normal && c.ShakenHalt && c.HaltedOrder != null && c.StartWaitOrder == null)
-                        {
-                            c.StartWaitOrder = c.HaltedOrder;
-                            c.StartWaitAt = t + _p.Of(c.Training).OrderStartSec;
-                            c.ShakenHalt = false;
-                            c.HaltedOrder = null;
-                            if (_log.Enabled) _log.Write(Ev(t, "halt_resume", c).Add("side", SideName(c.Side)).ToString());
-                        }
                         // 動揺した拘束は詰めるのをやめ、その場で目標を向いて撃つ（P1d の3）
                         if (want == CompanyState.Shaken && !c.Arrived && c.CurrentOrder.Type == OrderType.Pin)
                         {
@@ -740,6 +727,7 @@ namespace Battalion.Sim
                         }
                         if (_log.Enabled) LogStateChange(c, prev, t);
                     }
+                    UpdateRefusal(c, t);
                 }
             }
 
@@ -777,6 +765,10 @@ namespace Battalion.Sim
                         c.State = c.Morale <= _p.Morale.ShakenThreshold ? CompanyState.Shaken : CompanyState.Normal;
                         c.CurrentOrder = Order.Hold(c.Id);
                         c.Arrived = true;
+                        // 持ち場はその場（P2c）
+                        ClearAutonomy(c);
+                        c.PostPoint = c.Position;
+                        c.PostSettled = true;
                         // 預かっている命令書があれば、練度の遅れの後に第1段を始める。なければ命令待ち（P2b.2）
                         c.ActiveSheet = null;
                         c.ShakenHalt = false;
@@ -825,6 +817,8 @@ namespace Battalion.Sim
             }
             c.ShakenHalt = false;
             c.HaltedOrder = null;
+            ClearAutonomy(c);
+            c.ScrapeProgress = 0;
             // 士気50超から一度に壊走した場合など、見積もりがない（または古い）ときはその場で見積もって逃げる方向を決める
             if (!surrender && t - _p.TickSec >= c.NextEscapeCheckTime) RefreshEscape(c, t);
 

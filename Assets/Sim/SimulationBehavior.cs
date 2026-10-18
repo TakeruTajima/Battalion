@@ -128,6 +128,12 @@ namespace Battalion.Sim
                 OnAttackTargetBroken(c, tgt, t, tickStart);
                 return;
             }
+            // 猪突の続けての攻撃（P2c）：持ち場から 900m を越えたら止まって命令待ち
+            if (c.Independent == IndependentAct.Attack && Vec2.Distance(c.Position, c.IndependentOrigin) > RecklessLimitM)
+            {
+                StopIndependent(c, tgt, "limit", t);
+                return;
+            }
 
             if (c.Arrived) c.SeekingSight = false;
             if (!c.AttackFixed)
@@ -187,24 +193,56 @@ namespace Battalion.Sim
         void OnAttackTargetBroken(Company c, Company tgt, double t, double tickStart)
         {
             var o = c.CurrentOrder;
-            // 段階つき命令の「完了したら」：攻撃は目標が指揮下でなくなった刻みに完了（P2b）
-            c.StageCompleted = true;
-            double mult = B.PursuitLimitMult[c.Personality];
-            bool pursue = o.OnBreak == AttackOnBreak.Pursue && tgt != null && tgt.State == CompanyState.Routed && mult > 0;
+            bool independent = c.Independent != IndependentAct.None;
+            // 段階つき命令の「完了したら」：攻撃は目標が指揮下でなくなった刻みに完了（P2b）。独断の攻撃は数えない（P2c）
+            if (!independent) c.StageCompleted = true;
+            var broken = tgt ?? _companies[o.TargetId];
+            c.BrokenTargetPos = broken.Position;
+
+            // 追うか（P2c で裁量と「追撃」の字面のときの限度に読み替えた P1d の 4）
+            //   「追撃」の字面：任せるなら性格の倍率（猪突 1.5、慎重 0＝追わない）、厳命なら 1.0
+            //   「確保」の字面：任せるの猪突だけが独断で追う（1.5）。次の段が「完了したら」で始まるなら追わない
+            bool routed = tgt != null && tgt.State == CompanyState.Routed;
+            bool delegated = c.Discretion == Discretion.Delegate;
+            double mult = 0;
+            bool declare = false, cautiousRefused = false;
+            if (routed)
+            {
+                if (o.OnBreak == AttackOnBreak.Pursue)
+                {
+                    mult = delegated ? B.PursuitLimitMult[c.Personality] : 1.0;
+                    cautiousRefused = delegated && mult <= 0 && c.Personality == Personality.Cautious;
+                }
+                else if (delegated && c.Personality == Personality.Reckless && !independent
+                         && !NextStageOnComplete(c) && c.StartWaitOrder == null)
+                {
+                    mult = B.PursuitLimitMult[Personality.Reckless];
+                    declare = true;
+                }
+            }
+            bool pursue = mult > 0;
             if (pursue && c.Personality == Personality.Calm && EnemyUnderCommandWithin(c, B.PursuitCalmClearRadiusM)) pursue = false;
             if (_log.Enabled)
                 _log.Write(Ev(t, "target_broken", c)
-                    .Add("target", tgt != null ? tgt.Name : _companies[o.TargetId].Name)
+                    .Add("target", broken.Name)
                     .Add("decision", pursue ? "pursue" : "secure")
                     .ToString());
             if (!pursue)
             {
-                Secure(c, tgt ?? _companies[o.TargetId]);
+                if (cautiousRefused) LogIndependent(t, c, "no_pursuit", tgt);
+                Secure(c, broken);
                 return;
+            }
+            if (declare)
+            {
+                c.Independent = IndependentAct.Pursuit;
+                c.IndependentOrigin = c.Position;
+                LogIndependent(t, c, "pursue", tgt);
             }
             c.Pursuing = true;
             c.PursuitTargetId = tgt.Id;
-            c.PursuitStart = c.Position;
+            // 独断の追撃は、独断を始める前の持ち場から測る
+            c.PursuitStart = c.Independent != IndependentAct.None ? c.IndependentOrigin : c.Position;
             c.PursuitLimitM = B.PursuitLimitM * mult;
             c.NextPursuitPlan = double.NegativeInfinity;
             c.FacingOverride = null;
@@ -224,6 +262,8 @@ namespace Battalion.Sim
             if (stop != null)
             {
                 if (_log.Enabled) _log.Write(Ev(t, "pursuit_end", c).Add("target", tgt.Name).Add("reason", stop).ToString());
+                // 猪突（任せる）は続けて別の弱った敵へ攻めかかる。限度なら止まって命令待ち（P2c）
+                if (TryRecklessFollowUp(c, tgt, stop, t, tickStart)) return;
                 Secure(c, tgt);
                 return;
             }
@@ -255,7 +295,7 @@ namespace Battalion.Sim
         /// 確保：その場で保持して固める。向きは、400m 以内に指揮下の敵がいれば最も近いその敵の方、
         /// いなければ目標が逃げていった方角（壊走中ならその逃げる方位、それ以外は目標の最後の位置の方）。
         /// </summary>
-        void Secure(Company c, Company tgt)
+        void Secure(Company c, Company tgt, bool enter = true)
         {
             double? facing = null;
             Company nearest = null;
@@ -291,6 +331,12 @@ namespace Battalion.Sim
             c.CurrentOrder = Order.Hold(c.Id, facing);
             c.Arrived = true;
             c.Path = null;
+            // 持ち場は確保した地点。独断はここで終わる。崩した敵の陣地が近ければ入る（P2c）
+            c.Independent = IndependentAct.None;
+            c.PostPoint = c.Position;
+            c.PostSettled = true;
+            if (enter) TryEnterPosition(c, Time);
+            c.BrokenTargetPos = null;
         }
 
         // ---------------------------------------------------------------- 3. 拘束

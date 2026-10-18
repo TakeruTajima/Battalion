@@ -11,10 +11,13 @@ namespace Battalion.Sim.Tests
         static string RunAndHash(string scenario, ulong seed, out int lines) => RunAndHash(scenario, seed, out lines, null);
 
         /// <param name="strip">ログから取り除く文字列（後から足した項目を除いて昔のログと比べるため）。</param>
-        static string RunAndHash(string scenario, ulong seed, out int lines, string strip)
+        static string RunAndHash(string scenario, ulong seed, out int lines, string strip) =>
+            RunAndHash(TestUtil.Params, scenario, seed, out lines, strip);
+
+        static string RunAndHash(SimParams p, string scenario, ulong seed, out int lines, string strip)
         {
             var sink = new StringEventSink();
-            var sim = Scenarios.ByName(scenario).Build(TestUtil.Params, seed, sink);
+            var sim = Scenarios.ByName(scenario).Build(p, seed, sink);
             while (sim.Time < 60 * 60) sim.Step();
             lines = sink.Count;
             var text = sink.ToString();
@@ -55,7 +58,10 @@ namespace Battalion.Sim.Tests
         [TestCase("S6_4v1_surrounded", 5UL, 1456, "e9932711c7560dc4731cf1bafb30fe1bf0d4da9bb265f62958e75e4cff27c811")]
         public void FlatMapLogMatchesP02(string scenario, ulong seed, int expectedLines, string expectedHash)
         {
-            string h = RunAndHash(scenario, seed, out int n, ",\"disarray\":0");
+            // P2c の浅い掩体（止まって静かな中隊が掘る）は平地の S1〜S6 にも効くので、掘り始めない値にして比べる。
+            // P2c の他の規則（向き・物陰・独断）では S1〜S6 のログは変わらない（冷静だけで、物陰のない平地のため）
+            var p = TestUtil.ParamsWith(("\"scrape_still_sec\": 120", "\"scrape_still_sec\": 1e9"));
+            string h = RunAndHash(p, scenario, seed, out int n, ",\"disarray\":0");
             Assert.That(n, Is.EqualTo(expectedLines));
             Assert.That(h, Is.EqualTo(expectedHash));
         }
