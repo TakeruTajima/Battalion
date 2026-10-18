@@ -88,9 +88,10 @@ namespace Battalion.Sim
 
         /// <summary>
         /// 段ごとに、発令できない理由（なければ null）。第1段に条件がある、第2段・第3段に条件がない、
-        /// 保持・拘束の後に「完了したら」、段の数が多すぎる、宛先の中隊が段で違う。
+        /// 保持・拘束の後に「完了したら」、段の数が多すぎる、宛先の中隊が段で違う、
+        /// 使用済みの色の信号弾が条件（P2b.1。上がったことが残るので、届いた瞬間に満たしてしまう）。
         /// </summary>
-        public static string[] StageProblems(IReadOnlyList<Stage> stages, int maxStages)
+        public static string[] StageProblems(IReadOnlyList<Stage> stages, int maxStages, Func<FlareColor, bool> flareUsed = null)
         {
             var problems = new string[stages.Count];
             for (int k = 0; k < stages.Count; k++)
@@ -105,17 +106,21 @@ namespace Battalion.Sim
                     problems[k] = $"{(stages[k - 1].Order.Type == OrderType.Hold ? "保持" : "拘束")}は終わらないので「完了したら」は選べない";
                 else if (k > 0 && stages[0].Order != null && s.Order.CompanyId != stages[0].Order.CompanyId)
                     problems[k] = "宛先の中隊が段で違う";
+                else if (k > 0 && s.Trigger.Kind == TriggerKind.Flare && flareUsed != null && flareUsed(s.Trigger.Color))
+                    problems[k] = $"信号弾 {FlareJa(s.Trigger.Color)}は使用済み（届いた瞬間に満たしてしまう）";
             }
             return problems;
         }
 
         /// <summary>発令できるか（全ての段に問題がない）。</summary>
-        public static bool IsValid(IReadOnlyList<Stage> stages, int maxStages)
+        public static bool IsValid(IReadOnlyList<Stage> stages, int maxStages, Func<FlareColor, bool> flareUsed = null)
         {
             if (stages.Count == 0) return false;
-            foreach (var p in StageProblems(stages, maxStages))
+            foreach (var p in StageProblems(stages, maxStages, flareUsed))
                 if (p != null) return false;
             return true;
         }
+
+        static string FlareJa(FlareColor c) => c == FlareColor.Red ? "赤" : c == FlareColor.Green ? "緑" : "白";
     }
 }

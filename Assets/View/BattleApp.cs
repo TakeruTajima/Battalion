@@ -112,6 +112,7 @@ namespace Battalion.View
             _result = null;
             _hideEnd = false;
             _commandRefusal = null;
+            _awaiting = null;
             _phase = Phase.Running;
             FitCamera();
         }

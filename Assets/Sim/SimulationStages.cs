@@ -45,6 +45,28 @@ namespace Battalion.Sim
         /// <summary>その色の信号弾を上げた時刻（まだなら null）。</summary>
         public double? FlareTime(Side side, FlareColor color) => _flareAt[(int)side, (int)color];
 
+        /// <summary>その陣営の使用済みの色か（命令書の検査に渡す。P2b.1）。</summary>
+        public Func<FlareColor, bool> FlareUsedBy(Side side) => color => _flareAt[(int)side, (int)color].HasValue;
+
+        // ---------------------------------------------------------------- 命令待ち（P2b.1。読み取りだけ）
+
+        /// <summary>
+        /// 命令待ちか（P2b.1）：指揮下の中隊で、命令書がないか、最後の段を終えた（「完了」は段の表と同じ。保持・拘束は終わらない）。
+        /// 開始待ちの段がある間は命令待ちではない。ただし届いたばかりの命令書の第1段の開始待ちの間は、届く前の状態のまま
+        /// （新しい命令書が始まると解ける）。会戦開始前は、命令書を受けていない中隊が全て命令待ち。
+        /// 会戦の規則には使わない（P2c の自律行動の起点になる）。
+        /// </summary>
+        public bool AwaitingOrders(Company c)
+        {
+            if (!c.OnBoard || !c.UnderCommand) return false;
+            var sheet = c.ActiveSheet;
+            if (sheet == null) return true;
+            if (c.StartWaitOrder != null && c.StageIndex == 0 && !c.StageStarted) return c.AwaitingWhenDelivered;
+            if (c.StartWaitOrder != null || !c.StageStarted) return false;
+            if (c.StageIndex + 1 < sheet.Stages.Count) return false;
+            return StageComplete(c, sheet.Stages[c.StageIndex].Order);
+        }
+
         // ---------------------------------------------------------------- 段の進行
 
         /// <summary>

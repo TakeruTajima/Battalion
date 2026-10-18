@@ -91,8 +91,10 @@ namespace Battalion.Sim.Tests
             var sim = Flat();
             var a = Add(sim, "A", Side.Blue, 600, 0, 0);
             sim.Step();
-            sim.FireFlare(Side.Blue, FlareColor.Red); // 命令書が届く前に上がる
             sim.SendSheet(Sheet((Order.Hold(a.Id), StageTrigger.None), (Order.Hold(a.Id, Math.PI), StageTrigger.OnFlare(FlareColor.Red))));
+            // 命令書を出した後、届く前に上がる（P2b.1 から、上がった後の色を条件にした命令書は発令できない）
+            for (int k = 0; k < 20; k++) sim.Step();
+            sim.FireFlare(Side.Blue, FlareColor.Red);
             for (int k = 0; k < 3000 && a.StageIndex == 0; k++) sim.Step();
             Assert.That(a.StageIndex, Is.EqualTo(1), "上がったことが残り、第1段が始まった時点で満たす");
         }

@@ -31,6 +31,7 @@ namespace Battalion.View
         /// <summary>
         /// 命令を起案中の命令書に書き込む（P2b。選んだだけでは出さない。「発令」で出す）。
         /// 起案がなければ白紙から第1段を作る。あれば書き込む段の命令を置き換える。
+        /// 最後の段に書き込んだら、その下に空の段を1つ自動で足す（P2b.1。3段まで）。
         /// </summary>
         bool SendCommand(Order order)
         {
@@ -40,8 +41,7 @@ namespace Battalion.View
                 d = new OrderSheetDraft(c.Id);
                 _drafts[c.Id] = d;
             }
-            if (d.Count == 0) d.Add(order, _sim.MaxStages);
-            else d.SetOrder(d.Selected, order);
+            d.Write(order, _sim.MaxStages);
             _draftVersion++;
             _commandRefusal = null;
             return true;
@@ -55,7 +55,7 @@ namespace Battalion.View
         {
             var d = DraftOf(c);
             if (d == null) return;
-            var sheet = d.ToSheet(_sim.MaxStages);
+            var sheet = d.ToSheet(_sim.MaxStages, _sim.FlareUsedBy(Side.Blue));
             if (sheet == null)
             {
                 _commandRefusal = "発令できない段がある（赤い印を直す）";
@@ -224,7 +224,7 @@ namespace Battalion.View
             }
             if (d != null)
             {
-                var problems = d.Problems(_sim.MaxStages);
+                var problems = d.Problems(_sim.MaxStages, _sim.FlareUsedBy(Side.Blue));
                 int remove = -1, up = -1, down = -1;
                 for (int k = 0; k < d.Count; k++)
                 {
@@ -241,9 +241,15 @@ namespace Battalion.View
                         if (GUILayout.Button("時刻", st.Trigger.Kind == TriggerKind.Time ? _toggleOn : _button))
                             SetTrigger(d, k, StageTrigger.At(st.Trigger.Kind == TriggerKind.Time ? st.Trigger.TimeSec : DefaultTriggerTime()));
                         foreach (var col in FlareColors)
-                            if (GUILayout.Button(FlareName(col), st.Trigger.Kind == TriggerKind.Flare && st.Trigger.Color == col ? _toggleOn : _button,
-                                    GUILayout.Width(28)))
+                        {
+                            // 上がった色は新しく選べない（P2b.1。上がったことが残るので、届いた瞬間に満たしてしまう）
+                            bool used = _sim.FlareTime(Side.Blue, col).HasValue;
+                            GUI.enabled = can && !used;
+                            if (GUILayout.Button(used ? FlareName(col) + "済" : FlareName(col),
+                                    st.Trigger.Kind == TriggerKind.Flare && st.Trigger.Color == col ? _toggleOn : _button, GUILayout.Width(used ? 40 : 28)))
                                 SetTrigger(d, k, StageTrigger.OnFlare(col));
+                            GUI.enabled = can;
+                        }
                         GUILayout.EndHorizontal();
                         if (st.Trigger.Kind == TriggerKind.Time)
                         {
@@ -282,7 +288,7 @@ namespace Battalion.View
                     _draftVersion++;
                 }
                 bool slot = SlotAvailable || d.ReviseRunnerId.HasValue;
-                GUI.enabled = can && d.IsValid(_sim.MaxStages) && slot;
+                GUI.enabled = can && d.IsValid(_sim.MaxStages, _sim.FlareUsedBy(Side.Blue)) && slot;
                 if (GUILayout.Button(d.ReviseRunnerId.HasValue ? "差し替え (Enter)" : "発令 (Enter)", _button)) DispatchDraft(c);
                 GUI.enabled = can;
                 if (GUILayout.Button("起案の破棄", _button)) DiscardDraft(c);
@@ -307,10 +313,18 @@ namespace Battalion.View
                     GUILayout.Label($"準備中 あと {left:0}秒", _label);
                 }
                 else GUILayout.Label($"未着 あと {RunnerTagEta(r):0}秒", _label);
+                var transitProblems = preparing ? OrderSheet.StageProblems(r.Sheet.Stages, _sim.MaxStages, _sim.FlareUsedBy(Side.Blue)) : null;
                 for (int k = 0; k < r.Sheet.Stages.Count; k++)
                 {
                     var st = r.Sheet.Stages[k];
                     GUILayout.Label($"　第{k + 1}段　{StageOrderText(st.Order)}" + (k > 0 ? $"［{TriggerText(st.Trigger)}］" : ""), _small);
+                    if (transitProblems != null && transitProblems[k] != null)
+                    {
+                        // 準備中の命令書に使用済みの色の条件が残っている（P2b.1）：［直す］で直すか［取り消す］
+                        var ps = new GUIStyle(_small) { wordWrap = true };
+                        ps.normal.textColor = new Color(1f, 0.4f, 0.35f);
+                        GUILayout.Label("　× " + transitProblems[k], ps);
+                    }
                 }
                 if (preparing)
                 {

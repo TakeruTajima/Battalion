@@ -50,6 +50,17 @@ namespace Battalion.Sim
             return true;
         }
 
+        /// <summary>
+        /// 命令を書き込む（P2b.1）：起案が空なら第1段を作り、そうでなければ書き込む段の命令を置き換える。
+        /// 書き込んだ段が最後の段なら、その下に空の段を1つ自動で足し、そこを書き込む段にする（<paramref name="max"/> 段まで）。
+        /// </summary>
+        public void Write(Order order, int max)
+        {
+            if (_stages.Count == 0) Add(order, max);
+            else SetOrder(Selected, order);
+            if (order != null && Selected == _stages.Count - 1 && _stages.Count < max) Add(null, max);
+        }
+
         /// <summary>段の命令を置き換える（条件はそのまま）。</summary>
         public void SetOrder(int index, Order order)
         {
@@ -98,12 +109,58 @@ namespace Battalion.Sim
                 _stages[0] = new Stage(_stages[0].Order, StageTrigger.None);
         }
 
-        /// <summary>段ごとの、発令できない理由（なければ null）。</summary>
-        public string[] Problems(int maxStages) => OrderSheet.StageProblems(_stages, maxStages);
+        /// <summary>
+        /// 発令するときの段（P2b.1）：命令の入っていない段を落として詰める。第1段になった段の条件は外す。
+        /// <c>Index</c> は起案の中の元の段の位置。
+        /// </summary>
+        List<(int Index, Stage Stage)> Compacted()
+        {
+            var list = new List<(int, Stage)>();
+            foreach (var (s, k) in Indexed())
+                if (s.Order != null) list.Add((k, list.Count == 0 ? new Stage(s.Order, StageTrigger.None) : s));
+            return list;
+        }
 
-        public bool IsValid(int maxStages) => OrderSheet.IsValid(_stages, maxStages);
+        IEnumerable<(Stage, int)> Indexed()
+        {
+            for (int k = 0; k < _stages.Count; k++) yield return (_stages[k], k);
+        }
 
-        /// <summary>命令書にする（発令できなければ null）。</summary>
-        public OrderSheet ToSheet(int maxStages) => IsValid(maxStages) ? new OrderSheet(_stages) : null;
+        /// <summary>
+        /// 段ごとの、発令できない理由（なければ null）。命令の入っていない段は落とすので問題にしない（P2b.1）。
+        /// 命令の入った段が1つもなければ、第1段に「命令がない」。<paramref name="flareUsed"/> は使用済みの色。
+        /// </summary>
+        public string[] Problems(int maxStages, System.Func<FlareColor, bool> flareUsed = null)
+        {
+            var result = new string[_stages.Count];
+            var c = Compacted();
+            if (c.Count == 0)
+            {
+                if (result.Length > 0) result[0] = "命令がない";
+                return result;
+            }
+            var stages = new List<Stage>();
+            foreach (var (_, s) in c) stages.Add(s);
+            var p = OrderSheet.StageProblems(stages, maxStages, flareUsed);
+            for (int i = 0; i < c.Count; i++) result[c[i].Index] = p[i];
+            return result;
+        }
+
+        public bool IsValid(int maxStages, System.Func<FlareColor, bool> flareUsed = null)
+        {
+            if (Compacted().Count == 0) return false;
+            foreach (var p in Problems(maxStages, flareUsed))
+                if (p != null) return false;
+            return true;
+        }
+
+        /// <summary>命令書にする（命令の入っていない段は落として詰める。発令できなければ null）。</summary>
+        public OrderSheet ToSheet(int maxStages, System.Func<FlareColor, bool> flareUsed = null)
+        {
+            if (!IsValid(maxStages, flareUsed)) return null;
+            var stages = new List<Stage>();
+            foreach (var (_, s) in Compacted()) stages.Add(s);
+            return new OrderSheet(stages);
+        }
     }
 }

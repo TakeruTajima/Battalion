@@ -126,11 +126,22 @@ namespace Battalion.View
                 string tag = RunnerTag(c);
                 string stage = StageTag(c);
                 if (stage != null) tag = tag == null ? stage : tag + "　" + stage;
+                // 命令待ち（P2b.1）：命令書がない・最後の段を終えた。送付中の命令書があれば「未着」を添える
+                bool awaiting = _sim.AwaitingOrders(c);
+                if (awaiting) tag = tag == null ? "命令待ち" : "命令待ち・" + tag;
                 if (tag == null) continue;
                 Pose(c, out var pos, out double facing);
                 Extent(facing, out float ex, out float ey);
                 var at = V(pos) + new Vector2(0, ey + 30 * px);
-                var col = tag.StartsWith("受領") ? new Color(0.75f, 0.95f, 1f) : new Color(1f, 0.88f, 0.35f);
+                var col = awaiting ? new Color(0.78f, 0.78f, 0.78f)
+                    : tag.StartsWith("受領") ? new Color(0.75f, 0.95f, 1f) : new Color(1f, 0.88f, 0.35f);
+                if (awaiting)
+                {
+                    // 灰色の小さな札
+                    float w = 9 * tag.Length * px, h = 15 * px;
+                    var bl = at + new Vector2(-w / 2 - 3 * px, -2 * px);
+                    _shapes.Quad(bl, bl + new Vector2(w + 6 * px, 0), bl + new Vector2(w + 6 * px, h), bl + new Vector2(0, h), new Color32(60, 60, 60, 190));
+                }
                 _texts.Draw(tag, at + new Vector2(1.2f * px, -1.2f * px), 13, px, new Color(0, 0, 0, 0.85f));
                 _texts.Draw(tag, at, 13, px, col);
             }

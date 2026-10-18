@@ -92,6 +92,7 @@ namespace Battalion.View
             var reasons = new List<string>();
             foreach (var h in _feed.Recent) HandleHappening(h, now, reasons);
             _feed.Recent.Clear();
+            NoteAwaitingOrders();
 
             _objective = ObjectiveStatus.Compute(_sim, _scenario);
             var vs = _objective.State;
@@ -203,6 +204,26 @@ namespace Battalion.View
             }
             if (text != null)
                 _floats.Add(new FloatText { UnitId = c.Id, Text = text, Color = col, Start = now, Duration = BigTextSec, Big = true });
+        }
+
+        /// <summary>命令待ちになった青の中隊（P2b.1）。会戦の初めは全て命令待ちなので、そこからの変わり目だけを出来事にする。</summary>
+        HashSet<int> _awaiting;
+
+        /// <summary>命令待ちに変わった青の中隊を、出来事の欄に「B2 命令を終えた（命令待ち）」と出す（Sim のログには出さない。読み取りだけ）。</summary>
+        void NoteAwaitingOrders()
+        {
+            bool first = _awaiting == null;
+            if (first) _awaiting = new HashSet<int>();
+            foreach (var c in _sim.Companies)
+            {
+                if (c.Side != Side.Blue) continue;
+                bool now = _sim.AwaitingOrders(c);
+                if (now && _awaiting.Add(c.Id))
+                {
+                    if (!first) _feed.Entries.Add(new EventFeed.Entry(_sim.Time, $"{c.Name} 命令を終えた（命令待ち）", false));
+                }
+                else if (!now) _awaiting.Remove(c.Id);
+            }
         }
 
         /// <summary>毎フレーム：損害の数字を出す・士気の残像を縮める・消えた文字を捨てる。</summary>

@@ -101,8 +101,8 @@ namespace Battalion.Sim
 
         SendResult SendSheet(OrderSheet sheet, bool countsSlot)
         {
-            if (!OrderSheet.IsValid(sheet.Stages, MaxStages)) return SendResult.Invalid;
             var c = _companies[sheet.CompanyId];
+            if (!OrderSheet.IsValid(sheet.Stages, MaxStages, FlareUsedBy(c.Side))) return SendResult.Invalid;
             var hq = _hq[(int)c.Side];
             if (BeforeStart || !hq.HasValue)
             {
@@ -142,7 +142,7 @@ namespace Battalion.Sim
             if (runnerId < 0 || runnerId >= _runners.Count) return false;
             var r = _runners[runnerId];
             if (r.State != RunnerState.Preparing || sheet.CompanyId != r.CompanyId) return false;
-            if (!OrderSheet.IsValid(sheet.Stages, MaxStages)) return false;
+            if (!OrderSheet.IsValid(sheet.Stages, MaxStages, FlareUsedBy(r.Side))) return false;
             r.Sheet = sheet;
             if (_log.Enabled)
                 _log.Write(Ev(Time, "runner_revised", _companies[r.CompanyId]).Add("runner", r.Id).Add("side", SideName(r.Side))
@@ -415,6 +415,7 @@ namespace Battalion.Sim
                 _log.Write(Ev(t, "runner_delivered", c).Add("runner", r.Id).Add("side", SideName(r.Side)).Add("stale", stale)
                     .Add("stages", r.Sheet.Stages.Count).ToString());
             if (stale) return;
+            c.AwaitingWhenDelivered = AwaitingOrders(c);
             c.ReceivedSeq = r.Seq;
             c.ActiveSheet = r.Sheet;
             c.StageIndex = 0;

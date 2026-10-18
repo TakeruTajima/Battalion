@@ -105,6 +105,8 @@ namespace Battalion.Sim
         public bool StageStarted;
         /// <summary>今の段の攻撃が完了したか（目標が指揮下でなくなった）。</summary>
         public bool StageCompleted;
+        /// <summary>新しい命令書が届いた時点で命令待ちだったか（表示用。その命令書が始まるまで命令待ちのまま。P2b.1）。</summary>
+        public bool AwaitingWhenDelivered;
 
         // ---- P1g：目標が見えないときの判断
         /// <summary>目標が見えないため、見える位置を探して動いているか（着いたら false）。</summary>
