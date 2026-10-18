@@ -221,6 +221,12 @@
     "speed_mps": 3.0,
     "loss_per_sec": 0.003,
     "overdue_mult": 1.5,
-    "max_out": 3
+    "max_out": 3,
+    "path_threat_weight": 3.0,
+    "replan_sec": 10
+  },
+  "orders": {
+    "_note": "P2b の段階つき命令",
+    "max_stages": 3
   }
 }
