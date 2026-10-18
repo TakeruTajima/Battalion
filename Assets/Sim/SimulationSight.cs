@@ -14,9 +14,25 @@ namespace Battalion.Sim
             return UnitRect.Gap(RectOf(a), RectOf(b), limit + 1) <= limit;
         }
 
-        /// <summary>撃つための視線：接触中なら問わない。それ以外は <see cref="LineOfSight.Visible"/>。</summary>
-        bool SightForFire(Company shooter, Company e) =>
-            InFireContact(shooter, e) || LineOfSight.Visible(_map, _p.Sight, shooter.Position, e.Position);
+        /// <summary>
+        /// 中隊 <paramref name="c"/> が敵 <paramref name="e"/> に気付いているか（P2c.1.2）：視線が通るか、接触の距離（矩形の隙間 50m 以内）にいる。
+        /// 撃ち合い（撃つための視線）、接敵中、向き直りの正面の弧、自律の向きで同じ判定を使う。
+        /// </summary>
+        public bool Aware(Company c, Company e) =>
+            InFireContact(c, e) || LineOfSight.Visible(_map, _p.Sight, c.Position, e.Position);
+
+        /// <summary>
+        /// 点 <paramref name="p"/> に向き <paramref name="facing"/> で置いた中隊の矩形が、矩形 <paramref name="enemy"/> と接触の距離（隙間 50m 以内）か。
+        /// 物陰の候補の点、退路の見積もりの各刻みの点で、気付いている（撃てる）かを見るのに使う（P2c.1.2）。
+        /// </summary>
+        bool InContactAt(Vec2 p, double facing, in UnitRect enemy)
+        {
+            double limit = B.SightContactGapM;
+            return UnitRect.Gap(RectAt(p, facing), enemy, limit + 1) <= limit;
+        }
+
+        /// <summary>撃つための視線：気付いているか（接触中なら視線を問わない）。</summary>
+        bool SightForFire(Company shooter, Company e) => Aware(shooter, e);
 
         /// <summary>命令の目標と交戦できるか（射程内で、視線が通るか接触中）。</summary>
         bool CanEngage(Company c, Company tgt) => CanFireAt(c, tgt);

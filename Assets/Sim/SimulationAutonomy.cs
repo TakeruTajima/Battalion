@@ -268,7 +268,7 @@ namespace Battalion.Sim
                 foreach (var s in shooters)
                     if (Vec2.Distance(center, s) <= A.CoverMinShooterDistM) return;
                 if (!DestinationOk(c, center)) return;
-                bool sees = tgt != null && EngageableFrom(center, tgt);
+                bool sees = tgt != null && CanShootFrom(c, center, tgt);
                 if (pin && !sees) return;
                 bool better = !best.HasValue
                               || (sees && !bestSees)
@@ -283,6 +283,14 @@ namespace Battalion.Sim
             independent = best.HasValue && wide && (bestRear || Vec2.Distance(best.Value, c.PostPoint) > A.PostRadiusM + 1e-9);
             return best;
         }
+
+        /// <summary>
+        /// 物陰の候補の点 <paramref name="p"/> から目標を撃てるか（P2c.1.2）：射程内で、視線が通るか、今の向きで置いた矩形が接触の距離。
+        /// なお、接触の距離の点は経路で敵を避けるマス（敵の矩形から約 113m）に入るので、物陰の候補からは先に外れる。
+        /// </summary>
+        public bool CanShootFrom(Company c, Vec2 p, Company tgt) =>
+            EngageableFrom(p, tgt)
+            || (Vec2.Distance(p, tgt.Position) <= _p.Fire.RangeMaxM && InContactAt(p, c.Facing, RectOf(tgt)));
 
         // ---------------------------------------------------------------- 止まって静か → 浅い掩体
 
@@ -342,7 +350,7 @@ namespace Battalion.Sim
             if (v.Length > 1e-9) c.AutoFacing = Math.Atan2(v.Y, v.X);
         }
 
-        /// <summary>今の正面の弧（±60°）の <paramref name="radius"/> 以内に、自分から見える指揮下の敵がいるか。</summary>
+        /// <summary>今の正面の弧（±60°）の <paramref name="radius"/> 以内に、気付いている指揮下の敵がいるか（視線が通るか接触の距離。P2c.1.2）。</summary>
         bool FrontArcHasVisibleEnemy(Company c, double radius)
         {
             foreach (var e in _companies)
@@ -350,12 +358,12 @@ namespace Battalion.Sim
                 if (!e.OnBoard || e.Side == c.Side || !e.UnderCommand) continue;
                 if (Vec2.Distance(c.Position, e.Position) > radius) continue;
                 if (AspectOf(c, e.Position) != Aspect.Front) continue;
-                if (LineOfSight.Visible(_map, _p.Sight, c.Position, e.Position)) return true;
+                if (Aware(c, e)) return true;
             }
             return false;
         }
 
-        /// <summary>自分から視線の通る、<paramref name="radius"/> 以内の最も近い指揮下の敵（同じ距離なら ID の小さい方）。</summary>
+        /// <summary>気付いている（視線が通るか接触の距離。P2c.1.2）、<paramref name="radius"/> 以内の最も近い指揮下の敵（同じ距離なら ID の小さい方）。</summary>
         Company NearestVisibleEnemy(Company c, double radius)
         {
             Company best = null;
@@ -365,7 +373,7 @@ namespace Battalion.Sim
                 if (!e.OnBoard || e.Side == c.Side || !e.UnderCommand) continue;
                 double d = Vec2.Distance(c.Position, e.Position);
                 if (d > bd || (best != null && d >= bd)) continue;
-                if (!LineOfSight.Visible(_map, _p.Sight, c.Position, e.Position)) continue;
+                if (!Aware(c, e)) continue;
                 bd = d;
                 best = e;
             }

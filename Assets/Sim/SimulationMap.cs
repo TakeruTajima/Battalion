@@ -121,10 +121,13 @@ namespace Battalion.Sim
             {
                 if (e.Side == side || !IsShooter(e)) continue;
                 var g = sightOf(e);
+                // 敵の矩形から接触の距離（50m 以内）のマスは、視線を問わず射界に数える（P2c.1.2）
+                var rect = RectAt(g.From, e.Facing);
+                double contact = B.SightContactGapM;
                 Visibility.ForCellsWithin(_map, g.From, _p.Fire.RangeMaxM, (i, j, center) =>
                 {
                     int k = j * _map.Width + i;
-                    if (g.Cells[k]) exp[k] = true;
+                    if (g.Cells[k] || rect.DistanceTo(center) <= contact) exp[k] = true;
                 });
             }
             return exp;

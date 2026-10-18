@@ -58,7 +58,7 @@ namespace Battalion.Sim
             {
                 if (!e.OnBoard || e.Side == c.Side || !e.UnderCommand) continue;
                 if (Vec2.Distance(c.Position, e.Position) > B.ContactRadiusM) continue;
-                if (InFireContact(c, e) || LineOfSight.Visible(_map, _p.Sight, c.Position, e.Position)) return true;
+                if (Aware(c, e)) return true;
             }
             return false;
         }

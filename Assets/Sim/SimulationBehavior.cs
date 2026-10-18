@@ -461,7 +461,9 @@ namespace Battalion.Sim
             }
         }
 
-        /// <summary>正面の弧（±60°）の <paramref name="radius"/> 以内に、指揮下の敵がいるか（必要なら視線が通る敵だけ）。</summary>
+        /// <summary>
+        /// 正面の弧（±60°）の <paramref name="radius"/> 以内に、指揮下の敵がいるか（必要なら気付いている敵だけ。視線が通るか接触の距離。P2c.1.2）。
+        /// </summary>
         bool FrontArcOccupied(Company c, double radius, bool needsSight)
         {
             foreach (var e in _companies)
@@ -469,7 +471,7 @@ namespace Battalion.Sim
                 if (!e.OnBoard || e.Side == c.Side || !e.UnderCommand) continue;
                 if (Vec2.Distance(c.Position, e.Position) > radius) continue;
                 if (AspectOf(c, e.Position) != Aspect.Front) continue;
-                if (needsSight && !LineOfSight.Visible(_map, _p.Sight, c.Position, e.Position)) continue;
+                if (needsSight && !Aware(c, e)) continue;
                 return true;
             }
             return false;

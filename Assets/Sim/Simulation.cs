@@ -554,6 +554,10 @@ namespace Battalion.Sim
             double aspectMult = _p.Fire.AspectCasualtyMult[(int)ep.EscapeFireAspect];
             var sight = new bool[foes.Count][];
             for (int f = 0; f < foes.Count; f++) sight[f] = visibleCellsFrom(foes[f]);
+            // 接触の距離（隙間 50m 以内）の敵は、視線を問わず撃ってくる敵に数える（P2c.1.2）。矩形どうしの隙間を見るのは、中心どうしが届きうる距離のときだけ
+            var foeRects = new UnitRect[foes.Count];
+            for (int f = 0; f < foes.Count; f++) foeRects[f] = RectOf(foes[f]);
+            double contactReach = 2 * RectAt(c.Position, 0).Radius + B.SightContactGapM + 1;
 
             // 敵の矩形（降伏を除く）。逃げる中隊の矩形との隙間が 10m 未満に詰まる方位は、そこで逃げられない（P1d の2。動きの止め方と同じ）
             var blockers = new List<UnitRect>();
@@ -582,7 +586,8 @@ namespace Battalion.Sim
                     for (int f = 0; f < foes.Count; f++)
                     {
                         double d = Vec2.Distance(p, foes[f].Position);
-                        if (d > _p.Fire.RangeMaxM || !sight[f][cell]) continue;
+                        if (d > _p.Fire.RangeMaxM) continue;
+                        if (!sight[f][cell] && !(d <= contactReach && InContactAt(p, dirRad, foeRects[f]))) continue;
                         sum += rate[f] * (d <= _p.Fire.RangeCloseM ? _p.Fire.RangeCloseMult : 1.0);
                     }
                 }
