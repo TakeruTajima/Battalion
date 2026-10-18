@@ -24,6 +24,14 @@ namespace Battalion.Sim
         public MapRulesParams MapRules = new MapRulesParams();
         public BehaviorParams Behavior = new BehaviorParams();
         public RunnersParams Runners = new RunnersParams();
+        public OrdersParams Orders = new OrdersParams();
+
+        /// <summary>P2b の命令書（"orders"）。</summary>
+        public sealed class OrdersParams
+        {
+            /// <summary>命令書の段の最大数。</summary>
+            public int MaxStages;
+        }
 
         /// <summary>P2a の伝令（"runners"）。</summary>
         public sealed class RunnersParams
@@ -38,6 +46,9 @@ namespace Battalion.Sim
             public double OverdueMult;
             /// <summary>判断枠（同時に外に出ている伝令の上限）。</summary>
             public int MaxOut;
+            /// <summary>P2b：伝令の経路の脅威の重み（慎重と同じ）と、経路を引き直す間隔（秒）。</summary>
+            public double PathThreatWeight;
+            public double ReplanSec;
         }
 
         public TrainingParams Of(Training t) => TrainingTable[t];
@@ -429,6 +440,9 @@ namespace Battalion.Sim
             p.Runners.LossPerSec = rn.D("loss_per_sec");
             p.Runners.OverdueMult = rn.D("overdue_mult");
             p.Runners.MaxOut = (int)rn.D("max_out");
+            p.Runners.PathThreatWeight = rn.D("path_threat_weight");
+            p.Runners.ReplanSec = rn.D("replan_sec");
+            p.Orders.MaxStages = (int)root["orders"].D("max_stages");
 
             return p;
         }

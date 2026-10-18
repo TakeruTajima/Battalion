@@ -4,6 +4,7 @@ using Battalion.Sim;
 using UnityEditor;
 using UnityEditor.SceneManagement;
 using UnityEngine;
+using Stage = Battalion.Sim.Stage;
 
 namespace Battalion.View.Editor
 {
@@ -57,6 +58,7 @@ namespace Battalion.View.Editor
                 CaptureFireDemo(dir);
                 CaptureTerrainView(dir);
                 CaptureRunners(dir);
+                CaptureSheets(dir);
                 Debug.Log("[Battalion] 撮影した：" + dir);
             }
             catch (Exception e)
@@ -239,6 +241,41 @@ namespace Battalion.View.Editor
                 rig.App.StepForCapture(150);
                 rig.Look(new Vec2(650, 1000), 600);
                 Shoot(rig, b1.Id, 0, false, false, null, Path.Combine(dir, "runners_stage1.png"));
+            }
+        }
+
+        /// <summary>
+        /// 段階つき命令（P2b）：ステージ1。会戦開始前に「拘束＋迂回（段階つき）」と同じ命令書を出し、5分進めてから
+        /// B3 へ伝令で2段の命令書を出す。さらに1分進めて、B1 の段ごとの下見（番号と到着予定）と、駒の段の印を撮る。
+        /// </summary>
+        static void CaptureSheets(string dir)
+        {
+            using (var rig = new Rig(1500, 1000))
+            {
+                var sim = rig.App.BeginCapture(rig.Cam, 1, 5);
+                int r1 = sim.Find("R1").Id;
+                int b1 = sim.Find("B1").Id, b2 = sim.Find("B2").Id, b3 = sim.Find("B3").Id, b4 = sim.Find("B4").Id;
+                var village = MapScenario.VillageCenter;
+                var white = StageTrigger.OnFlare(FlareColor.White);
+                var green = StageTrigger.OnFlare(FlareColor.Green);
+                sim.SendSheet(new OrderSheet(new[] { new Stage(Order.Pin(b2, r1, PinRange.Far), StageTrigger.None), new Stage(Order.Advance(b2, village, 0), white) }));
+                foreach (var (id, wait) in new[] { (b1, new Vec2(1500, 1450)), (b4, new Vec2(1300, 1450)) })
+                    sim.SendSheet(new OrderSheet(new[]
+                    {
+                        new Stage(Order.Advance(id, wait, -90 * Angles.DegToRad), StageTrigger.None),
+                        new Stage(Order.Attack(id, r1, AttackAspect.Flank), green),
+                        new Stage(Order.Advance(id, village, 0), white),
+                    }));
+                rig.App.StepForCapture(600);
+                sim.SendSheet(new OrderSheet(new[]
+                {
+                    new Stage(Order.Advance(b3, new Vec2(1100, 700), 0), StageTrigger.None),
+                    new Stage(Order.Hold(b3, 0), StageTrigger.At(20 * 60)),
+                }));
+                rig.App.StepForCapture(120);
+                rig.Look(new Vec2(1150, 1150), 650);
+                Shoot(rig, b1, 0, false, false, null, Path.Combine(dir, "sheets_stage1_b1.png"));
+                Shoot(rig, b3, 0, false, false, null, Path.Combine(dir, "sheets_stage1_b3_in_transit.png"));
             }
         }
 

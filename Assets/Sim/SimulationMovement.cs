@@ -164,6 +164,7 @@ namespace Battalion.Sim
             readonly double? _turnWait;
             readonly double _pinBearing;
             readonly bool _seeking;
+            readonly bool _stageCompleted;
             readonly double? _pinStandoff;
 
             public CompanySnapshot(Company c)
@@ -183,6 +184,7 @@ namespace Battalion.Sim
                 _turnWait = c.TurnWaitStart;
                 _pinBearing = c.PinBearing;
                 _seeking = c.SeekingSight;
+                _stageCompleted = c.StageCompleted;
                 _pinStandoff = c.PinStandoffM;
             }
 
@@ -203,6 +205,7 @@ namespace Battalion.Sim
                 c.TurnWaitStart = _turnWait;
                 c.PinBearing = _pinBearing;
                 c.SeekingSight = _seeking;
+                c.StageCompleted = _stageCompleted;
                 c.PinStandoffM = _pinStandoff;
             }
         }

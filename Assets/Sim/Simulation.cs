@@ -79,14 +79,7 @@ namespace Battalion.Sim
         /// 命令を伝令を使わずに渡す。次の刻みの最初に適用される（会戦開始前の命令、本部のない場面）。
         /// 伝令で運ぶ命令は <see cref="SendOrder"/>（P2a）。
         /// </summary>
-        public void Issue(Order order)
-        {
-            var c = _companies[order.CompanyId];
-            // 出した順を進める（後から着いた古い伝令の命令を捨てるため）。開始待ちの命令はこの命令に置き換わる
-            c.ReceivedSeq = ++_orderSeq;
-            c.StartWaitOrder = null;
-            _pending.Add(order);
-        }
+        public void Issue(Order order) => IssueSheet(OrderSheet.Single(order));
 
         public void Step()
         {
@@ -105,6 +98,7 @@ namespace Battalion.Sim
             Resolve(shots, t, tickStart);
             UpdateFacingReaction(t);
             Transitions(t);
+            UpdateStages(t);
 
             if (_log.Enabled && Tick % _snapshotEveryTicks == 0)
                 foreach (var c in _companies)

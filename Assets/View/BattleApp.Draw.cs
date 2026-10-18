@@ -31,6 +31,7 @@ namespace Battalion.View
             DrawBlockedSights(px);
             DrawFireLines(px, now);
             DrawSelectedPath(px);
+            DrawSheetPreviews(px);
             foreach (var c in _sim.Companies)
                 if (c.State != CompanyState.LeftBattle) DrawUnit(c, px, now);
             if (_showEscape) DrawEscapes(px);
@@ -589,18 +590,7 @@ namespace Battalion.View
             var c = Selected;
             if (c == null || !c.OnBoard) return;
             Pose(c, out var pos, out _);
-            var pending = c.Side == Side.Blue ? PendingPreview(c) : null;
-            if (pending != null)
-            {
-                // 未着・開始待ちの命令（P2a）：その命令の下見を薄く出す。今の命令の経路もそのまま出す（届くまでは古い命令で動く）
-                var po = _pendingFor;
-                DrawPreviewPath(pending, po, px, new Color32(255, 255, 255, 120), new Color32(0, 0, 0, 60));
-                if ((po.Type == OrderType.Attack || po.Type == OrderType.Pin) && po.TargetId >= 0)
-                {
-                    Pose(_sim.Companies[po.TargetId], out var ptp, out _);
-                    _shapes.DashedLine(V(pos), V(ptp), 1.5f * px, 8 * px, Palette.WithAlpha(Palette.Hover, 140));
-                }
-            }
+            // 未着・開始待ち・起案中の命令書の下見は、段ごとに DrawSheetPreviews で出す（P2b）
             var o = c.CurrentOrder;
             if (o.Moves && !c.Arrived && c.Path != null && c.PathIndex < c.Path.Count)
             {

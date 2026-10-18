@@ -191,6 +191,10 @@ namespace Battalion.View
                     col = new Color(1f, 0.55f, 0.4f);
                     reasons.Add($"{c.Name} 受領報告なし");
                     break;
+                case EventFeed.Kind.StageAdvance:
+                    text = h.Other;
+                    col = new Color(0.85f, 0.95f, 0.75f);
+                    break;
                 case EventFeed.Kind.SeekSight:
                     // 目標が見えないため見える位置を探す（P1g）。自動一時停止の理由には足さない
                     text = "見える位置へ";

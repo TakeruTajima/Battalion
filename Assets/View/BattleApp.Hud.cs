@@ -8,7 +8,7 @@ namespace Battalion.View
     // 画面の UI（IMGUI）：ステージ選択、上部バー、左パネル（中隊の一覧）、右パネル（詳細と命令）、下部のログ、駒の文字、終了画面
     public sealed partial class BattleApp
     {
-        const float TopH = 56, LeftW = 270, RightW = 300, BottomH = 150;
+        const float TopH = 56, LeftW = 270, RightW = 380, BottomH = 150;
 
         Font _font;
         GUIStyle _label, _small, _bold, _box, _button, _toggleOn, _logImportant, _title;
@@ -145,6 +145,8 @@ namespace Battalion.View
             GUILayout.Space(10);
             if (GUILayout.Button(_autoPause ? "自動一時停止：入 (P)" : "自動一時停止：切 (P)", _autoPause ? _toggleOn : _button, GUILayout.Width(160)))
                 _autoPause = !_autoPause;
+            GUILayout.Space(10);
+            if (_phase == Phase.Running) DrawFlareButtons();
             GUILayout.FlexibleSpace();
             GUILayout.Label(SlotText(), _label, GUILayout.Width(200));
             GUILayout.Label($"移動中の被弾×{_params.Terrain.MovingOpenDamageMult:0.0#}　シード {_seed}", _small);
@@ -261,6 +263,8 @@ namespace Battalion.View
                 if (o.Type == OrderType.Pin) s += $"（{PinRangeName(o.PinRange)}）";
             }
             if (o.Moves) s += c.Arrived ? "（到着）" : "（移動中）";
+            string stageTag = StageTag(c);
+            if (stageTag != null) s += $"　［{stageTag}］";
             if (_sim.PendingOrderOf(c.Id) != null) s += "　→ 新しい命令を次の刻みで受け付ける";
             else if (c.Side == Side.Blue)
             {
@@ -285,6 +289,7 @@ namespace Battalion.View
                 GUILayout.EndArea();
                 return;
             }
+            _sheetScroll = GUILayout.BeginScrollView(_sheetScroll);
 
             string who = c.Side == Side.Blue ? $"{c.Name}（{PersonalityName(c.Personality)}・{TrainingName(c.Training)}）" : $"{c.Name}（敵・{TrainingName(c.Training)}）";
             GUILayout.Label($"<b>{who}</b>", _bold);
@@ -297,7 +302,7 @@ namespace Battalion.View
             GUILayout.Label($"士気の要因：正面{l.Front:0} 側面{l.Flank:0} 背面{l.Rear:0} 包囲{l.Encircled:0}\n　隣の壊走{l.NeighborRout:0} 被弾中{l.UnderFire:0} 離脱{l.Disengage:0} 回復+{l.Recovery:0}", _small);
 
             GUILayout.Space(8);
-            bool can = CanCommand(c) && SlotAvailable;
+            bool can = CanCommand(c);
             GUI.enabled = can;
             GUILayout.Label("命令", _bold);
             GUILayout.BeginHorizontal();
@@ -330,8 +335,7 @@ namespace Battalion.View
 
             if (!can)
                 GUILayout.Label(c.Side == Side.Red ? "敵の中隊には命令できません"
-                    : !CanCommand(c) ? (_phase == Phase.Running ? "この状態では命令を受け付けません" : "")
-                    : NoSlotReason(), _small);
+                    : (_phase == Phase.Running ? "この状態では命令を受け付けません" : ""), _small);
             else if (_commandRefusal != null)
                 GUILayout.Label(_commandRefusal, _small);
 
@@ -343,6 +347,7 @@ namespace Battalion.View
                 hs.normal.textColor = new Color(1f, 0.85f, 0.2f);
                 GUILayout.Label(hint, hs);
             }
+            DrawSheetPanel(c);
             if (_sightFrom.HasValue)
                 GUILayout.Label("視線確認：" + _sightFromLabel + " から" + (_sightTo.HasValue ? "　断面：" + _sightToLabel + " まで" : ""), _small);
             if (_showEscape && c.OnBoard && (c.UnderCommand || c.State == CompanyState.Routed))
@@ -351,6 +356,7 @@ namespace Battalion.View
                 GUILayout.Label($"退路：最小の見積もり {e.MinLoss * 100:0.0}%（{Compass(_sim.EscapeDirection(e.Best) * Angles.RadToDeg)}）" +
                                 (e.MinLoss >= _params.Encirclement.EscapeLossThreshold ? "　<color=#ff6060>逃げ道なし</color>" : ""), _small);
             }
+            GUILayout.EndScrollView();
             GUILayout.EndArea();
         }
 

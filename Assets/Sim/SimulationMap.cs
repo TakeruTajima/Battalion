@@ -218,7 +218,9 @@ namespace Battalion.Sim
                     var tgt = EnemyOf(c, order.TargetId);
                     if (tgt == null || !tgt.UnderCommand)
                     {
+                        // 目標がもう指揮下でない：攻撃は始めた時点で完了（P2b の「完了したら」）
                         HoldInPlace(c);
+                        c.StageCompleted = true;
                         break;
                     }
                     ChooseAttackBearing(c, tgt, order, true);

@@ -91,6 +91,43 @@ namespace Battalion.Sim.Tests
             return plans;
         }
 
+        /// <summary>
+        /// 「拘束＋迂回（段階つき）」（P2b）：全て会戦開始前の命令書（伝令なし）。目標は R1。
+        /// B2：第1段 R1 を遠い拘束、第2段 村の中心へ前進（信号弾 白）。
+        /// B1・B4：第1段 北の待機地点へ前進（R1 から約 550m の見えない所）、第2段 R1 を側面の範囲で攻撃（信号弾 緑）、第3段 村の中心へ前進（信号弾 白）。
+        /// B3：第1段 B2 の南で火力支援、第2段 村の中心へ前進（信号弾 白）。
+        /// 信号弾は、緑を迂回役が待機地点に着く頃の T+18:00 に、白を R1 が指揮下でなくなった刻みに打つ。
+        /// </summary>
+        public static void StagedPinAndFlankStart(Simulation sim, int stage)
+        {
+            double fx = stage == 1 ? 1450 : 1350, fy = stage == 1 ? 800 : 900;
+            var waitB1 = stage == 1 ? new Vec2(1500, 1450) : new Vec2(1400, 1550);
+            var waitB4 = stage == 1 ? new Vec2(1300, 1450) : new Vec2(1200, 1550);
+            var village = MapScenario.VillageCenter;
+            var r1 = sim.Find("R1").Id;
+            int b1 = sim.Find("B1").Id, b2 = sim.Find("B2").Id, b3 = sim.Find("B3").Id, b4 = sim.Find("B4").Id;
+            var white = StageTrigger.OnFlare(FlareColor.White);
+            var green = StageTrigger.OnFlare(FlareColor.Green);
+            OrderSheet S(params Stage[] s) => new OrderSheet(s);
+            sim.SendSheet(S(new Stage(Order.Pin(b2, r1, PinRange.Far), StageTrigger.None),
+                new Stage(Order.Advance(b2, village, 0), white)));
+            foreach (var (id, wait) in new[] { (b1, waitB1), (b4, waitB4) })
+                sim.SendSheet(S(new Stage(Order.Advance(id, wait, -90 * Angles.DegToRad), StageTrigger.None),
+                    new Stage(Order.Attack(id, r1, AttackAspect.Flank), green),
+                    new Stage(Order.Advance(id, village, 0), white)));
+            sim.SendSheet(S(new Stage(Order.Advance(b3, new Vec2(fx, fy), 0), StageTrigger.None),
+                new Stage(Order.Advance(b3, village, 0), white)));
+        }
+
+        /// <summary>「拘束＋迂回（段階つき）」の信号弾（毎刻みの前に呼ぶ）。</summary>
+        public static void StagedPinAndFlankTick(Simulation sim)
+        {
+            if (sim.Time >= 18 * 60) sim.FireFlare(Side.Blue, FlareColor.Green);
+            if (!sim.Find("R1").UnderCommand) sim.FireFlare(Side.Blue, FlareColor.White);
+        }
+
+        public const string StagedPlanName = "拘束＋迂回（段階つき）";
+
         /// <summary>5作戦に「拘束＋迂回」の遠い版・近い版を足したもの（P1e の6）。</summary>
         public static List<(string name, PlannedOrder[] orders)> PlansWithPinAndFlank(int stage)
         {
@@ -147,10 +184,14 @@ namespace Battalion.Sim.Tests
             }
         }
 
-        public static RunResult RunOne(MapScenario sc, PlannedOrder[] plan, ulong seed)
+        public static RunResult RunOne(MapScenario sc, PlannedOrder[] plan, ulong seed) => RunOne(sc, plan, seed, null, null);
+
+        /// <summary>作戦を1回回す。<paramref name="start"/> は会戦開始前に1回、<paramref name="tick"/> は毎刻みの前に呼ぶ（段階つきの作戦。P2b）。</summary>
+        public static RunResult RunOne(MapScenario sc, PlannedOrder[] plan, ulong seed, Action<Simulation> start, Action<Simulation> tick)
         {
             var counter = new RoutCounter();
             var sim = sc.Build(TestUtil.Params, seed, counter);
+            start?.Invoke(sim);
             var orders = plan.Where(o => o.WhenBroken == null).OrderBy(o => o.AtSec).ToList();
             var conditional = plan.Where(o => o.WhenBroken != null).ToList();
             int next = 0;
@@ -167,6 +208,7 @@ namespace Battalion.Sim.Tests
                     if (o.AtSec > sim.Time || sim.Find(o.WhenBroken).UnderCommand) continue;
                     if (Issue(sim, o)) conditional.RemoveAt(k);
                 }
+                tick?.Invoke(sim);
                 sim.Step();
                 foreach (var c in sim.Companies)
                     if (c.AttackFixed && c.CurrentOrder.Type == OrderType.Attack && !fixedAt.ContainsKey(c.Name)) fixedAt[c.Name] = sim.Time / 60;
@@ -226,9 +268,12 @@ namespace Battalion.Sim.Tests
             foreach (int stage in new[] { 1, 2 })
             {
                 var sc = MapScenario.LoadFile(TestUtil.PathOf($"maps/scenario_a{stage}.json"));
-                foreach (var (name, plan) in PlansWithPinAndFlank(stage))
+                var all = PlansWithPinAndFlank(stage).Select(p => (p.name, p.orders, (Action<Simulation>)null, (Action<Simulation>)null)).ToList();
+                int st = stage;
+                all.Add((StagedPlanName, new PlannedOrder[0], s => StagedPinAndFlankStart(s, st), StagedPinAndFlankTick));
+                foreach (var (name, plan, start, tick) in all)
                 {
-                    var rs = Enumerable.Range(1, Runs).Select(s => RunOne(sc, plan, (ulong)s)).ToList();
+                    var rs = Enumerable.Range(1, Runs).Select(s => RunOne(sc, plan, (ulong)s, start, tick)).ToList();
                     // 「拘束＋迂回」は概算シミュレーションにない
                     bool hasSketch = sketch.TryGet($"stage{stage}:{name}", out var k);
                     string Ref(string key, string fmt) => hasSketch ? "［" + k.D(key).ToString(fmt) + "］" : "";

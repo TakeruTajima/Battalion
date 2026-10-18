@@ -90,6 +90,11 @@ namespace Battalion.View
             if (Input.GetKeyDown(KeyCode.F6)) _showTrigger = !_showTrigger;
             if (Input.GetKeyDown(KeyCode.F7)) _showEscape = !_showEscape;
             if (Input.GetKeyDown(KeyCode.F8)) _showBlockedAll = !_showBlockedAll;
+            // P2b：発令（Enter）と信号弾（F9 赤・F10 緑・F11 白。3秒以内にもう一度で打ち上げ）
+            if ((Input.GetKeyDown(KeyCode.Return) || Input.GetKeyDown(KeyCode.KeypadEnter)) && CanCommand(Selected)) DispatchDraft(Selected);
+            if (Input.GetKeyDown(KeyCode.F9)) PressFlare(FlareColor.Red);
+            if (Input.GetKeyDown(KeyCode.F10)) PressFlare(FlareColor.Green);
+            if (Input.GetKeyDown(KeyCode.F11)) PressFlare(FlareColor.White);
         }
 
         void Select(int id)
@@ -119,12 +124,7 @@ namespace Battalion.View
         {
             var c = Selected;
             if (!CanCommand(c)) return;
-            if (!SlotAvailable)
-            {
-                // 判断枠がない（伝令が出払っている。P2a）：命令を選べない
-                _commandRefusal = NoSlotReason();
-                return;
-            }
+            // P2b：命令を選んで地図をクリックすると起案中の命令書に書き込むだけ（判断枠は「発令」のときに見る）
             if (type == OrderType.Entrench && _mode == Mode.Entrench)
             {
                 if (SendCommand(Order.Entrench(c.Id))) _mode = Mode.None;

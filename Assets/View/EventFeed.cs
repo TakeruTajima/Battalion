@@ -29,7 +29,7 @@ namespace Battalion.View
         public enum Kind
         {
             FlankHit, RearHit, Encircled, Routed, Surrendered, RallyStart, RallyComplete, Counterattack, Entrenched, LeftBattle,
-            TargetBroken, PursuitEnd, Turn, Disarray, SeekSight, Receipt, ReceiptOverdue,
+            TargetBroken, PursuitEnd, Turn, Disarray, SeekSight, Receipt, ReceiptOverdue, StageAdvance,
         }
 
         /// <summary>駒の上に出す出来事。表示側が読んだら <see cref="Recent"/> を空にする。</summary>
@@ -149,6 +149,19 @@ namespace Battalion.View
                     Add(t, $"{unit} 受領報告なし（伝令が倒れた可能性）", true);
                     Happen(t, Kind.ReceiptOverdue, unit, null);
                     break;
+                case "flare":
+                    if (v["side"].String != "blue") break;
+                    Add(t, "信号弾 " + FlareJa(v["color"].String), true);
+                    break;
+                case "stage_advance":
+                {
+                    if (v["side"].String != "blue") break;
+                    string why = v["reason"].String;
+                    string text = why == "complete" ? "完了" : why == "time" ? "時刻" : why.StartsWith("flare_") ? "信号弾 " + FlareJa(why.Substring(6)) : why;
+                    Add(t, $"{unit} 第{(int)v.D("stage")}段へ（{text}）", false);
+                    Happen(t, Kind.StageAdvance, unit, $"第{(int)v.D("stage")}段へ");
+                    break;
+                }
                 case "seek_sight":
                 {
                     string how = v["how"].String == "side" ? "見える位置へ移る" : "前進";
@@ -161,6 +174,8 @@ namespace Battalion.View
                     break;
             }
         }
+
+        static string FlareJa(string c) => c == "red" ? "赤" : c == "green" ? "緑" : "白";
 
         void Add(double t, string text, bool important) => Entries.Add(new Entry(t, text, important));
         void Happen(double t, Kind k, string unit, string other) => Recent.Add(new Happening(t, k, unit, other));

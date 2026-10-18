@@ -12,10 +12,12 @@ namespace Battalion.Sim.Tests
     /// </summary>
     public class ScenarioLogHashTests
     {
-        public static string RunAndHash(MapScenario sc, ScenarioAReportTests.PlannedOrder[] plan, ulong seed, out int lines)
+        public static string RunAndHash(MapScenario sc, ScenarioAReportTests.PlannedOrder[] plan, ulong seed, out int lines,
+            Action<Simulation> start = null, Action<Simulation> tick = null)
         {
             var log = new StringEventSink();
             var sim = sc.Build(TestUtil.Params, seed, log);
+            start?.Invoke(sim);
             var timed = plan.Where(o => o.WhenBroken == null).OrderBy(o => o.AtSec).ToList();
             var conditional = plan.Where(o => o.WhenBroken != null).ToList();
             int next = 0;
@@ -29,6 +31,7 @@ namespace Battalion.Sim.Tests
                     if (o.AtSec > sim.Time || sim.Find(o.WhenBroken).UnderCommand) continue;
                     if (ScenarioAReportTests.Issue(sim, o)) conditional.RemoveAt(k);
                 }
+                tick?.Invoke(sim);
                 sim.Step();
                 if (!sim.Companies.Any(c => c.Side == Side.Red && c.OnBoard) || !sim.Companies.Any(c => c.Side == Side.Blue && c.OnBoard)) break;
             }
@@ -51,6 +54,13 @@ namespace Battalion.Sim.Tests
                         string h = RunAndHash(sc, plan, seed, out int n);
                         sb.AppendLine($"HASH stage{stage} {name} seed{seed} {n} {h}");
                     }
+                int st = stage;
+                foreach (ulong seed in new ulong[] { 1, 2 })
+                {
+                    string h = RunAndHash(sc, new ScenarioAReportTests.PlannedOrder[0], seed, out int n,
+                        s => ScenarioAReportTests.StagedPinAndFlankStart(s, st), ScenarioAReportTests.StagedPinAndFlankTick);
+                    sb.AppendLine($"HASH stage{stage} {ScenarioAReportTests.StagedPlanName} seed{seed} {n} {h}");
+                }
             }
             TestContext.WriteLine(sb.ToString());
             Assert.Pass();

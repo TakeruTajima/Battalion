@@ -10,20 +10,6 @@ namespace Battalion.View
         /// <summary>直前に命令を出せなかった理由（判断枠がない等）。命令を出せたら消す。</summary>
         string _commandRefusal;
 
-        /// <summary>
-        /// 命令を出す（会戦開始前は伝令なしで届き、その後は伝令）。判断枠がなければ出さずに理由を残し、false を返す。
-        /// </summary>
-        bool SendCommand(Order order)
-        {
-            if (_sim.SendOrder(order) == SendResult.NoSlot)
-            {
-                _commandRefusal = NoSlotReason();
-                return false;
-            }
-            _commandRefusal = null;
-            return true;
-        }
-
         /// <summary>新しい命令を出せるか（会戦開始前か、判断枠が空いている）。</summary>
         bool SlotAvailable => _sim.BeforeStart || _sim.RunnerSlotsUsed(Side.Blue) < _sim.MaxRunners;
 
@@ -138,6 +124,8 @@ namespace Battalion.View
             {
                 if (c.Side != Side.Blue || !c.OnBoard) continue;
                 string tag = RunnerTag(c);
+                string stage = StageTag(c);
+                if (stage != null) tag = tag == null ? stage : tag + "　" + stage;
                 if (tag == null) continue;
                 Pose(c, out var pos, out double facing);
                 Extent(facing, out float ex, out float ey);

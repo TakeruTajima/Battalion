@@ -93,9 +93,18 @@ namespace Battalion.Sim
         // ---- P2a：伝令
         /// <summary>受けた命令の出した順（これより古い命令の伝令が後から着いたら捨てる）。</summary>
         public long ReceivedSeq;
-        /// <summary>届いて、練度の遅れの後に始まる命令（null ならなし）と、始まる時刻。</summary>
+        /// <summary>届いて（または次の段へ移って）、練度の遅れの後に始まる段の命令（null ならなし）と、始まる時刻。</summary>
         public Order StartWaitOrder;
         public double StartWaitAt;
+
+        // ---- P2b：段階つき命令
+        /// <summary>実行中の命令書（null ならなし）と、今の段の添字（0 から）。</summary>
+        public OrderSheet ActiveSheet;
+        public int StageIndex;
+        /// <summary>今の段が始まったか（開始待ちの間は false。次の段の条件は始まった後から調べる）。</summary>
+        public bool StageStarted;
+        /// <summary>今の段の攻撃が完了したか（目標が指揮下でなくなった）。</summary>
+        public bool StageCompleted;
 
         // ---- P1g：目標が見えないときの判断
         /// <summary>目標が見えないため、見える位置を探して動いているか（着いたら false）。</summary>

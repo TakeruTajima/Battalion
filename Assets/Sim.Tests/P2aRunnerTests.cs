@@ -40,14 +40,13 @@ namespace Battalion.Sim.Tests
             Assert.That(sim.SendOrder(Order.Advance(a.Id, new Vec2(600, 300))), Is.EqualTo(SendResult.Sent));
             var r = sim.Runners.Single();
 
-            RunUntil(sim, t0 + 229.5);
-            Assert.That(r.Delivered, Is.False);
-            sim.Step();
-            Assert.That(sim.Time, Is.EqualTo(t0 + 230).Within(1e-9));
-            Assert.That(r.Delivered, Is.True, "30＋600÷3＝230秒で届く");
+            // P2b から伝令は経路（マスの中心）をたどるので、まっすぐの 230秒より数秒長くなる
+            for (int k = 0; k < 2000 && !r.Delivered; k++) sim.Step();
+            double delivered = sim.Time;
+            Assert.That(delivered - t0, Is.EqualTo(230).Within(5), "30＋600÷3＝230秒で届く（経路の分だけ数秒長い）");
             Assert.That(a.StartWaitOrder, Is.Not.Null);
 
-            RunUntil(sim, t0 + 254.5);
+            RunUntil(sim, delivered + 24.5);
             Assert.That(a.Position.Y, Is.EqualTo(0), "練度の遅れ（25秒）の間は動かない");
             Assert.That(a.CurrentOrder.Type, Is.EqualTo(OrderType.Hold));
             sim.Step();
@@ -63,10 +62,10 @@ namespace Battalion.Sim.Tests
             Begin(sim);
             double t0 = sim.Time;
             sim.SendOrder(Order.Hold(a.Id, Math.PI / 2));
-            RunUntil(sim, t0 + 429.5);
+            RunUntil(sim, t0 + 420);
             Assert.That(sim.RunnerSlotsUsed(Side.Blue), Is.EqualTo(1));
-            sim.Step();
-            Assert.That(sim.RunnerSlotsUsed(Side.Blue), Is.EqualTo(0), "往復 430秒で受領が戻り、判断枠が空く");
+            for (int k = 0; k < 2000 && sim.RunnerSlotsUsed(Side.Blue) > 0; k++) sim.Step();
+            Assert.That(sim.Time - t0, Is.EqualTo(430).Within(10), "往復 約 430秒で受領が戻り、判断枠が空く（経路の分だけ少し長い）");
             Assert.That(sim.Runners.Single().State, Is.EqualTo(RunnerState.Done));
         }
 
@@ -194,10 +193,10 @@ namespace Battalion.Sim.Tests
             sim.SendOrder(Order.Hold(a.Id));
             var r = sim.Runners.Single();
             Assert.That(r.SentTime, Is.EqualTo(100));
-            RunUntil(sim, 329.5);
+            RunUntil(sim, 320);
             Assert.That(r.Delivered, Is.False);
-            RunUntil(sim, 330);
-            Assert.That(r.Delivered, Is.True, "再開後に同じ 230秒で届く");
+            for (int k = 0; k < 2000 && !r.Delivered; k++) sim.Step();
+            Assert.That(sim.Time, Is.EqualTo(330).Within(5), "再開後に同じ 約 230秒で届く");
         }
 
         [Test]

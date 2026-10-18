@@ -187,6 +187,8 @@ namespace Battalion.Sim
         void OnAttackTargetBroken(Company c, Company tgt, double t, double tickStart)
         {
             var o = c.CurrentOrder;
+            // 段階つき命令の「完了したら」：攻撃は目標が指揮下でなくなった刻みに完了（P2b）
+            c.StageCompleted = true;
             double mult = B.PursuitLimitMult[c.Personality];
             bool pursue = o.OnBreak == AttackOnBreak.Pursue && tgt != null && tgt.State == CompanyState.Routed && mult > 0;
             if (pursue && c.Personality == Personality.Calm && EnemyUnderCommandWithin(c, B.PursuitCalmClearRadiusM)) pursue = false;
