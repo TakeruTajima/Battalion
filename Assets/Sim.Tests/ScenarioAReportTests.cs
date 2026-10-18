@@ -19,7 +19,7 @@ namespace Battalion.Sim.Tests
         public static SimParams ParamsForRuns;
 
         /// <summary>作戦の命令の種類（P1e で拘束・攻撃を足した）。</summary>
-        public enum PlannedKind { Advance, PinFar, PinNear, AttackFlank }
+        public enum PlannedKind { Advance, PinFar, PinNear, AttackFlank, AttackSecure }
 
         /// <summary>作戦の命令：時刻（秒）、中隊、目的地、到着後の向き（度）。拘束・攻撃では目標の中隊。</summary>
         public readonly struct PlannedOrder
@@ -67,6 +67,27 @@ namespace Battalion.Sim.Tests
                 new PlannedOrder(0, "B2", MapScenario.VillageCenter.X, MapScenario.VillageCenter.Y, 0, whenBroken: "R1"),
                 new PlannedOrder(0, "B3", MapScenario.VillageCenter.X, MapScenario.VillageCenter.Y, 0, whenBroken: "R1"),
                 new PlannedOrder(0, "B4", MapScenario.VillageCenter.X, MapScenario.VillageCenter.Y, 0, whenBroken: "R1"),
+            };
+        }
+
+        /// <summary>
+        /// 「拘束＋猪突の攻撃（確保）」（P2c.1。猪突の独断の出方を見るため）：B2 が R1 を遠い拘束、B3（猪突）が R1 を
+        /// 範囲の指定なし・崩れたら確保で攻撃、B1 が R1 を側面の範囲で攻撃、B4 は「拘束＋迂回」の B3 の位置で火力支援。
+        /// R1 が指揮下でなくなったら、B3 以外の指揮下の青の中隊が村の中心へ前進する（B3 は確保の字面のまま、独断を見る）。
+        /// </summary>
+        public static PlannedOrder[] PinAndRecklessAttack(int stage)
+        {
+            double fx = stage == 1 ? 1450 : 1350, fy = stage == 1 ? 800 : 900;
+            var v = MapScenario.VillageCenter;
+            return new[]
+            {
+                T(0, "B2", PlannedKind.PinFar, "R1"),
+                T(0, "B3", PlannedKind.AttackSecure, "R1"),
+                T(0, "B1", PlannedKind.AttackFlank, "R1"),
+                O(0, "B4", fx, fy, 0),
+                new PlannedOrder(0, "B1", v.X, v.Y, 0, whenBroken: "R1"),
+                new PlannedOrder(0, "B2", v.X, v.Y, 0, whenBroken: "R1"),
+                new PlannedOrder(0, "B4", v.X, v.Y, 0, whenBroken: "R1"),
             };
         }
 
@@ -133,6 +154,7 @@ namespace Battalion.Sim.Tests
         }
 
         public const string StagedPlanName = "拘束＋迂回（段階つき）";
+        public const string RecklessPlanName = "拘束＋猪突の攻撃（確保）";
 
         /// <summary>5作戦に「拘束＋迂回」の遠い版・近い版を足したもの（P1e の6）。</summary>
         public static List<(string name, PlannedOrder[] orders)> PlansWithPinAndFlank(int stage)
@@ -140,6 +162,7 @@ namespace Battalion.Sim.Tests
             var plans = Plans(stage);
             plans.Add(("拘束＋迂回（遠い拘束）", PinAndFlank(stage, false)));
             plans.Add(("拘束＋迂回（近い拘束）", PinAndFlank(stage, true)));
+            plans.Add((RecklessPlanName, PinAndRecklessAttack(stage)));
             return plans;
         }
 
@@ -269,6 +292,7 @@ namespace Battalion.Sim.Tests
                 case PlannedKind.PinFar: return Order.Pin(c.Id, sim.Find(o.Target).Id, PinRange.Far);
                 case PlannedKind.PinNear: return Order.Pin(c.Id, sim.Find(o.Target).Id, PinRange.Near);
                 case PlannedKind.AttackFlank: return Order.Attack(c.Id, sim.Find(o.Target).Id, AttackAspect.Flank);
+                case PlannedKind.AttackSecure: return Order.Attack(c.Id, sim.Find(o.Target).Id, AttackAspect.None, AttackOnBreak.Secure);
                 default: return Order.Advance(c.Id, new Vec2(o.X, o.Y), o.FacingDeg * Angles.DegToRad);
             }
         }
@@ -304,6 +328,49 @@ namespace Battalion.Sim.Tests
         [Test]
         public void DelegatedVersusStrictWithAutonomyCounts()
         {
+            TestContext.WriteLine(AutonomyTable());
+            Assert.Pass();
+        }
+
+        /// <summary>
+        /// P2c.1：P2c の報告で切り分けた3作戦（ステージ1の遠い拘束・近い拘束、ステージ2の総員突撃）を、撃てる目標がないときの向きの
+        /// 規則を止めた版（向く相手の距離と記憶を 0）で回す。任せる・厳命の両方。
+        /// </summary>
+        [Test]
+        public void ThreePlansWithoutAutoFacing()
+        {
+            var off = TestUtil.ParamsWith(("\"face_enemy_radius_m\": 600", "\"face_enemy_radius_m\": 0"),
+                ("\"face_shooter_memory_sec\": 30", "\"face_shooter_memory_sec\": 0"), ("\"face_near_radius_m\": 400", "\"face_near_radius_m\": 0"));
+            var sb = new StringBuilder();
+            sb.AppendLine("| ステージ | 作戦 | 裁量 | 勝率 | 赤が全て崩れた割合 | 青の損害率 | 崩れた青 | 崩れた赤 |");
+            sb.AppendLine("| --- | --- | --- | --- | --- | --- | --- | --- |");
+            ParamsForRuns = off;
+            try
+            {
+                foreach (var (stage, name) in new[] { (1, "拘束＋迂回（遠い拘束）"), (1, "拘束＋迂回（近い拘束）"), (2, "総員突撃") })
+                {
+                    var sc = MapScenario.LoadFile(TestUtil.PathOf($"maps/scenario_a{stage}.json"));
+                    var plan = PlansWithPinAndFlank(stage).First(p => p.name == name).orders;
+                    foreach (var d in new[] { Discretion.Delegate, Discretion.Strict })
+                    {
+                        var rs = Enumerable.Range(1, Runs).Select(s => RunOne(sc, plan, (ulong)s, null, null, d)).ToList();
+                        sb.AppendLine($"| {stage} | {name} | {(d == Discretion.Strict ? "厳命" : "任せる")} | {rs.Average(r => r.Win ? 1.0 : 0.0):0.00} | " +
+                                      $"{rs.Average(r => r.RedAllBrokenMin.HasValue ? 1.0 : 0.0):0.00} | {rs.Average(r => r.BlueLoss):0.000} | " +
+                                      $"{rs.Average(r => r.BlueBroken):0.00} | {rs.Average(r => r.RedBroken):0.00} |");
+                    }
+                }
+            }
+            finally
+            {
+                ParamsForRuns = null;
+            }
+            TestContext.WriteLine("向きの規則を止めた版");
+            TestContext.WriteLine(sb.ToString());
+            Assert.Pass();
+        }
+
+        static string AutonomyTable()
+        {
             var sb = new StringBuilder();
             sb.AppendLine("| ステージ | 作戦 | 裁量 | 勝率 | 青の損害率 | 崩れた青 | 崩れた赤 | 猪突 追撃 | 猪突 続けて攻撃 | 機敏 回り込み | 慎重 後退 | 慎重 追撃せず | 限度で停止 | 物陰 | 浅い掩体 | 陣地に入る | 赤の自律 |");
             sb.AppendLine("| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |");
@@ -330,9 +397,7 @@ namespace Battalion.Sim.Tests
                     }
                 }
             }
-            TestContext.WriteLine("回数は1回の会戦あたりの平均（20回）。慎重の後退は独断で 100m を越える・後ろへ寄る物陰。物陰は独断でないもの");
-            TestContext.WriteLine(sb.ToString());
-            Assert.Pass();
+            return "回数は1回の会戦あたりの平均（20回）。慎重の後退は独断で 100m を越える・後ろへ寄る物陰。物陰は独断でないもの\n" + sb;
         }
 
         [Test]

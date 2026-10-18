@@ -86,6 +86,7 @@ namespace Battalion.Sim
 
         void UpdateAutonomy(double t)
         {
+            RecordShotsAt(t);
             foreach (var c in _companies)
             {
                 if (!c.OnBoard || !c.UnderCommand) continue;
@@ -132,7 +133,7 @@ namespace Battalion.Sim
                 }
                 if (UpdateCover(c, t)) continue;
                 if (UpdateAgile(c, t)) continue;
-                UpdateAutoFacing(c);
+                UpdateAutoFacing(c, t);
             }
         }
 
@@ -316,64 +317,98 @@ namespace Battalion.Sim
             return 1.0 + (A.ScrapeDamageMult - 1.0) * Math.Min(1.0, c.ScrapeProgress / A.ScrapeDigSec);
         }
 
-        // ---------------------------------------------------------------- 撃てる目標がない → 最も近い敵の方を向く
+        // ---------------------------------------------------------------- 撃てる目標がない → 危ない敵の方を向く（P2c.1）
 
         /// <summary>
-        /// 撃てる目標がなければ、600m 以内で最も近い既知の指揮下の敵の方を向く。いなければ命令の向き。
-        /// 既知の敵は、P2d の霧が入るまでは、その陣営のどれかの指揮下の中隊から視線が通る敵（<see cref="KnownTo"/>）。
-        /// 向き直り（P1d の5）があればそちらを先にする。撃てる目標がある間は今の向きのまま。
+        /// 撃てる目標がないときの向き（P2c.1）。向く相手は上から順に、最初に当てはまったもの：
+        /// 直近 30秒に自分を撃った指揮下の敵（一番多く撃った敵）、自分から視線の通る 400m 以内の最も近い指揮下の敵、
+        /// 同じく 600m 以内の最も近い敵。いなければ今の向きのまま。
+        /// 今の正面の弧（±60°）の 400m 以内に自分から見える指揮下の敵がすでにいれば、向き直らない。
+        /// 撃てる目標ができたら自律の向きを解き、命令の向きに戻す（その後は射撃の目標選びと P1d の向き直りに任せる）。
+        /// 向き直り（P1d の5）があればそちらを先にする。
         /// </summary>
-        void UpdateAutoFacing(Company c)
+        void UpdateAutoFacing(Company c, double t)
         {
-            if (c.TargetId >= 0 || c.FacingOverride.HasValue) return;
-            Company best = null;
-            double bd = A.FaceEnemyRadiusM;
-            foreach (var e in _companies)
-            {
-                if (!e.OnBoard || e.Side == c.Side || !e.UnderCommand) continue;
-                double d = Vec2.Distance(c.Position, e.Position);
-                if (d > bd || !KnownTo(c.Side, e)) continue;
-                if (d <= bd && (best == null || d < bd))
-                {
-                    bd = d;
-                    best = e;
-                }
-            }
-            if (best == null)
+            if (c.FacingOverride.HasValue) return;
+            if (c.TargetId >= 0)
             {
                 c.AutoFacing = null;
                 return;
             }
-            var v = best.Position - c.Position;
+            if (FrontArcHasVisibleEnemy(c, A.FaceFrontHoldM)) return;
+            var e = RecentShooter(c, t) ?? NearestVisibleEnemy(c, A.FaceNearRadiusM) ?? NearestVisibleEnemy(c, A.FaceEnemyRadiusM);
+            if (e == null) return;
+            var v = e.Position - c.Position;
             if (v.Length > 1e-9) c.AutoFacing = Math.Atan2(v.Y, v.X);
         }
 
-        // 刻みごとの、陣営から見えている敵（[陣営, 敵の ID]。0 は未計算、1 は見える、2 は見えない）
-        sbyte[,] _known;
-        long _knownTick = -1;
+        /// <summary>今の正面の弧（±60°）の <paramref name="radius"/> 以内に、自分から見える指揮下の敵がいるか。</summary>
+        bool FrontArcHasVisibleEnemy(Company c, double radius)
+        {
+            foreach (var e in _companies)
+            {
+                if (!e.OnBoard || e.Side == c.Side || !e.UnderCommand) continue;
+                if (Vec2.Distance(c.Position, e.Position) > radius) continue;
+                if (AspectOf(c, e.Position) != Aspect.Front) continue;
+                if (LineOfSight.Visible(_map, _p.Sight, c.Position, e.Position)) return true;
+            }
+            return false;
+        }
+
+        /// <summary>自分から視線の通る、<paramref name="radius"/> 以内の最も近い指揮下の敵（同じ距離なら ID の小さい方）。</summary>
+        Company NearestVisibleEnemy(Company c, double radius)
+        {
+            Company best = null;
+            double bd = radius;
+            foreach (var e in _companies)
+            {
+                if (!e.OnBoard || e.Side == c.Side || !e.UnderCommand) continue;
+                double d = Vec2.Distance(c.Position, e.Position);
+                if (d > bd || (best != null && d >= bd)) continue;
+                if (!LineOfSight.Visible(_map, _p.Sight, c.Position, e.Position)) continue;
+                bd = d;
+                best = e;
+            }
+            return best;
+        }
 
         /// <summary>
-        /// 既知の敵か（P2d の霧が入るまでの仮）：陣営 <paramref name="side"/> の盤上の指揮下の中隊のどれかから視線が通る。
-        /// 刻みごとに一度だけ計算する。
+        /// 直近 30秒に自分を撃った、今も指揮下の敵のうち、撃った刻みの数が一番多いもの（同じなら最後に撃った方、それも同じなら ID の小さい方）。
         /// </summary>
-        bool KnownTo(Side side, Company e)
+        Company RecentShooter(Company c, double t)
         {
-            if (_known == null || _known.GetLength(1) != _companies.Count) _known = new sbyte[2, _companies.Count];
-            if (_knownTick != Tick)
+            Company best = null;
+            int bestN = 0;
+            double bestLast = double.NegativeInfinity;
+            foreach (var kv in c.ShotBy)
             {
-                Array.Clear(_known, 0, _known.Length);
-                _knownTick = Tick;
+                var q = kv.Value;
+                while (q.Count > 0 && t - q.Peek() > A.FaceShooterMemorySec + 1e-9) q.Dequeue();
+                if (q.Count == 0) continue;
+                var e = _companies[kv.Key];
+                if (!e.OnBoard || !e.UnderCommand) continue;
+                double last = 0;
+                foreach (double x in q) last = x;
+                bool better = best == null || q.Count > bestN
+                              || (q.Count == bestN && (last > bestLast || (last == bestLast && e.Id < best.Id)));
+                if (!better) continue;
+                best = e;
+                bestN = q.Count;
+                bestLast = last;
             }
-            int s = (int)side;
-            if (_known[s, e.Id] != 0) return _known[s, e.Id] == 1;
-            bool seen = false;
-            foreach (var f in _companies)
+            return best;
+        }
+
+        /// <summary>この刻みに自分を撃った敵を覚える（向く相手の順位に使う。30秒より古いものは捨てる）。</summary>
+        void RecordShotsAt(double t)
+        {
+            foreach (var f in _fireLog)
             {
-                if (f.Side != side || !f.OnBoard || !f.UnderCommand) continue;
-                if (LineOfSight.Visible(_map, _p.Sight, f.Position, e.Position)) { seen = true; break; }
+                var c = _companies[f.Target];
+                if (!c.ShotBy.TryGetValue(f.Shooter, out var q)) c.ShotBy[f.Shooter] = q = new Queue<double>();
+                q.Enqueue(t);
+                while (q.Count > 0 && t - q.Peek() > A.FaceShooterMemorySec + 1e-9) q.Dequeue();
             }
-            _known[s, e.Id] = (sbyte)(seen ? 1 : 2);
-            return seen;
         }
 
         // ---------------------------------------------------------------- 機敏：味方に正面から撃たれている敵の側面へ

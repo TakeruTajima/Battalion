@@ -143,6 +143,9 @@ namespace Battalion.Sim
         public double AutoMoveSince;
         /// <summary>撃てる目標がないときに向く向き（null なら命令の向き）。</summary>
         public double? AutoFacing;
+        /// <summary>自分を撃った敵ごとの、撃たれた刻みの時刻（直近 30秒。向く相手の順位に使う。P2c.1）。</summary>
+        public readonly System.Collections.Generic.Dictionary<int, System.Collections.Generic.Queue<double>> ShotBy =
+            new System.Collections.Generic.Dictionary<int, System.Collections.Generic.Queue<double>>();
         /// <summary>開けた所で、止まって撃たれ続けている始まりの時刻（null なら撃たれ続けていない）。</summary>
         public double? UnderFireSince;
         /// <summary>物陰へ寄る：練度の遅れの待ちを始めた時刻、寄る先、独断（慎重の広い範囲・後ろ向き）か、次に探す時刻。</summary>

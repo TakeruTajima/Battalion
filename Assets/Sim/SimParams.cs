@@ -32,8 +32,12 @@ namespace Battalion.Sim
         {
             /// <summary>全ての中隊長の自律行動は、持ち場からこの距離を出ない。</summary>
             public double PostRadiusM;
-            /// <summary>撃てる目標がないとき、この距離以内で最も近い指揮下の敵の方を向く。</summary>
+            /// <summary>撃てる目標がないとき、向く相手（P2c.1）：直近この秒数に自分を撃った敵、自分から見えるこの距離以内（近い・遠い）の最も近い敵。</summary>
+            public double FaceShooterMemorySec;
+            public double FaceNearRadiusM;
             public double FaceEnemyRadiusM;
+            /// <summary>今の正面の弧のこの距離以内に自分から見える敵がいれば向き直らない（P2c.1）。</summary>
+            public double FaceFrontHoldM;
             /// <summary>被弾倍率がこれ以上の所（開けた所）でこの秒数撃たれ続けたら物陰を探す。</summary>
             public double CoverUnderFireSec;
             public double CoverOpenMult;
@@ -487,6 +491,9 @@ namespace Battalion.Sim
             var au = root["autonomy"];
             p.Autonomy.PostRadiusM = au.D("post_radius_m");
             p.Autonomy.FaceEnemyRadiusM = au.D("face_enemy_radius_m");
+            p.Autonomy.FaceShooterMemorySec = au.D("face_shooter_memory_sec");
+            p.Autonomy.FaceNearRadiusM = au.D("face_near_radius_m");
+            p.Autonomy.FaceFrontHoldM = au.D("face_front_hold_m");
             p.Autonomy.CoverUnderFireSec = au.D("cover_under_fire_sec");
             p.Autonomy.CoverOpenMult = au.D("cover_open_mult");
             p.Autonomy.CoverMultRatio = au.D("cover_mult_ratio");
