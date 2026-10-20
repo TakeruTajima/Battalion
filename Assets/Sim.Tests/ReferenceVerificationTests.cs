@@ -25,6 +25,7 @@ namespace Battalion.Sim.Tests
         [TestCaseSource(nameof(ScenarioNames))]
         public void MatchesReference(string scenario)
         {
+            using var progress = RunProgress.Begin("S1〜S6 の参照との照合 " + scenario, Runs);
             var st = TestUtil.RunBatch(scenario, Runs);
             var r = Ref[scenario];
             double refMedian = r["rout_time_min"].D("median");

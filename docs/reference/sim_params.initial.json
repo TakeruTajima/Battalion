@@ -254,5 +254,18 @@
     "agile_post_limit_m": 600,
     "agile_check_sec": 5,
     "cautious_cover_radius_m": 200
+  },
+  "couriers": {
+    "_note": "P2c.2 の中隊の伝令（意見具申）。速さ・喪失・経路は runners の値を使う。heavy_loss_step は初めの兵力に対する割合。retreat_ask_morale は慎重が未満、ほかは以下",
+    "prep_sec": 10,
+    "max_out_per_company": 2,
+    "batch_sec": 60,
+    "discover_radius_m": 600,
+    "heavy_loss_step": { "cautious": 0.10, "calm": 0.20, "agile": 0.20, "reckless": 0.20 },
+    "neighbor_rout_radius_m": 300,
+    "ask_orders_after_sec": 300,
+    "ask_orders_repeat_sec": 600,
+    "retreat_ask_morale": { "cautious": 60, "calm": 50, "agile": 50, "reckless": 50 },
+    "retreat_ask_quiet_sec": 10
   }
 }

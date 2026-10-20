@@ -273,6 +273,7 @@ namespace Battalion.Sim.Tests
                 bool blueLeft = sim.Companies.Any(c => c.Side == Side.Blue && c.OnBoard);
                 if (!redLeft || !blueLeft) break;
             }
+            RunProgress.Tick();
             return Summarize(sc, sim, counter, redAllBroken, fixedAt);
         }
 
@@ -329,6 +330,7 @@ namespace Battalion.Sim.Tests
         [Test]
         public void DelegatedVersusStrictWithAutonomyCounts()
         {
+            using var progress = RunProgress.Begin("任せる・厳命と独断の回数", 2 * AllPlanRuns());
             TestContext.WriteLine(AutonomyTable());
             Assert.Pass();
         }
@@ -340,6 +342,7 @@ namespace Battalion.Sim.Tests
         [Test]
         public void ThreePlansWithoutAutoFacing()
         {
+            using var progress = RunProgress.Begin("向きの規則を止めた版", 3 * 2 * Runs);
             var off = TestUtil.ParamsWith(("\"face_enemy_radius_m\": 600", "\"face_enemy_radius_m\": 0"),
                 ("\"face_shooter_memory_sec\": 30", "\"face_shooter_memory_sec\": 0"), ("\"face_near_radius_m\": 400", "\"face_near_radius_m\": 0"));
             var sb = new StringBuilder();
@@ -401,9 +404,13 @@ namespace Battalion.Sim.Tests
             return "回数は1回の会戦あたりの平均（20回）。慎重の後退は独断で 100m を越える・後ろへ寄る物陰。物陰は独断でないもの\n" + sb;
         }
 
+        /// <summary>両ステージの作戦の数（段階つきを含む）×20回。</summary>
+        static int AllPlanRuns() => new[] { 1, 2 }.Sum(st => PlansWithPinAndFlank(st).Count + 1) * Runs;
+
         [Test]
         public void FivePlansOnBothStages()
         {
+            using var progress = RunProgress.Begin("通し実行の表", AllPlanRuns());
             var sketch = JsonValue.Parse(File.ReadAllText(TestUtil.PathOf("docs/reference/sketch/battle_sketch_v3_results.json")));
             var sb = new StringBuilder();
             sb.AppendLine("| ステージ | 作戦 | 勝率 | 赤が全て崩れた割合 | 青の損害率 | 崩れた青（終了時） | 崩れた赤（終了時） | 降伏した赤 | 終了時刻の中央値 |");
@@ -442,6 +449,7 @@ namespace Battalion.Sim.Tests
         [Test]
         public void PinAndFlankTimeline()
         {
+            using var progress = RunProgress.Begin("拘束＋迂回の経過", 2 * 2 * Runs);
             var sb = new StringBuilder();
             sb.AppendLine("| ステージ | 拘束 | B2 壊走 | B1 着 | B4 着 | R1 向き直り | R1 壊走 | R2 壊走 | B1 壊走 | B4 壊走 | 勝率 |");
             sb.AppendLine("| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |");

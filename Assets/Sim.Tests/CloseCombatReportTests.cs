@@ -13,6 +13,7 @@ namespace Battalion.Sim.Tests
         [Test]
         public void Report()
         {
+            using var progress = RunProgress.Begin("接近戦の表", 2 * 300);
             var cc = TestUtil.RunBatch("CC_1v1_front_50m");
             var s1 = TestUtil.RunBatch("S1_1v1_front");
             foreach (var st in new[] { cc, s1 })

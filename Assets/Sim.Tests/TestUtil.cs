@@ -97,6 +97,7 @@ namespace Battalion.Sim.Tests
                     if (!loss.TryGetValue(kv.Key, out var l)) loss[kv.Key] = l = new List<double>();
                     l.Add(kv.Value);
                 }
+                RunProgress.Tick();
             }
             st.P05 = Percentile(times, 5);
             st.Median = Median(times);

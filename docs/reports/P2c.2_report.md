@@ -8,9 +8,9 @@
 
 | 基準 | 結果 |
 | --- | --- |
-| .NET の速いテストが全て通る | 277件中 276件通過。落ちたのは `SimParamsIsIdenticalToInitial` の1件。新しい `couriers` の節（下）を `docs/reference/sim_params.initial.json` に反映するまで落ちる |
+| .NET の速いテストが全て通る | 277件全て通過（`couriers` の節が `sim_params.initial.json` に反映され、パラメータの同一性も通るようになった） |
 | Unity でコンパイルが通り、EditMode のテストが通る | Unity 6.3 LTS（6000.3.11f1）でコンパイル通過。EditMode の速いテスト（`Slow` の印のないもの）287件中 286件通過。落ちたのは同じ1件 |
-| 通し実行の回し方 | 下の「通し実行の回し方」（回していない） |
+| 通し実行の回し方 | 下の「通し実行の回し方」。通し実行の表と戦闘の行の一致は、P2c.1.2 と同じだった |
 | 触って確かめる項目・操作の早見表 | 末尾 |
 
 **速いテストと遅いテスト**：今回から、時間のかかるテストに `[Category("Slow")]` の印を付けた（通し実行の表 `ScenarioAReportTests`、ログのハッシュ `ScenarioLogHashTests`、S1〜S6 の参照との照合 `ReferenceVerificationTests`、接近戦の表 `CloseCombatReportTests`、表示の読み取りの確かめ `P1bSimTests.PeeksDoNotChangeTheBattle`）。速いテストだけなら .NET で約 40秒。
@@ -95,28 +95,30 @@
 
 ## 通し実行の回し方（Takeru がローカルで回す）
 
-プロジェクトのルート（`C:\Users\mr2o5\Documents\Battalion`）で：
+プロジェクトのルート（`C:\Users\mr2o5\Documents\Battalion`）で回す。遅いテストは、途中で進み具合を出す（15秒ごとに「[通し実行の表] 120/360（33.3%）　経過 10分05秒　残り約 20分」のような行）。進み具合は、出力の詳しさを `normal` 以上にしたときだけ出る（下のコマンドには付けてある）。所要は Takeru の環境で測った値（2026-10-20）。
 
-1. **戦闘の行の一致（P2c.1.2 と同じか）**：約 2分
+1. **戦闘の行の一致（P2c.1.2 と同じか）**：約 3分
    ```
-   dotnet test tools/dotnet/Sim.Tests --filter "FullyQualifiedName~CombatLogMatchesP2c12" --logger "console;verbosity=detailed"
+   dotnet test tools/dotnet/Sim.Tests --filter "FullyQualifiedName~CombatLogMatchesP2c12" --logger "console;verbosity=normal"
    ```
    36通り全てが「一致」なら、中隊の伝令は戦闘の結果を変えていない
-2. **通し実行の表（勝率・損害・崩れ方）**：約 50分
+2. **通し実行の表（勝率・損害・崩れ方）**：約 1時間55分（4つの表。独断の回数の表 1時間3分、作戦ごとの表 32分、向きを止めた版 12分、拘束＋迂回の経過 8分）
    ```
    dotnet test tools/dotnet/Sim.Tests --filter "FullyQualifiedName~ScenarioAReportTests" --logger "console;verbosity=detailed"
    ```
    P2c.1.2 の報告の表と完全に一致するはず（1 が一致すれば、表も一致する）
-3. **遅いテスト全て**（上の2つ、S1〜S6 の参照との照合など）：約 65分
+3. **遅いテスト全て**（上の2つ、S1〜S6 の参照との照合など）：2時間半ほど（測っていない。2 に S1〜S6 の照合などが足される）
    ```
    dotnet test tools/dotnet/Sim.Tests --filter "TestCategory=Slow" --logger "console;verbosity=detailed"
    ```
-4. **速いテストだけ**：約 40秒
+4. **速いテストだけ**：約 1分
    ```
    dotnet test tools/dotnet/Sim.Tests --filter "TestCategory!=Slow"
    ```
 
-Unity では、Test Runner の EditMode で全て回すと遅いテストも含めて約 1時間。
+Unity では、Test Runner の EditMode で全て回すと、遅いテストも含めて数時間かかる。
+
+**結果（2026-10-20）**：2 の通し実行の表は4つとも成功し、どの表も P2c.1.2 の報告の値と全く同じだった（Takeru が回した）。1 の戦闘の行の一致も 36通り全て一致した（.NET）。中隊の伝令は戦闘の結果を変えていない。
 
 **注意（.NET と Unity の違い）**：P2c.1.2 のハッシュは .NET で取ったもの。今回の Unity の実行では、ステージ2の段階つき（シード1）のログが、.NET のその値と違った（行数は同じ）。同じ Unity の中では、中隊の伝令を出す版と出さない版の戦闘の行が1文字も違わないので、違いは中隊の伝令からではなく、Unity（Mono）と .NET の計算の違いと読む。そのため P2c.1.2 との一致は .NET で確かめる（`CombatLogMatchesP2c12` は Unity では落ちうる）。
 

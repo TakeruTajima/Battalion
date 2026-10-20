@@ -62,6 +62,7 @@ namespace Battalion.Sim.Tests
                 if (!sim.Companies.Any(c => c.Side == Side.Red && c.OnBoard) || !sim.Companies.Any(c => c.Side == Side.Blue && c.OnBoard)) break;
             }
             lines = log.Count;
+            RunProgress.Tick();
             return log.ToString();
         }
 
@@ -116,6 +117,7 @@ namespace Battalion.Sim.Tests
         [Test]
         public void CombatLogMatchesP2c12()
         {
+            using var progress = RunProgress.Begin("戦闘のログの一致", P2c12Hashes.Length);
             var got = new System.Collections.Generic.List<string>();
             foreach (int stage in new[] { 1, 2 })
             {
@@ -141,6 +143,7 @@ namespace Battalion.Sim.Tests
         [Test]
         public void PrintLogHashes()
         {
+            using var progress = RunProgress.Begin("ログのハッシュ", P2c12Hashes.Length);
             var sb = new StringBuilder();
             foreach (int stage in new[] { 1, 2 })
             {
