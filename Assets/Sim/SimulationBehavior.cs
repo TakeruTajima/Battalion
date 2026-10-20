@@ -227,6 +227,9 @@ namespace Battalion.Sim
                     .Add("target", broken.Name)
                     .Add("decision", pursue ? "pursue" : "secure")
                     .ToString());
+            // 目標崩壊の報告と、追撃の可否の要請（P2c.2。情報だけ）：字面が確保で、独断で追わない時（追えるのは目標が壊走中のとき）
+            NoteDispatch(c, DispatchKind.TargetBroken, t, broken);
+            if (routed && o.OnBreak == AttackOnBreak.Secure && !pursue) NoteDispatch(c, DispatchKind.AskPursuit, t, broken);
             if (!pursue)
             {
                 if (cautiousRefused) LogIndependent(t, c, "no_pursuit", tgt);

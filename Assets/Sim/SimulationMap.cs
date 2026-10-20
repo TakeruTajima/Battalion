@@ -801,6 +801,7 @@ namespace Battalion.Sim
             }
             if (_log.Enabled)
                 _log.Write(Ev(t, "entrench_complete", c).Add("x", c.Position.X).Add("y", c.Position.Y).ToString());
+            NoteDispatch(c, DispatchKind.EntrenchDone, t);
         }
 
         /// <summary>陣地構築で塹壕にするマスの候補：中心と、向きに直交する方向（8方位に丸める）の左右2マスずつ。</summary>

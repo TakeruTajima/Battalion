@@ -100,6 +100,7 @@ namespace Battalion.Sim
             Transitions(t);
             UpdateStages(t);
             UpdateAutonomy(t);
+            UpdateDispatches(t);
 
             if (_log.Enabled && Tick % _snapshotEveryTicks == 0)
                 foreach (var c in _companies)
@@ -839,6 +840,11 @@ namespace Battalion.Sim
                 if (surrender)
                     _log.Write(Ev(t, "surrender", c).Add("strength", c.Strength).ToString());
             }
+
+            // 隣の崩壊の報告（P2c.2。情報だけ）
+            foreach (var f in _companies)
+                if (f != c && f.Side == c.Side && f.OnBoard && Vec2.Distance(f.Position, c.Position) <= CP.NeighborRoutRadiusM)
+                    NoteDispatch(f, DispatchKind.NeighborRouted, t, c);
 
             // 壊走の連鎖：300m 以内の味方に一度だけ −10（この壊走1回につき1度）
             foreach (var f in _companies)

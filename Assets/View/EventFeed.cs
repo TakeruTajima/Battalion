@@ -10,18 +10,23 @@ namespace Battalion.View
     /// </summary>
     public sealed class EventFeed : IEventSink
     {
+        /// <summary>出来事の種類（色分け。P2c.2）：ふつう／中隊からの要請（目立つ色）／中隊からの宣言（独断の色）。</summary>
+        public enum EntryKind { Normal, Request, Declaration }
+
         public readonly struct Entry
         {
             public readonly double TimeSec;
             public readonly string Text;
             /// <summary>読み手の注意を引く出来事（壊走・降伏・包囲・側面や背面を突かれた・逆襲）か。</summary>
             public readonly bool Important;
+            public readonly EntryKind Kind;
 
-            public Entry(double t, string text, bool important)
+            public Entry(double t, string text, bool important, EntryKind kind = EntryKind.Normal)
             {
                 TimeSec = t;
                 Text = text;
                 Important = important;
+                Kind = kind;
             }
         }
 
@@ -180,28 +185,10 @@ namespace Battalion.View
                     break;
                 }
                 // ---- P2c：自律行動と独断
+                // 独断の宣言は、中隊の伝令が本部に届いた時に出す（P2c.2。BattleApp.ProcessInbox）。
+                // 独断の限度での停止は「命令を終えた」の報告で届く
                 case "independent":
-                {
-                    string who = $"{unit}（{PersonalityJa(v["personality"].String)}）";
-                    string tgt = v.TryGet("target", out var tv) ? tv.String : null;
-                    string ts = v.TryGet("target_state", out var sv) ? StateJa(sv.String) : "";
-                    string text, tag;
-                    switch (v["kind"].String)
-                    {
-                        case "pursue": text = $"{who}独断で追撃（{tgt}）"; tag = "独断：追撃"; break;
-                        case "attack": text = $"{who}独断で攻撃（{ts}の {tgt}）"; tag = "独断：攻撃"; break;
-                        case "flank": text = $"{who}独断で側面へ（{tgt}）"; tag = "独断：側面へ"; break;
-                        case "cover": text = $"{who}独断で後退（物陰へ）"; tag = "独断：後退"; break;
-                        case "no_pursuit": text = $"{who}追撃せず確保（損害を嫌う）"; tag = "追撃せず"; break;
-                        default: text = $"{who}独断"; tag = "独断"; break;
-                    }
-                    Add(t, text, true);
-                    Happen(t, Kind.Independent, unit, tag);
-                    break;
-                }
                 case "independent_end":
-                    Add(t, $"{unit}（{PersonalityJa(v["personality"].String)}）持ち場から遠く離れた、止まって命令待ち", true);
-                    Happen(t, Kind.Autonomy, unit, "独断の限度");
                     break;
                 case "auto_cover":
                     if (v["independent"].Bool) break; // 独断の後退は宣言で出した

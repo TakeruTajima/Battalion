@@ -11,6 +11,7 @@ namespace Battalion.Sim.Tests
     /// reference_results.json の ±15% 以内に入ることを確かめる（損害率が 0 の中隊は対象外）。
     /// 正解値で全回降伏している中隊（S6 の R）は、本実装でも全回降伏することを確かめる。
     /// </summary>
+    [Category("Slow")]
     public class ReferenceVerificationTests
     {
         const double Tolerance = 0.15;

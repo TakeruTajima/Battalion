@@ -26,6 +26,30 @@ namespace Battalion.Sim
         public RunnersParams Runners = new RunnersParams();
         public OrdersParams Orders = new OrdersParams();
         public AutonomyParams Autonomy = new AutonomyParams();
+        public CouriersParams Couriers = new CouriersParams();
+
+        /// <summary>P2c.2 の中隊の伝令（意見具申。"couriers"）。速さ・喪失・経路は <see cref="RunnersParams"/> を使う。</summary>
+        public sealed class CouriersParams
+        {
+            /// <summary>中隊が伝令を出すまでの準備（秒）。</summary>
+            public double PrepSec;
+            /// <summary>1つの中隊が同時に出せる伝令の数（越える分は出さずに捨てる）。</summary>
+            public int MaxOutPerCompany;
+            /// <summary>報告・要請をまとめる間隔（前の伝令からこの秒数あける）。</summary>
+            public double BatchSec;
+            /// <summary>敵発見：気付いている指揮下の敵がこの距離以内に初めて入った時。</summary>
+            public double DiscoverRadiusM;
+            /// <summary>損害大：前の「損害大」から、初めの兵力に対してこの割合を新たに失った時（性格ごと）。</summary>
+            public readonly Dictionary<Personality, double> HeavyLossStep = new Dictionary<Personality, double>();
+            /// <summary>隣の崩壊：この距離以内の味方が壊走した時。</summary>
+            public double NeighborRoutRadiusM;
+            /// <summary>命令を請う：命令待ちがこの秒数続いた時、以後この秒数ごと。</summary>
+            public double AskOrdersAfterSec;
+            public double AskOrdersRepeatSec;
+            /// <summary>後退の許可：士気がこの値（慎重は未満、ほかは以下）で撃たれている時。この秒数撃たれなければ状況が変わったとみなす。</summary>
+            public readonly Dictionary<Personality, double> RetreatAskMorale = new Dictionary<Personality, double>();
+            public double RetreatAskQuietSec;
+        }
 
         /// <summary>P2c の中隊長の自律行動（"autonomy"）。</summary>
         public sealed class AutonomyParams
@@ -512,6 +536,18 @@ namespace Battalion.Sim
             p.Autonomy.AgilePostLimitM = au.D("agile_post_limit_m");
             p.Autonomy.AgileCheckSec = au.D("agile_check_sec");
             p.Autonomy.CautiousCoverRadiusM = au.D("cautious_cover_radius_m");
+
+            var co = root["couriers"];
+            p.Couriers.PrepSec = co.D("prep_sec");
+            p.Couriers.MaxOutPerCompany = (int)co.D("max_out_per_company");
+            p.Couriers.BatchSec = co.D("batch_sec");
+            p.Couriers.DiscoverRadiusM = co.D("discover_radius_m");
+            ReadPersonalityTable(co["heavy_loss_step"], p.Couriers.HeavyLossStep);
+            p.Couriers.NeighborRoutRadiusM = co.D("neighbor_rout_radius_m");
+            p.Couriers.AskOrdersAfterSec = co.D("ask_orders_after_sec");
+            p.Couriers.AskOrdersRepeatSec = co.D("ask_orders_repeat_sec");
+            ReadPersonalityTable(co["retreat_ask_morale"], p.Couriers.RetreatAskMorale);
+            p.Couriers.RetreatAskQuietSec = co.D("retreat_ask_quiet_sec");
 
             return p;
         }

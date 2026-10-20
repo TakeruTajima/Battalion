@@ -100,6 +100,7 @@ namespace Battalion.View
         /// <summary>伝令：本部と向かう中隊を結ぶ点線と、その上を動く小さな点（行きは黄、帰りは水色）。倒れた伝令は描かない。</summary>
         void DrawRunners(float px)
         {
+            DrawCouriers(px);
             var go = new Color32(255, 220, 60, 255);
             var back = new Color32(120, 210, 255, 255);
             foreach (var r in _sim.Runners)

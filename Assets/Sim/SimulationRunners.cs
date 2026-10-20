@@ -19,18 +19,27 @@ namespace Battalion.Sim
         Invalid,
     }
 
-    /// <summary>伝令1人（1つの命令書を運ぶ）。表示のために読める。</summary>
-    public sealed class Runner
+    /// <summary>伝令の共通の土台（本部の伝令と中隊の伝令。P2c.2）：陣営、位置、たどっている経路。</summary>
+    public abstract class Messenger
     {
         public int Id;
         public Side Side;
+        public Vec2 Position;
+        /// <summary>今たどっている経路の点（最後の点の後は、向かう先へまっすぐ）と、次に向かう点の添字、次に引き直す時刻。</summary>
+        public List<Vec2> Path;
+        public int PathIndex;
+        public double NextReplan;
+    }
+
+    /// <summary>伝令1人（1つの命令書を運ぶ）。表示のために読める。</summary>
+    public sealed class Runner : Messenger
+    {
         /// <summary>運んでいる命令書（P2b）。準備中なら直せる。</summary>
         public OrderSheet Sheet;
         /// <summary>命令書の第1段の命令（P2a からの読み口）。</summary>
         public Order Order => Sheet.First;
         public int CompanyId;
         public RunnerState State;
-        public Vec2 Position;
         /// <summary>発令した時刻（秒）。</summary>
         public double SentTime;
         /// <summary>出した順（同じ中隊への命令の新旧を決める）。</summary>
@@ -43,10 +52,6 @@ namespace Battalion.Sim
         public double OverdueAt;
         /// <summary>命令書を渡したか。</summary>
         public bool Delivered;
-        /// <summary>今たどっている経路の点（最後の点の後は、向かう先へまっすぐ）と、次に向かう点の添字、次に引き直す時刻。</summary>
-        public List<Vec2> Path;
-        public int PathIndex;
-        public double NextReplan;
     }
 
     // P2a：伝令（仕様「P2a：伝令（確定）」）。P2b：命令書を運び、経路探索で進む（仕様「P2b」の伝令の経路）。
@@ -371,7 +376,7 @@ namespace Battalion.Sim
         /// <summary>
         /// 伝令を <paramref name="seconds"/> 秒ぶん経路に沿って <paramref name="to"/> へ動かす。10秒ごとに経路を引き直す。着いたら true。
         /// </summary>
-        bool MoveRunner(Runner r, Vec2 to, double seconds, double tickStart)
+        bool MoveRunner(Messenger r, Vec2 to, double seconds, double tickStart)
         {
             if (tickStart >= r.NextReplan - 1e-9)
             {

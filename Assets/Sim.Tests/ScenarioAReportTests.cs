@@ -11,6 +11,7 @@ namespace Battalion.Sim.Tests
     /// シナリオAの両ステージで、概算シミュレーション（docs/reference/sketch/battle_sketch_v3.py）と同じ5つの作戦を
     /// 各20回（シード1〜20）回し、結果を概算の結果と並べて出力する。合否は付けない（例外なく終わることだけを確かめる）。
     /// </summary>
+    [Category("Slow")]
     public class ScenarioAReportTests
     {
         public const int Runs = 20;

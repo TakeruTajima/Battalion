@@ -112,7 +112,10 @@ namespace Battalion.View
             _result = null;
             _hideEnd = false;
             _commandRefusal = null;
-            _awaiting = null;
+            // 意見具申の表示（P2c.2）
+            _inboxSeen = 0;
+            _dismissed.Clear();
+            _approveArmed = null;
             _phase = Phase.Running;
             FitCamera();
         }

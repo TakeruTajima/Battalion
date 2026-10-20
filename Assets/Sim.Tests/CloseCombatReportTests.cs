@@ -7,6 +7,7 @@ namespace Battalion.Sim.Tests
     /// 接近戦の検算：50m で対峙した同数の正面衝突。合否は問わず、結果を出力するだけ（値の決定は報告を見てから）。
     /// 比較のため、同じ条件の 300m（S1）も並べて出す。
     /// </summary>
+    [Category("Slow")]
     public class CloseCombatReportTests
     {
         [Test]

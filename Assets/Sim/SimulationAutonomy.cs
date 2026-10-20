@@ -623,6 +623,8 @@ namespace Battalion.Sim
         /// <summary>独断の宣言（出来事の欄に出す）。kind：pursue／attack／flank／cover／no_pursuit。</summary>
         void LogIndependent(double t, Company c, string kind, Company target)
         {
+            // 宣言は中隊の伝令で本部へ送る（P2c.2）
+            NoteDispatch(c, DispatchKind.Declaration, t, target, kind);
             if (!_log.Enabled) return;
             var ev = Ev(t, "independent", c).Add("side", SideName(c.Side)).Add("personality", Names.Of(c.Personality)).Add("kind", kind);
             if (target != null) ev.Add("target", target.Name).Add("target_state", Names.Of(target.State));

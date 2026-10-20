@@ -85,6 +85,7 @@ namespace Battalion.Sim.Tests
 
         /// <summary>表示から PeekExposure・PeekEscape を毎刻み呼んでも、会戦の結果（ログ）が変わらないこと。</summary>
         [Test]
+        [Category("Slow")]
         public void PeeksDoNotChangeTheBattle()
         {
             var sc = MapScenario.LoadFile(TestUtil.PathOf("maps/scenario_a2.json"));

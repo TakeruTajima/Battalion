@@ -11,7 +11,7 @@ namespace Battalion.View
         const float TopH = 56, LeftW = 270, RightW = 380, BottomH = 150;
 
         Font _font;
-        GUIStyle _label, _small, _bold, _box, _button, _toggleOn, _logImportant, _title;
+        GUIStyle _label, _small, _bold, _box, _button, _toggleOn, _logImportant, _logRequest, _logDeclaration, _title;
         Texture2D _white;
         Vector2 _logScroll;
         int _lastLogCount;
@@ -56,6 +56,11 @@ namespace Battalion.View
             _toggleOn.normal.textColor = new Color(1f, 0.85f, 0.1f);
             _logImportant = new GUIStyle(_small);
             _logImportant.normal.textColor = new Color(1f, 0.75f, 0.35f);
+            // 中隊からの要請（目立つ色・太字）と宣言（独断の色）。P2c.2
+            _logRequest = new GUIStyle(_small) { fontStyle = FontStyle.Bold };
+            _logRequest.normal.textColor = RequestColor;
+            _logDeclaration = new GUIStyle(_small);
+            _logDeclaration.normal.textColor = IndependentColor;
             _white = Texture2D.whiteTexture;
         }
 
@@ -145,6 +150,9 @@ namespace Battalion.View
             GUILayout.Space(10);
             if (GUILayout.Button(_autoPause ? "自動一時停止：入 (P)" : "自動一時停止：切 (P)", _autoPause ? _toggleOn : _button, GUILayout.Width(160)))
                 _autoPause = !_autoPause;
+            // 自動一時停止の選択肢「要請が届いた」（P2c.2。初めは切）
+            if (GUILayout.Button(_pauseOnRequest ? "要請で止める：入" : "要請で止める：切", _pauseOnRequest ? _toggleOn : _button, GUILayout.Width(120)))
+                _pauseOnRequest = !_pauseOnRequest;
             GUILayout.Space(10);
             if (_phase == Phase.Running) DrawFlareButtons();
             GUILayout.FlexibleSpace();
@@ -203,10 +211,13 @@ namespace Battalion.View
                 GUI.Label(new Rect(row.x + 132, row.y + 14, 60, 18), $"{c.Strength}名", _small);
                 Bar(new Rect(row.x + 8, row.y + 31, 120, 8), (float)(c.Morale / 100.0), MoraleColor(c));
                 GUI.Label(new Rect(row.x + 132, row.y + 25, 60, 18), $"士気{c.Morale:0}", _small);
+                if (blue) GUI.Label(new Rect(row.x + 180, row.y + 20, row.width - 182, 18), LastReportText(c), _small);
                 GUI.Label(new Rect(row.x + 8, row.y + 38, row.width - 10, 18), $"命令：{OrderText(c)}", _small);
                 y += 60;
                 if (y > r.yMax - 56) break;
             }
+            // 具申の箱（P2c.2）
+            if (r.yMax - y > 70) DrawRequestBox(new Rect(r.x, y + 4, r.width, r.yMax - y - 8));
         }
 
         void Bar(Rect r, float v, Color col)
@@ -392,7 +403,10 @@ namespace Battalion.View
             for (int k = 0; k < entries.Count; k++)
             {
                 var e = entries[k];
-                GUI.Label(new Rect(0, k * lineH, content.width, lineH), $"{EventFeed.FormatTime(e.TimeSec)}　{e.Text}", e.Important ? _logImportant : _small);
+                var style = e.Kind == EventFeed.EntryKind.Request ? _logRequest
+                    : e.Kind == EventFeed.EntryKind.Declaration ? _logDeclaration
+                    : e.Important ? _logImportant : _small;
+                GUI.Label(new Rect(0, k * lineH, content.width, lineH), $"{EventFeed.FormatTime(e.TimeSec)}　{e.Text}", style);
             }
             GUI.EndScrollView();
         }
