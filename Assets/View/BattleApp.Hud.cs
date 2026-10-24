@@ -20,7 +20,7 @@ namespace Battalion.View
         Rect LeftRect => new Rect(0, TopH, LeftW, Screen.height - TopH - BottomH);
         Rect RightRect => new Rect(Screen.width - RightW, TopH, RightW, Screen.height - TopH - BottomH);
         Rect BottomRect => new Rect(0, Screen.height - BottomH, Screen.width, BottomH);
-        Rect EndRect => new Rect(Screen.width / 2f - 230, Screen.height / 2f - 170, 460, 340);
+        Rect EndRect => new Rect(Screen.width / 2f - 230, Screen.height / 2f - 190, 460, 380);
 
         /// <summary>地図を見る領域（パネルの間）。GUI の座標（左上が原点）。</summary>
         Rect MapArea() => new Rect(LeftW, TopH, Screen.width - LeftW - RightW, Screen.height - TopH - BottomH);
@@ -442,6 +442,13 @@ namespace Battalion.View
             GUILayout.BeginArea(new Rect(r.x + 16, r.y + 12, r.width - 32, r.height - 24));
             GUILayout.Label(_result.BlueWins ? "勝利：リーデル村を確保" : "敗北：村を確保できなかった", _title);
             GUILayout.Label($"{_result.Reason}（{EventFeed.FormatTime(_result.EndSec)}）", _label);
+            GUILayout.Space(6);
+            // 作戦目標ごとの達成（V1。勝ち負けを1つにしない）
+            var ob = _result.Objectives;
+            string Mark(bool ok) => ok ? "<color=#7fb2ff><b>達成</b></color>" : "<color=#ff9a6a><b>未達成</b></color>";
+            GUILayout.Label($"第一目標（村の奪取）：{Mark(ob.Primary)}　第二目標（塹壕の敵の排除）：{Mark(ob.Secondary)}", _label);
+            GUILayout.Label($"赤の目標（村の死守）：{(ob.RedHolds ? "<color=#ff9a6a><b>達成</b></color>" : "<color=#7fb2ff><b>失敗</b></color>")}" +
+                            $"　塹壕の赤：{string.Join("・", _scenario.TrenchUnits)}", _label);
             GUILayout.Space(8);
             SideLine("青（自軍）", _result.Blue);
             SideLine("赤（敵）", _result.Red);

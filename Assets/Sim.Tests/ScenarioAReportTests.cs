@@ -164,11 +164,26 @@ namespace Battalion.Sim.Tests
             plans.Add(("拘束＋迂回（遠い拘束）", PinAndFlank(stage, false)));
             plans.Add(("拘束＋迂回（近い拘束）", PinAndFlank(stage, true)));
             plans.Add((RecklessPlanName, PinAndRecklessAttack(stage)));
+            plans.Add((VillageAdvancePlanName, VillageAdvance()));
             return plans;
+        }
+
+        public const string VillageAdvancePlanName = "村への前進（全中隊）";
+
+        /// <summary>
+        /// 「村への前進（全中隊）」（V1）：全中隊に村の中心への前進だけを命じる。素直な作戦の基準
+        /// （P2c.1.2 のプレイで、これだけでおおむね勝てると分かったため）。
+        /// </summary>
+        public static PlannedOrder[] VillageAdvance()
+        {
+            var v = MapScenario.VillageCenter;
+            return new[] { O(0, "B1", v.X, v.Y, 0), O(0, "B2", v.X, v.Y, 0), O(0, "B3", v.X, v.Y, 0), O(0, "B4", v.X, v.Y, 0) };
         }
 
         public sealed class RunResult
         {
+            /// <summary>会戦の結果の記録（V1。作戦目標の達成、損害、撃ち合った組、通り道など）。</summary>
+            public BattleRecord Record;
             public bool Win;
             public double EndMin;
             public double BlueLoss;
@@ -247,6 +262,9 @@ namespace Battalion.Sim.Tests
             var counter = new RoutCounter();
             var sim = sc.Build(ParamsForRuns ?? TestUtil.Params, seed, counter);
             start?.Invoke(sim);
+            // 会戦の結果の記録（V1。読むだけで、会戦とログを変えない）
+            var recorder = new BattleRecorder(sim, sc, seed);
+            recorder.Observe();
             var orders = plan.Where(o => o.WhenBroken == null).OrderBy(o => o.AtSec).ToList();
             var conditional = plan.Where(o => o.WhenBroken != null).ToList();
             int next = 0;
@@ -265,6 +283,7 @@ namespace Battalion.Sim.Tests
                 }
                 tick?.Invoke(sim);
                 sim.Step();
+                recorder.Observe();
                 foreach (var c in sim.Companies)
                     if (c.AttackFixed && c.CurrentOrder.Type == OrderType.Attack && !fixedAt.ContainsKey(c.Name)) fixedAt[c.Name] = sim.Time / 60;
                 if (!redAllBroken.HasValue && sim.Companies.Where(c => c.Side == Side.Red).All(c => !c.UnderCommand))
@@ -274,7 +293,9 @@ namespace Battalion.Sim.Tests
                 if (!redLeft || !blueLeft) break;
             }
             RunProgress.Tick();
-            return Summarize(sc, sim, counter, redAllBroken, fixedAt);
+            var result = Summarize(sc, sim, counter, redAllBroken, fixedAt);
+            result.Record = recorder.Finish();
+            return result;
         }
 
         /// <summary>作戦の命令を伝令で出す（P2a）。出せた（判断枠があった）ら true。</summary>
@@ -373,11 +394,43 @@ namespace Battalion.Sim.Tests
             Assert.Pass();
         }
 
+        /// <summary>
+        /// 目標ごとの達成率の欄（V1）：「第一目標 | 第二目標 | 両方 | 村を取った時刻の中央値」。
+        /// 村を取った時刻は、初めて第一目標の条件を満たした時刻の中央値（満たした回だけ。「（回数/20）」を添える）。
+        /// </summary>
+        static string ObjectiveCells(List<RunResult> rs)
+        {
+            double p = rs.Average(r => r.Record.Objectives.Primary ? 1.0 : 0.0);
+            double s = rs.Average(r => r.Record.Objectives.Secondary ? 1.0 : 0.0);
+            double both = rs.Average(r => r.Record.Objectives.Primary && r.Record.Objectives.Secondary ? 1.0 : 0.0);
+            var taken = rs.Where(r => r.Record.FirstPrimarySec.HasValue).Select(r => r.Record.FirstPrimarySec.Value / 60).ToList();
+            string t = taken.Count == 0 ? "—" : $"{TestUtil.Median(taken):0.0}分（{taken.Count}/{rs.Count}）";
+            return $"{p:0.00} | {s:0.00} | {both:0.00} | {t}";
+        }
+
+        /// <summary>
+        /// 環境変数 BATTALION_RECORD_DIR があれば、会戦ごとの記録（JSON）をそこへ書き出す
+        /// （ファイル名：stage{ステージ}_{作戦}_{裁量}_seed{シード}.json。作戦の名前は記録の "plan" に入る）。
+        /// </summary>
+        static void WriteRecords(List<RunResult> rs, string plan, string discretion)
+        {
+            string dir = Environment.GetEnvironmentVariable("BATTALION_RECORD_DIR");
+            foreach (var r in rs) r.Record.Plan = plan;
+            if (string.IsNullOrEmpty(dir)) return;
+            Directory.CreateDirectory(dir);
+            foreach (var r in rs)
+            {
+                string safe = string.Concat(plan.Select(ch => Path.GetInvalidFileNameChars().Contains(ch) ? '_' : ch));
+                File.WriteAllText(Path.Combine(dir, $"stage{r.Record.Stage}_{safe}_{discretion}_seed{r.Record.Seed}.json"), r.Record.ToJson(),
+                    new UTF8Encoding(false));
+            }
+        }
+
         static string AutonomyTable()
         {
             var sb = new StringBuilder();
-            sb.AppendLine("| ステージ | 作戦 | 裁量 | 勝率 | 青の損害率 | 崩れた青 | 崩れた赤 | 猪突 追撃 | 猪突 続けて攻撃 | 機敏 回り込み | 慎重 後退 | 慎重 追撃せず | 限度で停止 | 物陰 | 浅い掩体 | 陣地に入る | 赤の自律 |");
-            sb.AppendLine("| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |");
+            sb.AppendLine("| ステージ | 作戦 | 裁量 | 勝率 | 第一目標 | 第二目標 | 両方 | 村を取った時刻の中央値 | 青の損害率 | 崩れた青 | 崩れた赤 | 猪突 追撃 | 猪突 続けて攻撃 | 機敏 回り込み | 慎重 後退 | 慎重 追撃せず | 限度で停止 | 物陰 | 浅い掩体 | 陣地に入る | 赤の自律 |");
+            sb.AppendLine("| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |");
             foreach (int stage in new[] { 1, 2 })
             {
                 var sc = MapScenario.LoadFile(TestUtil.PathOf($"maps/scenario_a{stage}.json"));
@@ -390,10 +443,11 @@ namespace Battalion.Sim.Tests
                     foreach (var (name, plan, start, tick) in all)
                     {
                         var rs = Enumerable.Range(1, Runs).Select(s => RunOne(sc, plan, (ulong)s, start, tick, d)).ToList();
+                        WriteRecords(rs, name, d == Discretion.Strict ? "strict" : "delegate");
                         string A(params string[] keys) =>
                             rs.Average(r => keys.Sum(k => r.Autonomy.TryGetValue(k, out int n) ? n : 0)).ToString("0.00");
                         sb.AppendLine($"| {stage} | {name} | {(d == Discretion.Strict ? "厳命" : "任せる")} | " +
-                                      $"{rs.Average(r => r.Win ? 1.0 : 0.0):0.00} | {rs.Average(r => r.BlueLoss):0.000} | " +
+                                      $"{rs.Average(r => r.Win ? 1.0 : 0.0):0.00} | " + ObjectiveCells(rs) + $" | {rs.Average(r => r.BlueLoss):0.000} | " +
                                       $"{rs.Average(r => r.BlueBroken):0.00} | {rs.Average(r => r.RedBroken):0.00} | " +
                                       $"{A("pursue")} | {A("attack")} | {A("flank")} | {A("cover")} | {A("no_pursuit")} | {A("independent_end")} | " +
                                       $"{A("auto_cover")} | {A("scrape_start")} | {A("enter_position")} | " +
@@ -413,8 +467,8 @@ namespace Battalion.Sim.Tests
             using var progress = RunProgress.Begin("通し実行の表", AllPlanRuns());
             var sketch = JsonValue.Parse(File.ReadAllText(TestUtil.PathOf("docs/reference/sketch/battle_sketch_v3_results.json")));
             var sb = new StringBuilder();
-            sb.AppendLine("| ステージ | 作戦 | 勝率 | 赤が全て崩れた割合 | 青の損害率 | 崩れた青（終了時） | 崩れた赤（終了時） | 降伏した赤 | 終了時刻の中央値 |");
-            sb.AppendLine("| --- | --- | --- | --- | --- | --- | --- | --- | --- |");
+            sb.AppendLine("| ステージ | 作戦 | 勝率 | 第一目標 | 第二目標 | 両方 | 村を取った時刻の中央値 | 赤が全て崩れた割合 | 青の損害率 | 崩れた青（終了時） | 崩れた赤（終了時） | 降伏した赤 | 終了時刻の中央値 |");
+            sb.AppendLine("| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |");
             foreach (int stage in new[] { 1, 2 })
             {
                 var sc = MapScenario.LoadFile(TestUtil.PathOf($"maps/scenario_a{stage}.json"));
@@ -424,11 +478,13 @@ namespace Battalion.Sim.Tests
                 foreach (var (name, plan, start, tick) in all)
                 {
                     var rs = Enumerable.Range(1, Runs).Select(s => RunOne(sc, plan, (ulong)s, start, tick)).ToList();
+                    WriteRecords(rs, name, "delegate");
                     // 「拘束＋迂回」は概算シミュレーションにない
                     bool hasSketch = sketch.TryGet($"stage{stage}:{name}", out var k);
                     string Ref(string key, string fmt) => hasSketch ? "［" + k.D(key).ToString(fmt) + "］" : "";
                     sb.AppendLine($"| {stage} | {name} | " +
                                   $"{rs.Average(r => r.Win ? 1.0 : 0.0):0.00}{Ref("win", "0.00")} | " +
+                                  ObjectiveCells(rs) + " | " +
                                   $"{rs.Average(r => r.RedAllBrokenMin.HasValue ? 1.0 : 0.0):0.00} | " +
                                   $"{rs.Average(r => r.BlueLoss):0.000}{Ref("blue_loss", "0.000")} | " +
                                   $"{rs.Average(r => r.BlueBroken):0.00}（{rs.Average(r => r.BlueOutAtEnd):0.00}）{Ref("blue_out", "0.00")} | " +

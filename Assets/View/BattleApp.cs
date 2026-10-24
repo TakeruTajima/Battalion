@@ -40,6 +40,8 @@ namespace Battalion.View
         sealed class BattleResult
         {
             public bool BlueWins;
+            /// <summary>作戦目標の達成（V1）。</summary>
+            public ObjectiveResult Objectives;
             public double EndSec;
             public string Reason;
             public SideResult Blue, Red;
@@ -199,6 +201,7 @@ namespace Battalion.View
             _result = new BattleResult
             {
                 BlueWins = _scenario.BlueWins(_sim),
+                Objectives = _scenario.EvaluateObjectives(_sim),
                 EndSec = _sim.Time,
                 Reason = timeUp ? $"{_scenario.TimeLimitMin:0}分が経過" : (!redOn ? "赤が全て盤上から消えた" : "青が全て盤上から消えた"),
                 Blue = Summarize(Side.Blue),

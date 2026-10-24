@@ -29,6 +29,14 @@ namespace Battalion.Sim
         public Vec2 ReserveTriggerCenter;
         public double ReserveTriggerRadiusM;
 
+        /// <summary>
+        /// 塹壕に配置した赤の中隊（V1。青の第二目標「塹壕の敵の排除」の対象）。地図ファイルにないので、ステージごとにここで持つ：
+        /// ステージ1 は稜線の塹壕の R1、ステージ2 は前の塹壕の R1・R2（R3 は村の予備隊）。
+        /// </summary>
+        public readonly List<string> TrenchUnits = new List<string>();
+
+        public static string[] TrenchUnitsOf(int stage) => stage == 1 ? new[] { "R1" } : stage == 2 ? new[] { "R1", "R2" } : new string[0];
+
         /// <summary>勝ちの判定に使う村の中心（概算シミュレーションと同じ）。</summary>
         public static readonly Vec2 VillageCenter = new Vec2(1975, 1000);
         /// <summary>大隊本部の位置（P2a。両ステージ共通、試作では動かない）。</summary>
@@ -59,6 +67,7 @@ namespace Battalion.Sim
             var tc = rs["trigger_center"].Array;
             s.ReserveTriggerCenter = new Vec2(tc[0].Number, tc[1].Number);
             s.ReserveTriggerRadiusM = rs.D("trigger_radius_m");
+            s.TrenchUnits.AddRange(TrenchUnitsOf(s.Stage));
             return s;
         }
 
@@ -119,6 +128,22 @@ namespace Battalion.Sim
                 }
             }
             return (blueInVillage && !redNearVillage) || (!redOnBoard && blueUnderCommand);
+        }
+
+        /// <summary>
+        /// 作戦目標の達成（V1）：青の第一目標は村の奪取（<see cref="BlueWins"/>）、第二目標は塹壕の敵の排除
+        /// （塹壕に配置した赤の中隊が全て、指揮下にないか盤上にいない）。赤の目標（村の死守）は第一目標の裏。
+        /// 会戦の終わり（90分の時点）に呼ぶ。
+        /// </summary>
+        public ObjectiveResult EvaluateObjectives(Simulation sim)
+        {
+            bool trenchCleared = true;
+            foreach (var name in TrenchUnits)
+            {
+                var c = sim.Find(name);
+                if (c != null && c.OnBoard && c.UnderCommand) trenchCleared = false;
+            }
+            return new ObjectiveResult(BlueWins(sim), trenchCleared);
         }
     }
 

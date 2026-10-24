@@ -117,7 +117,7 @@ namespace Battalion.Sim.Tests
         [Test]
         public void CombatLogMatchesP2c12()
         {
-            using var progress = RunProgress.Begin("戦闘のログの一致", P2c12Hashes.Length);
+            using var progress = RunProgress.Begin("戦闘のログの一致", new[] { 1, 2 }.Sum(st => ScenarioAReportTests.PlansWithPinAndFlank(st).Count + 1) * 2);
             var got = new System.Collections.Generic.List<string>();
             foreach (int stage in new[] { 1, 2 })
             {
@@ -136,14 +136,28 @@ namespace Battalion.Sim.Tests
                     got.Add($"stage{stage} {ScenarioAReportTests.StagedPlanName} seed{seed} {n} {Hash(text)}");
                 }
             }
-            for (int k = 0; k < got.Count; k++) TestContext.WriteLine((got[k] == P2c12Hashes[k] ? "一致 " : "違う ") + got[k]);
-            Assert.That(got, Is.EqualTo(P2c12Hashes));
+            // P2c.1.2 の後に足した作戦（V1 の「村への前進（全中隊）」など）は比べる値がないので、出すだけ
+            var mismatched = new System.Collections.Generic.List<string>();
+            foreach (var g in got)
+            {
+                string prefix = string.Join(" ", g.Split(' ').Take(3)) + " ";
+                string expected = P2c12Hash(prefix);
+                if (expected == null) TestContext.WriteLine("（新しい作戦） " + g);
+                else
+                {
+                    TestContext.WriteLine((g == expected ? "一致 " : "違う ") + g);
+                    if (g != expected) mismatched.Add(g);
+                }
+            }
+            Assert.That(P2c12Hashes.All(h => got.Contains(h) || mismatched.Any(m => m.StartsWith(string.Join(" ", h.Split(' ').Take(3)) + " ", StringComparison.Ordinal))),
+                Is.True, "P2c.1.2 の作戦が全て回っている");
+            Assert.That(mismatched, Is.Empty);
         }
 
         [Test]
         public void PrintLogHashes()
         {
-            using var progress = RunProgress.Begin("ログのハッシュ", P2c12Hashes.Length);
+            using var progress = RunProgress.Begin("ログのハッシュ", new[] { 1, 2 }.Sum(st => ScenarioAReportTests.PlansWithPinAndFlank(st).Count + 1) * 2);
             var sb = new StringBuilder();
             foreach (int stage in new[] { 1, 2 })
             {
