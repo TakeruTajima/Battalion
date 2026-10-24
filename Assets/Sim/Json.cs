@@ -207,10 +207,168 @@ namespace Battalion.Sim
                 if (Peek() == '-') _i++;
                 while (_i < _s.Length && "0123456789.eE+-".IndexOf(_s[_i]) >= 0) _i++;
                 string tok = _s.Substring(start, _i - start);
-                if (!double.TryParse(tok, NumberStyles.Float, CultureInfo.InvariantCulture, out double d))
+                if (!JsonNumber.TryParse(tok, out double d))
                     throw Error($"不正な数値 '{tok}'");
                 return new JsonValue { Kind = JsonKind.Number, Number = d };
             }
+        }
+    }
+
+    /// <summary>
+    /// JSON の数の読み書き（V1 タスク0）。実行環境（.NET と Unity の Mono）によらず同じビット列・同じ文字になるようにする。
+    /// Mono の <c>double.Parse</c> は正しく丸めないことがあり、<c>ToString("R")</c> は往復できる値でも 17桁で書くことがあるため。
+    /// </summary>
+    public static class JsonNumber
+    {
+        // 10⁰〜10²²：double で正確に表せる
+        static readonly double[] Pow10 =
+        {
+            1e0, 1e1, 1e2, 1e3, 1e4, 1e5, 1e6, 1e7, 1e8, 1e9, 1e10, 1e11,
+            1e12, 1e13, 1e14, 1e15, 1e16, 1e17, 1e18, 1e19, 1e20, 1e21, 1e22,
+        };
+
+        /// <summary>
+        /// 正しく丸める読み方で読めなかった（実行環境の <c>double.Parse</c> に任せた）数の数（テストで、設定や地図の数が
+        /// 全て正しく丸める読み方で読めることを確かめるため）。
+        /// </summary>
+        public static int FallbackCount;
+
+        /// <summary>
+        /// 数を読む。有効数字 15桁以下で、10 の指数が ±22 以内なら「整数 × 10ⁿ」か「整数 ÷ 10ⁿ」の1回の演算で読む
+        /// （整数も 10ⁿ も double で正確に表せるので、結果は正しく丸まり、実行環境によらない）。それ以外は <c>double.Parse</c>。
+        /// </summary>
+        public static bool TryParse(string tok, out double value)
+        {
+            if (TryParseExact(tok, out value)) return true;
+            FallbackCount++;
+            return double.TryParse(tok, NumberStyles.Float, CultureInfo.InvariantCulture, out value);
+        }
+
+        /// <summary>正しく丸める読み方（上の1回の演算）で読めれば true。</summary>
+        public static bool TryParseExact(string tok, out double value)
+        {
+            value = 0;
+            int i = 0, n = tok.Length;
+            bool neg = false;
+            if (i < n && (tok[i] == '-' || tok[i] == '+')) neg = tok[i++] == '-';
+            long mant = 0;
+            int digits = 0, exp10 = 0;
+            bool any = false, dot = false;
+            for (; i < n; i++)
+            {
+                char c = tok[i];
+                if (c == '.')
+                {
+                    if (dot) return false;
+                    dot = true;
+                    continue;
+                }
+                if (c < '0' || c > '9') break;
+                any = true;
+                if (mant == 0 && c == '0')
+                {
+                    if (dot) exp10--; // 小数点の後の先頭の 0
+                    continue;
+                }
+                if (digits >= 15)
+                {
+                    // 16桁目以降は 0 だけ許す（末尾の 0）
+                    if (c != '0') return false;
+                    if (!dot) exp10++;
+                    continue;
+                }
+                mant = mant * 10 + (c - '0');
+                digits++;
+                if (dot) exp10--;
+            }
+            if (!any) return false;
+            if (i < n)
+            {
+                if (tok[i] != 'e' && tok[i] != 'E') return false;
+                i++;
+                bool eneg = false;
+                if (i < n && (tok[i] == '-' || tok[i] == '+')) eneg = tok[i++] == '-';
+                int e = 0;
+                bool edig = false;
+                for (; i < n; i++)
+                {
+                    char c = tok[i];
+                    if (c < '0' || c > '9') return false;
+                    edig = true;
+                    if (e > 10000) return false;
+                    e = e * 10 + (c - '0');
+                }
+                if (!edig) return false;
+                exp10 += eneg ? -e : e;
+            }
+            if (mant == 0)
+            {
+                value = neg ? -0.0 : 0.0;
+                return true;
+            }
+            // 末尾の 0 を指数へ寄せる（「1500」は 15×10²）
+            while (mant % 10 == 0)
+            {
+                mant /= 10;
+                exp10++;
+            }
+            if (exp10 < -22 || exp10 > 22) return false;
+            double m = mant;
+            double v = exp10 >= 0 ? m * Pow10[exp10] : m / Pow10[-exp10];
+            value = neg ? -v : v;
+            return true;
+        }
+
+        /// <summary>
+        /// ログに数を書く：小数第6位で丸め（0 から遠い方へ）、.NET の <c>ToString("R")</c> と同じ文字を、実行環境によらずに書く。
+        /// 丸めた値を 100万倍した整数から「整数部.小数部（末尾の 0 を落とす）」で書く。0.0001 未満は「1.2E-05」の形。
+        /// 10億以上（ログには出ない）は <c>ToString("R")</c> に任せる。
+        /// </summary>
+        public static void Append(StringBuilder sb, double value)
+        {
+            if (double.IsNaN(value) || double.IsInfinity(value))
+            {
+                sb.Append("null");
+                return;
+            }
+            double scaled = Math.Round(value * 1e6, MidpointRounding.AwayFromZero);
+            if (scaled == 0)
+            {
+                sb.Append('0'); // -0 も 0
+                return;
+            }
+            if (Math.Abs(scaled) >= 1e15)
+            {
+                sb.Append((scaled / 1e6).ToString("R", CultureInfo.InvariantCulture));
+                return;
+            }
+            long m = (long)scaled;
+            if (m < 0)
+            {
+                sb.Append('-');
+                m = -m;
+            }
+            if (m < 100)
+            {
+                // 0.0001 未満：.NET の "R" と同じ指数の形（1.2E-05、5E-06）
+                int zeros = 0;
+                while (m % 10 == 0)
+                {
+                    m /= 10;
+                    zeros++;
+                }
+                string ds = m.ToString(CultureInfo.InvariantCulture);
+                int e = ds.Length - 1 + zeros - 6;
+                sb.Append(ds[0]);
+                if (ds.Length > 1) sb.Append('.').Append(ds, 1, ds.Length - 1);
+                sb.Append('E').Append(e < 0 ? '-' : '+').Append(Math.Abs(e).ToString("00", CultureInfo.InvariantCulture));
+                return;
+            }
+            long ip = m / 1000000, fp = m % 1000000;
+            sb.Append(ip.ToString(CultureInfo.InvariantCulture));
+            if (fp == 0) return;
+            string f = fp.ToString("000000", CultureInfo.InvariantCulture).TrimEnd('0');
+            sb.Append('.').Append(f);
         }
     }
 
@@ -292,15 +450,8 @@ namespace Battalion.Sim
 
         public static void AppendNumber(StringBuilder sb, double value)
         {
-            if (double.IsNaN(value) || double.IsInfinity(value))
-            {
-                sb.Append("null");
-                return;
-            }
-            // 表示とハッシュを安定させるため、小数第6位で丸める
-            double r = Math.Round(value, 6, MidpointRounding.AwayFromZero);
-            if (r == 0) r = 0; // -0 を 0 にそろえる
-            sb.Append(r.ToString("R", CultureInfo.InvariantCulture));
+            // 表示とハッシュを安定させるため、小数第6位で丸め、実行環境によらない書き方で書く（V1 タスク0）
+            JsonNumber.Append(sb, value);
         }
 
         public static void AppendString(StringBuilder sb, string s)
