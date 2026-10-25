@@ -13,7 +13,7 @@
 | 基準 | 結果 |
 | --- | --- |
 | .NET の速いテストが全て通る | 325件全て通過（`sim_params.initial.json` の反映の後。`SimParamsIsIdenticalToInitial` も通る） |
-| Unity でコンパイルが通り、EditMode の速いテストが通る | **まだ確かめていない**（下の「触って確かめる項目」の初めに置いた） |
+| Unity でコンパイルが通り、EditMode の速いテストが通る | Unity 6.3 LTS（6000.3.11f1）のバッチモードで、コンパイルのエラー・警告 0。EditMode の速いテスト（`-testCategory "!Slow"`）は 336件中 334件通過、失敗 0（飛ばした2件は、.NET だけで比べる `NewFormattingMatchesTheOldDotNetFormatting` と、ふだんは回さない `R1SceneTests.Sweep`）。`ScenarioALogIsTheSameOnUnityAndDotNet` も通り、R1 を入れた会戦のログが Unity と .NET で同じ（タグの後に確かめた） |
 | S7〜S9 の結果の表と、決めた値の理由 | 途中報告3 の B〜D。`R1SceneTests.ChosenValuesMeetTheExpectations` で、決めた値が期待を満たすことを確かめている |
 | S1〜S6 の扱い | 仕様側の v4 と、R1 の値で照合して全て合格（下の「v4 との照合」）。規則を止めた値は v3 と照合して全て合格 |
 | 通し実行の回し方 | 下の「シナリオA の通し実行の回し方」 |
@@ -157,7 +157,6 @@ v4 が届く前に、R1 の値で回した値（各 300回、シード 1〜300�
 
 Unity 6.3 LTS（6000.3.11f1）で開く。
 
-- [ ] コンパイルが通る。EditMode の速いテスト（`-testCategory "!Slow"`）が、`SimParamsIsIdenticalToInitial` を除いて通る（`ScenarioALogIsTheSameOnUnityAndDotNet` も通ること）
 - [ ] ステージ2 で全中隊を村へ前進させると、塹壕の射界に入った中隊の駒の上に「伏せ」が出て止まる。撃たれなくなってから約 60秒で、同じ命令のまま動き出す
 - [ ] 中隊の詳しい表示に「受けている火力 ○/分（制圧のしきい値 ○・動いている／止まっている）」が出て、伏せたときに火力の量がしきい値以上になっている
 - [ ] 状態の文字に「制圧下（伏せて停止）」が出る
