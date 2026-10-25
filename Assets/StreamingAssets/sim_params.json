@@ -17,7 +17,7 @@
     "non_front_target_mult": 0.5,
     "shaken_mult": 0.7,
     "suppressed_mult": 0.5,
-    "moving_fire_mult": 0.5
+    "moving_fire_mult": 0.3
   },
   "morale": {
     "initial": 100,

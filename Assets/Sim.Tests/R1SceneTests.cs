@@ -136,18 +136,10 @@ namespace Battalion.Sim.Tests
         static string Min(double? m) => m.HasValue ? $"{m.Value:0.0}分" : "—";
 
         /// <summary>
-        /// 決めた値（sim_params.json）で、S7〜S9 の期待を満たす（各 20シード）。R2.1（伏せた味方の超越）の後は、S8 の
-        /// 「攻めの損害が S7 の 2/3 以下」だけを外れる（R2.1 の報告）ので、それを除いて確かめる。全てを確かめるのは
-        /// <see cref="ChosenValuesMeetAllTheExpectations"/>（仕様の判断を待つ間はふだん回さない）。
+        /// 決めた値（sim_params.json）で、S7〜S9 の期待を全て満たす（各 20シード）。R2.1（伏せた味方の超越）の後に掃き出しを
+        /// 回し直して、fire.moving_fire_mult を 0.5 から 0.3 に替えた（R2.1 の報告）。
         /// </summary>
         [Test]
-        public void ChosenValuesMeetTheExpectations()
-        {
-            var unmet = UnmetWithChosenValues();
-            Assert.That(unmet.Where(u => u != "S8 攻めの損害 ≤ S7 の 2/3"), Is.Empty);
-        }
-
-        [Test, Explicit("R2.1 の後、S8 の攻めの損害が S7 の 2/3 を外れる（R2.1 の報告）")]
         public void ChosenValuesMeetAllTheExpectations()
         {
             Assert.That(UnmetWithChosenValues(), Is.Empty);
