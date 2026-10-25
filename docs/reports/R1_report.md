@@ -6,18 +6,40 @@
 
 # 完了の報告（2026-10-25）
 
-値は途中報告3 の D のとおり決まった（移動の被弾 3.0、解けるまで 60秒、制圧下の撃つ力 0.25、ほかは初めの案）。残りの作業を終えた。**タグと push は、仕様側の v4 と `sim_params.initial.json` の反映を待ってから行う**。
+値は途中報告3 の D のとおり決まった（移動の被弾 3.0、解けるまで 60秒、制圧下の撃つ力 0.25、ほかは初めの案）。残りの作業を終えた。仕様側で v4 と `sim_params.initial.json` が反映された後、S1〜S6 の照合を v4 に切り替えて、タグ `proto-r1-suppression` を打った（下の「v4 との照合」）。
 
 ## 完了基準の確認
 
 | 基準 | 結果 |
 | --- | --- |
-| .NET の速いテストが全て通る | 325件中 324件通過。落ちるのは `SimParamsIsIdenticalToInitial` の1件だけ（新しいキーと値が `sim_params.initial.json` にまだない。了承済み） |
+| .NET の速いテストが全て通る | 325件全て通過（`sim_params.initial.json` の反映の後。`SimParamsIsIdenticalToInitial` も通る） |
 | Unity でコンパイルが通り、EditMode の速いテストが通る | **まだ確かめていない**（下の「触って確かめる項目」の初めに置いた） |
 | S7〜S9 の結果の表と、決めた値の理由 | 途中報告3 の B〜D。`R1SceneTests.ChosenValuesMeetTheExpectations` で、決めた値が期待を満たすことを確かめている |
-| S1〜S6 の扱い | 下の「S1〜S6」。v4 は仕様側で作る |
+| S1〜S6 の扱い | 仕様側の v4 と、R1 の値で照合して全て合格（下の「v4 との照合」）。規則を止めた値は v3 と照合して全て合格 |
 | 通し実行の回し方 | 下の「シナリオA の通し実行の回し方」 |
 | 人が触って確かめる項目 | 下の「触って確かめる項目」 |
+
+## v4 との照合（仕様側の反映の後）
+
+- `ReferenceVerificationTests.MatchesReference`：R1 の値（`sim_params.json`）で、`reference_results.json`（v4）と比べる。
+  - `"_version"` が `"v4"` であることも確かめる。
+  - 合格の判定に、P0 の合格の行に足された「正解値が 0.05 未満の損害率は、差が ±0.01 以内でも可」を入れた。
+- `ReferenceVerificationTests.MatchesV3WithoutR1`：R1 の規則を止めた値で、v3 の正解値と比べる。v3 の値は、R1 の前の `reference_results.json`（`combat_reference.py --v3` と同じ）を、テストの中に持つ。
+- 回した結果（各 300回）は、どちらも 6場面全て合格。v4 との差は次のとおり。
+
+| 場面 | 壊走までの中央値（本実装／v4、差） | 損害率（本実装／v4） |
+| --- | --- | --- |
+| S1 | 36.00／35.40、+1.7% | A 0.346／0.347、R 0.344／0.341 |
+| S2 | 17.04／16.87、+1.0% | A 0.042／0.042、R 0.446／0.446 |
+| S3 | 7.65／7.69、−0.5% | A 0.022／0.023、R 0.258／0.257 |
+| S4 | 4.10／4.10、+0.0% | A 0.013／0.013、R 0.169／0.169 |
+| S5 | 30.70／30.01、+2.3% | V 0.298／0.299、R 0.398／0.399 |
+| S6 | 1.29／1.32、−2.1%（300回全て降伏） | A 0.006／0.005（+15.1%。差 0.001 で ±0.01 以内なので可）、R 0.106／0.106 |
+
+- `reference_results.json` に足された `"_version"` と `_params.suppression` は、読む側に困ることはなかった。
+  - 正解値を読むのは `ReferenceVerificationTests` だけで、場面の名前で引く。
+  - ファイル全体を読む `CrossPlatformTests`（数の読み方の見張り）も通る。
+  - `"_version"` は、ファイルの一番上ではなく末尾にあった。読み方には関係ない。
 
 ## 実装の全体（途中報告1 の 6 からの変わり）
 
@@ -48,7 +70,7 @@
   - `P1dBehaviorTests`・`P1eOrderTests`・`P1gSightTests`・`MapBehaviourTests`：撃たれながら動く場面で、制圧に止められずに動きを確かめる（`TestUtil.ParamsNoR1`）
   - `DeterminismTests.FlatMapLogMatchesP02`：P0.2 のログと比べる
   - `ScenarioLogHashTests.CombatLogMatchesP2c12`：P2c.1.2 のログと比べる（遅いテスト。回して 36通り全て一致）
-  - `ReferenceVerificationTests.MatchesReference`：S1〜S6 を v3 と比べる（遅いテスト。回して全て通過）
+  - `ReferenceVerificationTests.MatchesV3WithoutR1`：S1〜S6 を v3 と比べる（遅いテスト。回して全て通過）
 - **R1 の値で取り直したもの**：
   - `CrossPlatformTests.ScenarioALogIsTheSameOnUnityAndDotNet`：ステージ2 の段階つき、シード1 のログ。3924行、`6637bf00…`。Unity でも通れば、R1 の計算も両方で同じ
   - `P1bSimTests.MovingOpenDamageMultIsTheR1Value`：開けた所を動く被弾倍率が 3.0（P1b では 1.0 を確かめていた）
@@ -56,7 +78,7 @@
 
 ## S1〜S6（v4 と比べるための、C# 側の値）
 
-`ReferenceVerificationTests.WithR1RulesForV4`（遅いテスト。各 300回、シード 1〜300、最初の壊走まで）で回した値。
+v4 が届く前に、R1 の値で回した値（各 300回、シード 1〜300、最初の壊走まで。当時の `WithR1RulesForV4`。今は `MatchesReference` が v4 と比べる）。
 
 | 場面 | 壊走まで p05／中央値／p95（分） | v3 の中央値 | 損害率（R1 の値） | v3 の損害率 |
 | --- | --- | --- | --- | --- |
@@ -72,7 +94,7 @@
   - R に撃たれる A の損害率は、約 1/4 になる。
   - R の壊走の時刻と R の損害率は、ほとんど変わらない（青の火力は変わらない）。
 - H3（側面攻撃は正面攻撃の約半分以下の時間）は保たれる。S3／S2 の中央値は 7.65／17.04 = 0.45（v3 では 0.45）。
-- 規則を止めた値では、S1〜S6 は v3 の ±15% 以内（`MatchesReference` が通過。差は −3.5%〜+2.5%）。
+- 規則を止めた値では、S1〜S6 は v3 の ±15% 以内（今の `MatchesV3WithoutR1`。差は −3.5%〜+2.5%）。
 
 ## v4 に要る点（Python で同じ規則を作るために）
 
@@ -108,7 +130,7 @@
    ```
    dotnet test tools/dotnet/Sim.Tests --filter "FullyQualifiedName~ScenarioAReportTests" --logger "console;verbosity=detailed"
    ```
-3. **S1〜S6（v3 との照合と、R1 の値）**：約 2分
+3. **S1〜S6（R1 の値で v4 と、規則を止めた値で v3 と照合）**：約 2分
    ```
    dotnet test tools/dotnet/Sim.Tests --filter "FullyQualifiedName~ReferenceVerificationTests" --logger "console;verbosity=detailed"
    ```

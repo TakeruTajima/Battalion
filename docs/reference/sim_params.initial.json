@@ -16,7 +16,8 @@
     "flank_arc_deg": 120,
     "non_front_target_mult": 0.5,
     "shaken_mult": 0.7,
-    "suppressed_mult": 0.5
+    "suppressed_mult": 0.5,
+    "moving_fire_mult": 0.5
   },
   "morale": {
     "initial": 100,
@@ -134,7 +135,7 @@
       "S": 1.0,
       "W": 1.0
     },
-    "moving_open_damage_mult": 1.0,
+    "moving_open_damage_mult": 3.0,
     "_note_moving_open": "平地・砲撃痕・橋・浅瀬・塹壕を移動中の中隊の被弾倍率。P1b の調整候補（案は 2.0）",
     "los_weight": {
       "F": 1.0,
@@ -267,5 +268,15 @@
     "ask_orders_repeat_sec": 600,
     "retreat_ask_morale": { "cautious": 60, "calm": 50, "agile": 50, "reckless": 50 },
     "retreat_ask_quiet_sec": 10
+  },
+  "suppression": {
+    "_note": "R1 の制圧。火力の量は自分を撃つ全ての敵の、損害の式から守り（地形・塹壕・陣地構築・浅い掩体・移動中の倍率）を除いた値の和（毎分）。動いている間のしきい値に性格の倍率を掛ける",
+    "threshold_moving_per_min": 1.5,
+    "threshold_stationary_per_min": 3.5,
+    "onset_sec": 10,
+    "release_ratio": 0.5,
+    "release_sec": 60,
+    "fire_mult": 0.25,
+    "moving_threshold_personality_mult": { "cautious": 0.75, "calm": 1.0, "agile": 1.0, "reckless": 1.5 }
   }
 }

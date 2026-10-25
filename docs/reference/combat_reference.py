@@ -10,6 +10,11 @@
   v2 (2026-10-16): 動揺時の射撃効率 x0.7 を追加（v1 は仕様の f_state を欠いていた）
   v3 (2026-10-16): 包囲判定を「退路の見積もり」に変更。士気50以下で16方位の逃げ道を調べ、
                    どの方位でも逃げる間に2割以上を失う見込みなら包囲（絶望 -15、以後毎分 -3、壊走すれば降伏）
+  v4 (2026-10-25): R1 の制圧を追加（仕様「R1：開けた所を動く代償と制圧」）。止まっている中隊だけの場面なので、
+                   規則1（動く中隊の被弾）・規則3（動きながら撃つ）・伏せて止まるは効かない。
+                   受けている火力の量（損害の式の期待値から守りを除いた値の和、毎分）がしきい値 3.5 以上の刻みが
+                   10秒続けば制圧下、しきい値 x0.5 未満が 60秒続けば解ける。制圧下の射手は撃つ力 x0.25（次の刻みから）
+                   --v3 で v3 の規則（制圧なし）のまま回せる
 
 本実装との違い（意図的に省いたもの）:
   - 移動・地形・視界・接近戦・射程による補正（全シナリオ 300m、f_range=1.0）
@@ -53,6 +58,15 @@ P = {
         "veteran": {"rout": 15, "fire": 1.20, "morale_sens": 0.8},
     },
     "cap_min": 60.0,
+    # v4：R1 の制圧（止まっている中隊のしきい値だけを使う）
+    "suppression": {
+        "enabled": True,
+        "threshold_stationary_per_min": 3.5,
+        "onset_sec": 10.0,
+        "release_ratio": 0.5,
+        "release_sec": 60.0,
+        "fire_mult": 0.25,
+    },
 }
 
 
@@ -70,6 +84,10 @@ class Unit:
         self.surrendered = False
         self.enc_cache = False
         self.enc_next = 0.0
+        # v4：制圧
+        self.suppressed = False
+        self.sup_on_ticks = 0
+        self.sup_off_ticks = 0
 
     def aspect_of(self, other):
         """other から撃たれたときの、自分から見た方向（正面／側面／背面）"""
@@ -111,12 +129,18 @@ def tick(units, rng, P, now_sec=0.0):
     cas = {u.name: 0 for u in units}
     mor = {u.name: 0.0 for u in units}
     aspects_hit = {u.name: set() for u in units}
+    volume = {u.name: 0.0 for u in units}  # v4：受けている火力の量（毎分、守りを除く。平地なので守りはない）
+    sp = P["suppression"]
     for u, t, asp in shots:
         tq = P["training"][u.q]
         eff = P["fire_at_non_front_target"] if u.aspect_of(t) != "front" else 1.0
         if u.m <= P["shaken_threshold"]:
             eff *= P["shaken_fire_mult"]  # 動揺（v2 で追加。仕様の f_state と一致させる）
-        lam = P["k_per_min"] * u.n * tq["fire"] * P["aspect_cas"][asp] * eff * dt_min
+        if sp["enabled"] and u.suppressed:
+            eff *= sp["fire_mult"]  # v4：制圧下の射手（刻みの初めの状態）
+        per_min = P["k_per_min"] * u.n * tq["fire"] * P["aspect_cas"][asp] * eff
+        volume[t.name] += per_min
+        lam = per_min * dt_min
         c = int(rng.poisson(lam))
         cas[t.name] += c
         mor[t.name] += c / t.n0 * 100 * P["morale_per_pct_loss"] * P["aspect_morale"][asp]
@@ -149,6 +173,27 @@ def tick(units, rng, P, now_sec=0.0):
         if u.m <= P["training"][u.q]["rout"]:
             u.routed = True
             u.surrendered = encircled
+    # 4) v4：制圧の状態を更新（損害と士気を適用した後。効き目は次の刻みの射撃から）
+    if sp["enabled"]:
+        on_need = int(round(sp["onset_sec"] / P["dt_sec"]))
+        off_need = int(round(sp["release_sec"] / P["dt_sec"]))
+        th = sp["threshold_stationary_per_min"]
+        for u in units:
+            if u.routed:
+                u.suppressed = False
+                u.sup_on_ticks = u.sup_off_ticks = 0
+                continue
+            v = volume[u.name]
+            if not u.suppressed:
+                u.sup_on_ticks = u.sup_on_ticks + 1 if v >= th else 0
+                if u.sup_on_ticks >= on_need:
+                    u.suppressed = True
+                    u.sup_on_ticks = u.sup_off_ticks = 0
+            else:
+                u.sup_off_ticks = u.sup_off_ticks + 1 if v < th * sp["release_ratio"] else 0
+                if u.sup_off_ticks >= off_need:
+                    u.suppressed = False
+                    u.sup_on_ticks = u.sup_off_ticks = 0
 
 
 def escape_estimate(u, units):
@@ -264,9 +309,13 @@ if __name__ == "__main__":
     ap = argparse.ArgumentParser()
     ap.add_argument("--runs", type=int, default=300)
     ap.add_argument("--out", default="reference_results.json")
+    ap.add_argument("--v3", action="store_true", help="v3 の規則（制圧なし）で回す")
     a = ap.parse_args()
+    if a.v3:
+        P["suppression"]["enabled"] = False
     res = {n: summarize(n, a.runs) for n in SCENARIOS}
     res["_params"] = P
+    res["_version"] = "v3" if a.v3 else "v4"
     print(json.dumps({k: v for k, v in res.items() if k != "_params"}, ensure_ascii=False, indent=1))
     with open(a.out, "w", encoding="utf-8") as f:
         json.dump(res, f, ensure_ascii=False, indent=1)
