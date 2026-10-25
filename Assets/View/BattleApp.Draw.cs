@@ -169,7 +169,8 @@ namespace Battalion.View
         /// <summary>
         /// 駒：正面幅 200m×奥行 50m の実寸の矩形（味方は青、敵は橙）、歩兵の×印、正面の縁の三角（向き）。
         /// 動揺は薄く、壊走は枠だけの破線、再集結は薄い塗りに破線、降伏は灰色に白旗。
-        /// 重ねて：籠城は二重枠、拘束されているときは点線の輪、包囲は脈打つ赤い輪、被弾の明滅、発砲の明滅、行動の印、兵力と士気のバー。
+        /// 重ねて：籠城は二重枠、拘束されているときは点線の輪、包囲は脈打つ赤い輪、被弾の明滅、発砲の明滅、行動の印、兵力と士気のバー、
+        /// 制圧下は駒の上に「伏せ」（R1）。
         /// </summary>
         void DrawUnit(Company c, float px, float now)
         {
@@ -255,6 +256,13 @@ namespace Battalion.View
             DrawDisarray(c, pos, facing, px);
             if (c.UnderCommand) DrawAction(c, pos, facing, fv, lv, hd, hf, ex, ey, px);
             DrawBars(c, pos, ey, px);
+            // 制圧下（R1）：駒の上に「伏せ」
+            if (c.UnderCommand && c.Suppressed)
+            {
+                var at = V(pos) + new Vector2(0, ey + 8 * px);
+                _texts.Draw("伏せ", at + new Vector2(1.2f * px, -1.2f * px), 13, px, new Color(0, 0, 0, 0.85f));
+                _texts.Draw("伏せ", at, 13, px, new Color(1f, 0.85f, 0.3f));
+            }
         }
 
         void DottedCircle(Vector2 center, float radius, float width, float dotPx, Color32 col)

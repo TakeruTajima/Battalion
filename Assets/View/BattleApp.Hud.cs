@@ -246,6 +246,7 @@ namespace Battalion.View
                 if (c.TurnWaitStart.HasValue) s += "・向き直り待ち";
                 else if (c.FacingOverride.HasValue && Math.Abs(Angles.Wrap(c.FacingOverride.Value - c.Facing)) > 1e-6) s += "・向き直り中";
                 if (c.DisarrayUntil >= _sim.Time) s += "・<color=#ffa040>隊形の乱れ</color>";
+                if (c.Suppressed) s += _sim.PinnedDown(c) ? "・<color=#ffd84d>制圧下（伏せて停止）</color>" : "・<color=#ffd84d>制圧下</color>";
                 if (c.Pinned) s += "・拘束";
                 if (c.Encircled) s += "・<color=#ff6060>包囲</color>";
                 if (c.Fortified) s += "・籠城";
@@ -317,6 +318,11 @@ namespace Battalion.View
             GUILayout.Label($"向き {Compass(deg)}（{deg:0}°）　位置 ({c.Position.X:0}, {c.Position.Y:0})", _small);
             var l = c.Ledger;
             GUILayout.Label($"士気の要因：正面{l.Front:0} 側面{l.Flank:0} 背面{l.Rear:0} 包囲{l.Encircled:0}\n　隣の壊走{l.NeighborRout:0} 被弾中{l.UnderFire:0} 離脱{l.Disengage:0} 回復+{l.Recovery:0}", _small);
+
+            // 受けている火力の量としきい値（R1）
+            if (c.UnderCommand)
+                GUILayout.Label($"受けている火力 {c.IncomingFirePerMin:0.0}/分（制圧のしきい値 {_sim.SuppressionThreshold(c):0.0}・" +
+                                $"{(_sim.MovingPosture(c) ? "動いている" : "止まっている")}）", _small);
 
             GUILayout.Space(8);
             bool can = CanCommand(c);

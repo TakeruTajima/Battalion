@@ -1,0 +1,123 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+using NUnit.Framework;
+
+namespace Battalion.Sim.Tests
+{
+    /// <summary>
+    /// R1：強い陣地の検証の場面 S7〜S9（仕様「R1：開けた所を動く代償と制圧（確定）」の検証の場面）。正解値を固定せず、
+    /// 期待（史実の目安）を満たすかどうかで見る。各 20 シード。
+    /// </summary>
+    public class R1SceneTests
+    {
+        public const int Seeds = 20;
+
+        /// <summary>1回の場面の結果。</summary>
+        public sealed class SceneResult
+        {
+            /// <summary>守備（R）が崩れた（指揮下でなくなった）か。</summary>
+            public bool DefenderBroken;
+            /// <summary>攻める側（青）の損害率（全体）と、1個中隊以上が壊走（降伏を含む）したか。</summary>
+            public double AttackerLoss;
+            public bool AttackerRouted;
+            /// <summary>青の中隊が一度でも伏せて止まったか（S9 の横切る中隊）。</summary>
+            public bool PinnedDown;
+            public double EndMin;
+        }
+
+        /// <summary>場面の打ち切り（分）：S7・S8 は 30分、S9 は 20分。</summary>
+        public static double CapMin(Scenario sc) => sc.Name.StartsWith("S9", StringComparison.Ordinal) ? 20 : 30;
+
+        /// <summary>
+        /// 場面を1回回す。S7・S8 は守備が崩れるか、攻める側が全て指揮下でなくなるまで、S9 は横切る中隊が着くか指揮下で
+        /// なくなるまで（どちらも打ち切りまで）。
+        /// </summary>
+        public static SceneResult Run(Scenario sc, SimParams p, ulong seed)
+        {
+            var sim = sc.Build(p, seed);
+            var blue = sim.Companies.Where(c => c.Side == Side.Blue).ToList();
+            var red = sim.Find("R");
+            bool crossing = sc.Name.StartsWith("S9", StringComparison.Ordinal);
+            var r = new SceneResult();
+            int next = 0;
+            double capSec = CapMin(sc) * 60;
+            while (sim.Time < capSec)
+            {
+                sc.IssueDue(sim, ref next);
+                sim.Step();
+                foreach (var c in blue)
+                {
+                    if (c.State == CompanyState.Routed || c.State == CompanyState.Surrendered) r.AttackerRouted = true;
+                    if (sim.PinnedDown(c)) r.PinnedDown = true;
+                }
+                if (!red.UnderCommand) { r.DefenderBroken = true; break; }
+                if (blue.All(c => !c.UnderCommand)) break;
+                if (crossing && next >= sc.Orders.Count && !sim.MovingPosture(blue[0]) && blue[0].Arrived) break;
+            }
+            r.AttackerLoss = blue.Sum(c => c.InitialStrength - c.Strength) / (double)blue.Sum(c => c.InitialStrength);
+            r.EndMin = sim.Time / 60;
+            return r;
+        }
+
+        /// <summary>場面ごとの集計（20シード）。</summary>
+        public sealed class SceneSummary
+        {
+            public double BrokenRate, LossMean, RoutedRate, PinnedRate;
+        }
+
+        public static SceneSummary Summarize(Scenario sc, SimParams p, int seeds = Seeds)
+        {
+            var rs = Enumerable.Range(1, seeds).Select(s => Run(sc, p, (ulong)s)).ToList();
+            return new SceneSummary
+            {
+                BrokenRate = rs.Average(x => x.DefenderBroken ? 1.0 : 0.0),
+                LossMean = rs.Average(x => x.AttackerLoss),
+                RoutedRate = rs.Average(x => x.AttackerRouted ? 1.0 : 0.0),
+                PinnedRate = rs.Average(x => x.PinnedDown ? 1.0 : 0.0),
+            };
+        }
+
+        /// <summary>期待：S7 は失敗する、S8 は S7 より明らかに良い、S9 は横切る代償が大きい。満たせない期待の一覧を返す。</summary>
+        public static List<string> Unmet(SceneSummary s7, SceneSummary s8, SceneSummary s9)
+        {
+            var u = new List<string>();
+            if (s7.BrokenRate > 0.2 + 1e-9) u.Add("S7 守備が崩れる割合 ≤ 0.2");
+            if (s7.LossMean < 0.25 - 1e-9 && s7.RoutedRate < 0.5 - 1e-9) u.Add("S7 攻めの損害 ≥ 25% か壊走 ≥ 0.5");
+            if (s8.BrokenRate < 0.6 - 1e-9) u.Add("S8 守備が崩れる割合 ≥ 0.6");
+            if (s8.LossMean > s7.LossMean * 2 / 3 + 1e-9) u.Add("S8 攻めの損害 ≤ S7 の 2/3");
+            if (s9.LossMean < 0.20 - 1e-9 && s9.PinnedRate < 0.5 - 1e-9) u.Add("S9 損害 ≥ 20% か伏せる ≥ 0.5");
+            return u;
+        }
+
+        /// <summary>
+        /// 値の掃き出し（R1 のタスク4）：開けた所を動く被弾倍率・動いている間と止まっている間のしきい値・動きながら撃つ倍率の
+        /// 54組で S7〜S9 を回し、期待を満たすかを表にする。値を決めるための道具なので、ふだんは回さない。
+        /// </summary>
+        [Test, Explicit]
+        public void Sweep()
+        {
+            var sb = new StringBuilder();
+            sb.AppendLine("| 移動の被弾 | 動くしきい値 | 止まるしきい値 | 動きながら撃つ | S7 崩れる | S7 損害 | S7 壊走 | S8 崩れる | S8 損害 | S9 損害 | S9 伏せる | 満たせない期待 |");
+            sb.AppendLine("| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |");
+            using var progress = RunProgress.Begin("R1 の掃き出し", 3 * 3 * 3 * 2 * 3 * Seeds);
+            foreach (double mo in new[] { 2.0, 3.0, 4.0 })
+            foreach (double tm in new[] { 1.0, 1.5, 2.0 })
+            foreach (double ts in new[] { 2.5, 3.5, 4.5 })
+            foreach (double mf in new[] { 0.3, 0.5 })
+            {
+                var p = TestUtil.ParamsWithR1(mo, tm, ts, mf);
+                var s7 = Summarize(Scenarios.S7_assault_front(), p);
+                var s8 = Summarize(Scenarios.S8_suppress_then_assault(), p);
+                var s9 = Summarize(Scenarios.S9_cross_field_of_fire(), p);
+                for (int k = 0; k < 3 * Seeds; k++) RunProgress.Tick();
+                var unmet = Unmet(s7, s8, s9);
+                sb.AppendLine($"| {mo:0.0} | {tm:0.0} | {ts:0.0} | {mf:0.0} | {s7.BrokenRate:0.00} | {s7.LossMean:0.000} | {s7.RoutedRate:0.00} | " +
+                              $"{s8.BrokenRate:0.00} | {s8.LossMean:0.000} | {s9.LossMean:0.000} | {s9.PinnedRate:0.00} | " +
+                              $"{(unmet.Count == 0 ? "なし" : string.Join("・", unmet))} |");
+            }
+            TestContext.WriteLine(sb.ToString());
+        }
+    }
+}

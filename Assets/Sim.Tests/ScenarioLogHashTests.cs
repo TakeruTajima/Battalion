@@ -113,10 +113,14 @@ namespace Battalion.Sim.Tests
         /// <summary>P2c.1.2 のハッシュの行（「stage1 作戦 seed1 」で始まる行）。</summary>
         public static string P2c12Hash(string prefix) => System.Array.Find(P2c12Hashes, h => h.StartsWith(prefix, StringComparison.Ordinal));
 
-        /// <summary>中隊の伝令の行を除いたログ（戦闘の行だけ）が、P2c.1.2 と1文字も違わないこと（36通り。数分かかる）。</summary>
+        /// <summary>
+        /// 中隊の伝令の行を除いたログ（戦闘の行だけ）が、P2c.1.2 と1文字も違わないこと（36通り。数分かかる）。
+        /// R1 の規則（開けた所を動く代償・制圧・動きながら撃つ）は止めて回す（R1 がほかを変えていないことの見張り）。
+        /// </summary>
         [Test]
         public void CombatLogMatchesP2c12()
         {
+            var p = TestUtil.ParamsWithoutR1();
             using var progress = RunProgress.Begin("戦闘のログの一致", new[] { 1, 2 }.Sum(st => ScenarioAReportTests.PlansWithPinAndFlank(st).Count + 1) * 2);
             var got = new System.Collections.Generic.List<string>();
             foreach (int stage in new[] { 1, 2 })
@@ -125,14 +129,14 @@ namespace Battalion.Sim.Tests
                 foreach (var (name, plan) in ScenarioAReportTests.PlansWithPinAndFlank(stage))
                     foreach (ulong seed in new ulong[] { 1, 2 })
                     {
-                        string text = StripCourierLines(RunAndLog(sc, plan, seed, out _), out int n);
+                        string text = StripCourierLines(RunAndLog(sc, plan, seed, out _, p: p), out int n);
                         got.Add($"stage{stage} {name} seed{seed} {n} {Hash(text)}");
                     }
                 int st = stage;
                 foreach (ulong seed in new ulong[] { 1, 2 })
                 {
                     string text = StripCourierLines(RunAndLog(sc, new ScenarioAReportTests.PlannedOrder[0], seed, out _,
-                        s => ScenarioAReportTests.StagedPinAndFlankStart(s, st), ScenarioAReportTests.StagedPinAndFlankTick), out int n);
+                        s => ScenarioAReportTests.StagedPinAndFlankStart(s, st), ScenarioAReportTests.StagedPinAndFlankTick, p), out int n);
                     got.Add($"stage{stage} {ScenarioAReportTests.StagedPlanName} seed{seed} {n} {Hash(text)}");
                 }
             }

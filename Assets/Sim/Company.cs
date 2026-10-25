@@ -171,6 +171,17 @@ namespace Battalion.Sim
         public Vec2? EnterGoal;
         public double NextEnterTry;
 
+        // ---- R1：制圧
+        /// <summary>その刻みに受けた火力の量（自分を撃つ全ての敵の、損害の式から守りを除いた値の和。毎分）。</summary>
+        public double IncomingFirePerMin;
+        /// <summary>その刻みに、火力の量が一番多かった射手の ID（−1 はなし。伏せるときに向く相手）。</summary>
+        public int MainShooterId = -1;
+        /// <summary>制圧下（撃たれて頭を下げている）か。</summary>
+        public bool Suppressed;
+        /// <summary>制圧の始まり・終わりの条件が続いている秒数（揺れ止め）。</summary>
+        public double SuppressOnSec;
+        public double SuppressOffSec;
+
         /// <summary>直前の刻みで狙った目標の ID（-1 はなし）。</summary>
         public int TargetId = -1;
 

@@ -27,6 +27,25 @@ namespace Battalion.Sim
         public OrdersParams Orders = new OrdersParams();
         public AutonomyParams Autonomy = new AutonomyParams();
         public CouriersParams Couriers = new CouriersParams();
+        public SuppressionParams Suppression = new SuppressionParams();
+
+        /// <summary>
+        /// R1 の制圧（"suppression"）。受けている火力の量（自分を撃つ全ての敵の、損害の式から守りを除いた値の和。毎分）が
+        /// しきい値以上の状態が <see cref="OnsetSec"/> 続いたら制圧下、しきい値 × <see cref="ReleaseRatio"/> 未満が
+        /// <see cref="ReleaseSec"/> 続いたら解ける。
+        /// </summary>
+        public sealed class SuppressionParams
+        {
+            /// <summary>動いている中隊（移動を伴う命令でまだ着いていない、自律行動の移動の途中）のしきい値。性格の倍率を掛ける。</summary>
+            public double ThresholdMovingPerMin;
+            /// <summary>止まっている中隊のしきい値。</summary>
+            public double ThresholdStationaryPerMin;
+            public double OnsetSec;
+            public double ReleaseRatio;
+            public double ReleaseSec;
+            /// <summary>動いている間のしきい値に掛ける性格の倍率（表にない性格は 1.0）。</summary>
+            public readonly Dictionary<Personality, double> MovingThresholdPersonalityMult = new Dictionary<Personality, double>();
+        }
 
         /// <summary>P2c.2 の中隊の伝令（意見具申。"couriers"）。速さ・喪失・経路は <see cref="RunnersParams"/> を使う。</summary>
         public sealed class CouriersParams
@@ -133,7 +152,10 @@ namespace Battalion.Sim
             public double FlankArcDeg;
             public double NonFrontTargetMult;
             public double ShakenMult;
+            /// <summary>制圧下の射手の撃つ力の倍率（R1。砲撃の制圧と共通）。</summary>
             public double SuppressedMult;
+            /// <summary>その刻みに実際に動いた射手の撃つ力の倍率（R1 の規則3。動きながら撃つと当たりにくい）。</summary>
+            public double MovingFireMult;
         }
 
         public sealed class MoraleParams
@@ -373,6 +395,7 @@ namespace Battalion.Sim
             p.Fire.NonFrontTargetMult = f.D("non_front_target_mult");
             p.Fire.ShakenMult = f.D("shaken_mult");
             p.Fire.SuppressedMult = f.D("suppressed_mult");
+            p.Fire.MovingFireMult = f.D("moving_fire_mult");
 
             var m = root["morale"];
             p.Morale.Initial = m.D("initial");
@@ -548,6 +571,14 @@ namespace Battalion.Sim
             p.Couriers.AskOrdersRepeatSec = co.D("ask_orders_repeat_sec");
             ReadPersonalityTable(co["retreat_ask_morale"], p.Couriers.RetreatAskMorale);
             p.Couriers.RetreatAskQuietSec = co.D("retreat_ask_quiet_sec");
+
+            var su = root["suppression"];
+            p.Suppression.ThresholdMovingPerMin = su.D("threshold_moving_per_min");
+            p.Suppression.ThresholdStationaryPerMin = su.D("threshold_stationary_per_min");
+            p.Suppression.OnsetSec = su.D("onset_sec");
+            p.Suppression.ReleaseRatio = su.D("release_ratio");
+            p.Suppression.ReleaseSec = su.D("release_sec");
+            ReadPersonalityTable(su["moving_threshold_personality_mult"], p.Suppression.MovingThresholdPersonalityMult);
 
             return p;
         }

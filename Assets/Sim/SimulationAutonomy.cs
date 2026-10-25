@@ -114,6 +114,13 @@ namespace Battalion.Sim
                     c.PostPoint = c.Position;
                     c.PostSettled = true;
                 }
+                // 制圧下は、移動を伴う自律行動をしない（R1。向きは変えてよい）
+                if (c.Suppressed)
+                {
+                    c.CoverWaitStart = null;
+                    UpdateAutoFacing(c, t);
+                    continue;
+                }
                 // 次の段・新しい命令が始まろうとしている間は、新しく動かない
                 if (c.StartWaitOrder != null || PendingOrderOf(c.Id) != null)
                 {

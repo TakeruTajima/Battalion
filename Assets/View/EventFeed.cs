@@ -60,6 +60,9 @@ namespace Battalion.View
         public readonly List<Happening> Recent = new List<Happening>();
         public readonly HashSet<string> EverRouted = new HashSet<string>();
         readonly HashSet<string> _sheetAborted = new HashSet<string>();
+        /// <summary>制圧の出来事を最後に出した時刻（中隊と種類ごと。30秒以内の繰り返しは出さない。R1）。</summary>
+        readonly Dictionary<string, double> _lastSuppression = new Dictionary<string, double>();
+        const double SuppressionRepeatSec = 30;
         /// <summary>陣地が完成した（地形のテクスチャを塗り直す合図）。</summary>
         public bool TerrainChanged;
 
@@ -112,6 +115,16 @@ namespace Battalion.View
                 case "encircled_end":
                     Add(t, $"{unit} 包囲が解けた", false);
                     break;
+                case "suppressed":
+                case "suppression_end":
+                {
+                    string key = unit + "/" + type;
+                    if (_lastSuppression.TryGetValue(key, out double last) && t - last < SuppressionRepeatSec) break;
+                    _lastSuppression[key] = t;
+                    if (type == "suppressed") Add(t, v["moving"].Bool ? $"{unit} 制圧下（伏せた）" : $"{unit} 制圧下（頭を下げた）", false);
+                    else Add(t, $"{unit} 制圧が解けた", false);
+                    break;
+                }
                 case "rally":
                     bool start = v["phase"].String == "start";
                     Add(t, start ? $"{unit} 再集結を始めた" : $"{unit} 再集結して指揮下に戻った", false);

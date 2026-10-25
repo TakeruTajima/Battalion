@@ -21,6 +21,31 @@ namespace Battalion.Sim.Tests
             }
             return SimParams.FromJson(s);
         }
+        /// <summary>
+        /// R1 の規則を止めたパラメータ：開けた所を動く被弾倍率と、動きながら撃つ倍率を 1.0、制圧のしきい値を無限大にする
+        /// （R1 の前と同じ会戦になることの見張り。S1〜S6 を v3 と比べるのにも使う）。
+        /// </summary>
+        public static SimParams ParamsWithoutR1()
+        {
+            var p = SimParams.FromJson(File.ReadAllText(PathOf(ParamsRelPath)));
+            p.Terrain.MovingOpenDamageMult = 1.0;
+            p.Fire.MovingFireMult = 1.0;
+            p.Suppression.ThresholdMovingPerMin = double.PositiveInfinity;
+            p.Suppression.ThresholdStationaryPerMin = double.PositiveInfinity;
+            return p;
+        }
+
+        /// <summary>R1 の値を置き換えたパラメータ（掃き出し用）。</summary>
+        public static SimParams ParamsWithR1(double movingOpenDamageMult, double thresholdMoving, double thresholdStationary, double movingFireMult)
+        {
+            var p = SimParams.FromJson(File.ReadAllText(PathOf(ParamsRelPath)));
+            p.Terrain.MovingOpenDamageMult = movingOpenDamageMult;
+            p.Suppression.ThresholdMovingPerMin = thresholdMoving;
+            p.Suppression.ThresholdStationaryPerMin = thresholdStationary;
+            p.Fire.MovingFireMult = movingFireMult;
+            return p;
+        }
+
         public const string InitialParamsRelPath = "docs/reference/sim_params.initial.json";
         public const string ReferenceResultsRelPath = "docs/reference/reference_results.json";
 
@@ -78,14 +103,14 @@ namespace Battalion.Sim.Tests
         }
 
         /// <summary>シード first〜first+runs-1 で回して集計する。</summary>
-        public static BatchStats RunBatch(string scenario, int runs = 300, int firstSeed = 1, double capMin = 60.0)
+        public static BatchStats RunBatch(string scenario, int runs = 300, int firstSeed = 1, double capMin = 60.0, SimParams p = null)
         {
             var st = new BatchStats { Scenario = scenario, Runs = runs };
             var times = new List<double>(runs);
             var loss = new Dictionary<string, List<double>>();
             for (int s = firstSeed; s < firstSeed + runs; s++)
             {
-                var r = BattleRunner.RunToFirstRout(Scenarios.ByName(scenario), Params, (ulong)s, capMin);
+                var r = BattleRunner.RunToFirstRout(Scenarios.ByName(scenario), p ?? Params, (ulong)s, capMin);
                 times.Add(r.EndTimeMin);
                 if (!r.Routed) st.TimedOut++;
                 foreach (var u in r.RoutedUnits)

@@ -96,6 +96,7 @@ namespace Battalion.Sim
             UpdateFortified();
             var shots = SelectTargets();
             Resolve(shots, t, tickStart);
+            UpdateSuppression(t);
             UpdateFacingReaction(t);
             Transitions(t);
             UpdateStages(t);
@@ -183,7 +184,9 @@ namespace Battalion.Sim
                 if (c.State == CompanyState.Rallying) continue;
 
                 var before = c.Position;
-                MoveUnderCommand(c, t, tickStart, dt, maxTurn);
+                // 制圧下で動こうとしている中隊は、伏せて止まる（R1。解けたら同じ段のまま動きを続ける）
+                if (PinnedDown(c)) LieDown(c, maxTurn);
+                else MoveUnderCommand(c, t, tickStart, dt, maxTurn);
                 // 敵の矩形との隙間が 10m 未満になる手前で止まる（P1d の2）。全く進めなくても「着いた」扱いにはせず、
                 // 30秒ごとの経路の引き直しを続け、道が空けば進む（P1e.1）
                 c.BlockedByEnemy = ClampAgainstEnemies(c, before) && c.Position.X == before.X && c.Position.Y == before.Y
@@ -361,6 +364,11 @@ namespace Battalion.Sim
             var firstShooter = new int[n, 3];
             var targeted = new bool[n];
             var pinnedNow = new bool[n];
+            // 受けている火力の量（R1。守りを除いた損害の式の和、毎分）と、一番多い射手
+            var fireAmount = new double[n];
+            var mainAmount = new double[n];
+            var mainShooter = new int[n];
+            for (int i = 0; i < n; i++) mainShooter[i] = -1;
             for (int i = 0; i < n; i++)
                 for (int a = 0; a < 3; a++)
                     firstShooter[i, a] = -1;
@@ -383,7 +391,9 @@ namespace Battalion.Sim
                 if (!s.TargetInFrontArc) fState *= _p.Fire.NonFrontTargetMult;
                 // 隊形の乱れ（壊走中の味方にすり抜けられた。P1d の6）
                 if (u.DisarrayUntil >= t) fState *= _p.Behavior.DisarrayFireMult;
-                // 砲撃による制圧（×0.5）は P3
+                // 制圧下（R1。砲撃による制圧は P3 で同じ倍率を使う）、動きながら撃つ（R1 の規則3）
+                if (u.Suppressed) fState *= _p.Fire.SuppressedMult;
+                if (u.MovedThisTick) fState *= _p.Fire.MovingFireMult;
 
                 double fExtra = 1.0;
                 if (tg.State == CompanyState.Routed && s.Distance <= _p.Rout.PursuitRadiusM) fExtra *= _p.Rout.PursuitCasualtyMult;
@@ -391,6 +401,10 @@ namespace Battalion.Sim
 
                 double lambda = _p.Fire.KPerMin * u.Strength * fQuality * fRange * fTerrain * fAspect * fState * fExtra * dtMin;
                 int c = _rng.NextPoisson(lambda);
+
+                double amount = _p.Fire.KPerMin * u.Strength * fQuality * fRange * fAspect * fState * fExtra;
+                fireAmount[tg.Id] += amount;
+                if (amount > mainAmount[tg.Id]) { mainAmount[tg.Id] = amount; mainShooter[tg.Id] = u.Id; }
 
                 cas[tg.Id] += c;
                 double m = (double)c / tg.InitialStrength * 100.0 * _p.Morale.PerPctLoss * _p.Morale.AspectMoraleMult[a];
@@ -408,6 +422,8 @@ namespace Battalion.Sim
             {
                 if (!c.OnBoard) continue;
                 int i = c.Id;
+                c.IncomingFirePerMin = fireAmount[i];
+                c.MainShooterId = mainShooter[i];
                 c.Strength = Math.Max(0, c.Strength - cas[i]);
                 if (targeted[i]) c.LastTargetedTime = t;
 

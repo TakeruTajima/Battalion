@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 
 namespace Battalion.Sim
@@ -21,11 +22,25 @@ namespace Battalion.Sim
         }
     }
 
-    /// <summary>検算用の配置。全部隊はその場で保持する。</summary>
+    /// <summary>場面の中で、決まった時刻に出す前進の命令（R1 の検証の場面。伝令は使わない）。</summary>
+    public sealed class SceneOrder
+    {
+        public double AtSec;
+        public string Unit;
+        public double X, Y, FacingDeg;
+    }
+
+    /// <summary>検算用の配置。命令がなければ、全部隊はその場で保持する。</summary>
     public sealed class Scenario
     {
         public string Name;
         public readonly List<CompanySetup> Companies = new List<CompanySetup>();
+        /// <summary>
+        /// 塹壕を置く中隊の名前（R1）。その中隊の中心のマスと、正面に沿って左右2マスずつ（5マス、250m）を塹壕にする。
+        /// </summary>
+        public readonly List<string> TrenchUnits = new List<string>();
+        /// <summary>時刻順の前進の命令（R1）。時刻 0 の命令は会戦の初めに渡す。</summary>
+        public readonly List<SceneOrder> Orders = new List<SceneOrder>();
         /// <summary>
         /// 全て平地の地図（60×40マス、3km×2km）。原点を (−1200, −850) にずらして配置の中心付近に置く。
         /// 壊走した中隊が会戦から離脱する範囲は P0 と同じ（x −1200〜1800、y −850〜1150）。
@@ -40,10 +55,30 @@ namespace Battalion.Sim
 
         public Simulation Build(SimParams p, ulong seed, IEventSink log = null)
         {
-            var sim = new Simulation(p, seed, FlatMap(p), log);
+            var map = FlatMap(p);
+            foreach (var name in TrenchUnits)
+            {
+                var s = Companies.Find(x => x.Name == name);
+                map.CellOf(new Vec2(s.X, s.Y), out int ci, out int cj);
+                double a = (s.FacingDeg + 90) * Angles.DegToRad;
+                int di = (int)Math.Round(Math.Cos(a)), dj = (int)Math.Round(Math.Sin(a));
+                for (int k = -2; k <= 2; k++)
+                    if (map.InBounds(ci + k * di, cj + k * dj)) map.SetOverlay(ci + k * di, cj + k * dj, TerrainMap.Trench);
+            }
+            var sim = new Simulation(p, seed, map, log);
             foreach (var s in Companies)
                 sim.AddCompany(s.Name, s.Side, s.Training, s.Personality, new Vec2(s.X, s.Y), s.FacingDeg);
             return sim;
+        }
+
+        /// <summary>時刻が来た命令を渡す（<paramref name="next"/> は次に渡す命令の添字）。毎刻みの前に呼ぶ。</summary>
+        public void IssueDue(Simulation sim, ref int next)
+        {
+            while (next < Orders.Count && Orders[next].AtSec <= sim.Time + 1e-9)
+            {
+                var o = Orders[next++];
+                sim.Issue(Order.Advance(sim.Find(o.Unit).Id, new Vec2(o.X, o.Y), o.FacingDeg * Angles.DegToRad));
+            }
         }
     }
 
@@ -82,6 +117,46 @@ namespace Battalion.Sim
         public static Scenario CC_1v1_front_50m() =>
             new Scenario("CC_1v1_front_50m", Blue("A", 0, 0, 0), Red("R", 50, 0, 180));
 
+        // ---------------------------------------------------------------- R1 の検証の場面（強い陣地）
+
+        static SceneOrder Advance(double at, string unit, double x, double y, double facingDeg) =>
+            new SceneOrder { AtSec = at, Unit = unit, X = x, Y = y, FacingDeg = facingDeg };
+
+        /// <summary>
+        /// S7 正面からの突撃：塹壕の R（x=400、西向き）に、正面 400m から A・B・C（y=−200／0／200）が横に並んで
+        /// 守備の線まで前進する（突撃。R1 の設計で、今の攻撃の命令は 250m の発起点で止まるため前進で作る）。
+        /// </summary>
+        public static Scenario S7_assault_front()
+        {
+            var sc = new Scenario("S7_assault_front", Blue("A", 0, -200, 0), Blue("B", 0, 0, 0), Blue("C", 0, 200, 0), Red("R", 400, 0, 180));
+            sc.TrenchUnits.Add("R");
+            foreach (var (n, y) in new[] { ("A", -200.0), ("B", 0.0), ("C", 200.0) }) sc.Orders.Add(Advance(0, n, 400, y, 0));
+            return sc;
+        }
+
+        /// <summary>S8 抑えてから詰める：S7 と同じ配置。A・C は 300m（x=100）へ出て保持して撃ち、5分後に B が守備の線まで前進する。</summary>
+        public static Scenario S8_suppress_then_assault()
+        {
+            var sc = new Scenario("S8_suppress_then_assault", Blue("A", 0, -200, 0), Blue("B", 0, 0, 0), Blue("C", 0, 200, 0), Red("R", 400, 0, 180));
+            sc.TrenchUnits.Add("R");
+            sc.Orders.Add(Advance(0, "A", 100, -200, 0));
+            sc.Orders.Add(Advance(0, "C", 100, 200, 0));
+            sc.Orders.Add(Advance(300, "B", 400, 0, 0));
+            return sc;
+        }
+
+        /// <summary>
+        /// S9 射界を横切る：塹壕の R（原点、北向き）の前を、M が東向きに 600m 前進する。M の矩形の手前の辺が、R の矩形の
+        /// 正面の辺から 100m（中心どうしは 225m。中隊の正面幅 200m・奥行 50m）。
+        /// </summary>
+        public static Scenario S9_cross_field_of_fire()
+        {
+            var sc = new Scenario("S9_cross_field_of_fire", Blue("M", -300, 225, 0), Red("R", 0, 0, 90));
+            sc.TrenchUnits.Add("R");
+            sc.Orders.Add(Advance(0, "M", 300, 225, 0));
+            return sc;
+        }
+
         public static Scenario ByName(string name)
         {
             switch (name)
@@ -93,6 +168,9 @@ namespace Battalion.Sim
                 case "S5_vet_vs_reg": return S5_vet_vs_reg();
                 case "S6_4v1_surrounded": return S6_4v1_surrounded();
                 case "CC_1v1_front_50m": return CC_1v1_front_50m();
+                case "S7_assault_front": return S7_assault_front();
+                case "S8_suppress_then_assault": return S8_suppress_then_assault();
+                case "S9_cross_field_of_fire": return S9_cross_field_of_fire();
                 default: throw new KeyNotFoundException(name);
             }
         }
