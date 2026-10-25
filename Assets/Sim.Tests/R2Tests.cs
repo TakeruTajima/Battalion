@@ -229,20 +229,33 @@ namespace Battalion.Sim.Tests
         }
 
         /// <summary>
-        /// S10 と S11 の期待：S11（側面から撃たれる塹壕）は、30分以内に崩れる割合 0.8 以上で、崩れるまでの中央値が S10 の 1/3 以下
-        /// （S10 で崩れない場合は、崩れる割合で見る）。R2 の値では S11 が 0.60 で満たさない（R2 の報告）。仕様の判断を待つ間は
-        /// ふだんは回さない。
+        /// S11（側面から1個中隊）：30分以内に崩れる割合が、S10（正面から1個中隊）より 0.5 以上高い（R2 の報告の後に直した期待。
+        /// 側面から撃たれた守備は向き直り、その後は守りのない1対1 になるため、初めの「0.8 以上」は見込み違いだった）。
         /// </summary>
-        [Test, Explicit("S11 の期待を R2 の値では満たさない（R2 の報告）")]
-        public void FlankFireBreaksTheTrenchAndFrontFireDoesNot()
+        [Test]
+        public void FlankFireBreaksTheTrenchMuchMoreOftenThanFrontFire()
         {
             var s10 = RunTrenchScene(Scenarios.S10_trench_from_front(), TestUtil.Params);
             var s11 = RunTrenchScene(Scenarios.S11_trench_from_flank(), TestUtil.Params);
             TestContext.WriteLine($"S10 崩れる {s10.BrokenRate:0.00}（中央値 {s10.BrokenMedianMin:0.0}分）／S11 崩れる {s11.BrokenRate:0.00}（中央値 {s11.BrokenMedianMin:0.0}分）");
-            Assert.That(s10.BrokenRate, Is.LessThanOrEqualTo(0.2), "S10");
-            Assert.That(s11.BrokenRate, Is.GreaterThanOrEqualTo(0.8), "S11");
-            if (s10.BrokenMedianMin.HasValue)
-                Assert.That(s11.BrokenMedianMin.Value, Is.LessThanOrEqualTo(s10.BrokenMedianMin.Value / 3), "S11 の中央値は S10 の 1/3 以下");
+            Assert.That(s11.BrokenRate - s10.BrokenRate, Is.GreaterThanOrEqualTo(0.5 - 1e-9));
+        }
+
+        /// <summary>
+        /// S12（正面と側面から1個中隊ずつ）：30分以内に崩れる割合 0.8 以上。S13（正面から2個中隊）と比べて、崩れるまでの中央値が
+        /// S13 の 1/2 以下（S13 で崩れない場合は、30分以内に崩れる割合が S13 より 0.5 以上高い）。
+        /// </summary>
+        [Test]
+        public void PinAndFlankBreaksTheTrenchMuchFasterThanTwoFromTheFront()
+        {
+            var s12 = RunTrenchScene(Scenarios.S12_trench_front_and_flank(), TestUtil.Params);
+            var s13 = RunTrenchScene(Scenarios.S13_trench_two_from_front(), TestUtil.Params);
+            TestContext.WriteLine($"S12 崩れる {s12.BrokenRate:0.00}（中央値 {s12.BrokenMedianMin:0.0}分）／S13 崩れる {s13.BrokenRate:0.00}（中央値 {s13.BrokenMedianMin:0.0}分）");
+            Assert.That(s12.BrokenRate, Is.GreaterThanOrEqualTo(0.8 - 1e-9), "S12 は 30分以内に崩れる割合 0.8 以上");
+            if (s13.BrokenMedianMin.HasValue)
+                Assert.That(s12.BrokenMedianMin.Value, Is.LessThanOrEqualTo(s13.BrokenMedianMin.Value / 2 + 1e-9), "S12 の中央値は S13 の 1/2 以下");
+            else
+                Assert.That(s12.BrokenRate - s13.BrokenRate, Is.GreaterThanOrEqualTo(0.5 - 1e-9), "S13 で崩れないので、崩れる割合の差で見る");
         }
     }
 }

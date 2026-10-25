@@ -197,6 +197,22 @@ namespace Battalion.Sim
             return sc;
         }
 
+        /// <summary>S12 正面と側面：同じ塹壕の R を、正面 250m（西）の A と側面 250m（北）の B が同時に保持して撃つ（拘束と回り込み）。</summary>
+        public static Scenario S12_trench_front_and_flank()
+        {
+            var sc = new Scenario("S12_trench_front_and_flank", Blue("A", -250, 0, 0), Blue("B", 0, 250, -90), Red("R", 0, 0, 180));
+            sc.TrenchUnits.Add("R");
+            return sc;
+        }
+
+        /// <summary>S13 正面から2個中隊：同じ塹壕の R を、正面 250m（西）に横に並んだ A・B（y=∓100）が保持して撃つ（S12 と比べる場面）。</summary>
+        public static Scenario S13_trench_two_from_front()
+        {
+            var sc = new Scenario("S13_trench_two_from_front", Blue("A", -250, -100, 0), Blue("B", -250, 100, 0), Red("R", 0, 0, 180));
+            sc.TrenchUnits.Add("R");
+            return sc;
+        }
+
         public static Scenario ByName(string name)
         {
             switch (name)
@@ -213,6 +229,8 @@ namespace Battalion.Sim
                 case "S9_cross_field_of_fire": return S9_cross_field_of_fire();
                 case "S10_trench_from_front": return S10_trench_from_front();
                 case "S11_trench_from_flank": return S11_trench_from_flank();
+                case "S12_trench_front_and_flank": return S12_trench_front_and_flank();
+                case "S13_trench_two_from_front": return S13_trench_two_from_front();
                 default: throw new KeyNotFoundException(name);
             }
         }

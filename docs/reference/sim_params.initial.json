@@ -136,6 +136,8 @@
       "W": 1.0
     },
     "moving_open_damage_mult": 3.0,
+    "fortification_off_arc_mult": 1.0,
+    "_note_fortification": "R2。塹壕・陣地構築・浅い掩体の守りは、撃ってきた敵が陣地の向きの正面の弧（fire.front_arc_deg）にいるときだけ効く。外ならこの値に置き換える",
     "_note_moving_open": "平地・砲撃痕・橋・浅瀬・塹壕を移動中の中隊の被弾倍率。P1b の調整候補（案は 2.0）",
     "los_weight": {
       "F": 1.0,
