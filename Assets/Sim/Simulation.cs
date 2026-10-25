@@ -386,14 +386,8 @@ namespace Battalion.Sim
                 double fRange = RangeMultiplier(s.Distance, close);
                 double fTerrain = TerrainDamageMult(tg, u.Position);
                 double fAspect = _p.Fire.AspectCasualtyMult[a];
-                double fState = 1.0;
-                if (u.State == CompanyState.Shaken) fState *= _p.Fire.ShakenMult;
-                if (!s.TargetInFrontArc) fState *= _p.Fire.NonFrontTargetMult;
-                // 隊形の乱れ（壊走中の味方にすり抜けられた。P1d の6）
-                if (u.DisarrayUntil >= t) fState *= _p.Behavior.DisarrayFireMult;
-                // 小銃の制圧下（R1。砲撃による制圧は P3 で fire.suppressed_mult）、動きながら撃つ（R1 の規則3）
-                if (u.Suppressed) fState *= _p.Suppression.FireMult;
-                if (u.MovedThisTick) fState *= _p.Fire.MovingFireMult;
+                // 射手の状態（動揺・正面の弧の外の目標・隊形の乱れ・制圧下・動きながら撃つ）。表示と同じ関数（R2.1）
+                double fState = FireStateMult(u, s.TargetInFrontArc, t);
 
                 double fExtra = 1.0;
                 if (tg.State == CompanyState.Routed && s.Distance <= _p.Rout.PursuitRadiusM) fExtra *= _p.Rout.PursuitCasualtyMult;

@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using Battalion.Sim;
 using UnityEngine;
@@ -319,12 +320,16 @@ namespace Battalion.View
             var l = c.Ledger;
             GUILayout.Label($"士気の要因：正面{l.Front:0} 側面{l.Flank:0} 背面{l.Rear:0} 包囲{l.Encircled:0}\n　隣の壊走{l.NeighborRout:0} 被弾中{l.UnderFire:0} 離脱{l.Disengage:0} 回復+{l.Recovery:0}", _small);
 
-            // 受けている火力の量としきい値（R1）
+            // 今効いている倍率（R2.1）、受けている火力と伏せるしきい値（R1）、陣地の向き（R2）
             if (c.UnderCommand)
-                GUILayout.Label($"受けている火力 {c.IncomingFirePerMin:0.0}/分（制圧のしきい値 {_sim.SuppressionThreshold(c):0.0}・" +
-                                $"{(_sim.MovingPosture(c) ? "動いている" : "止まっている")}）", _small);
-            // 陣地の向きと、今受けている射撃に陣地が効いているか（R2）
-            if (c.UnderCommand) GUILayout.Label(FortificationText(c), _small);
+            {
+                GUILayout.Label("効いている倍率（直前の刻み）", _small);
+                GUILayout.Label(ModifiersText(c), _small);
+                GUILayout.Label($"受けている火力 {c.IncomingFirePerMin:0.0}/分（伏せるしきい値 {_sim.SuppressionThreshold(c):0.0}・" +
+                                $"{(_sim.MovingPosture(c) ? "動いている" : "止まっている")}）" +
+                                (c.Suppressed ? "　<color=#ffd84d>制圧下</color>" : ""), _small);
+                GUILayout.Label(FortificationText(c), _small);
+            }
 
             GUILayout.Space(8);
             bool can = CanCommand(c);
@@ -383,6 +388,67 @@ namespace Battalion.View
             }
             GUILayout.EndScrollView();
             GUILayout.EndArea();
+        }
+
+        /// <summary>
+        /// 今効いている倍率（R2.1）：被弾・撃つ力・移動の3行。各行は掛け合わせた値と、1.0 でない要素（陣地は効いていないときも出す）。
+        /// 被弾は、一番多く撃ってきた敵の位置から見た値（撃たれていなければ向きを見ない値）。
+        /// </summary>
+        string ModifiersText(Company c)
+        {
+            Vec2? from = null;
+            if (c.MainShooterId >= 0 && c.IncomingFirePerMin > 0) from = _sim.Companies[c.MainShooterId].Position;
+            var dmg = new List<ModifierFactor>();
+            var fire = new List<ModifierFactor>();
+            var move = new List<ModifierFactor>();
+            double d = _sim.DamageFactors(c, from, dmg);
+            double f = _sim.CurrentFireMult(c, fire);
+            double m = _sim.MoveFactors(c, move);
+            string Line(string name, double total, List<ModifierFactor> fs) =>
+                $"　{name} ×{total:0.00}" + (fs.Count == 0 ? "" : "：" + string.Join("・", fs.Select(x => $"{ModifierName(x)} ×{x.Mult:0.##}")));
+            return Line("被弾", d, dmg) + "\n" + Line("撃つ力", f, fire) + "\n" +
+                   (c.MovedThisTick ? Line("移動", m, move) : "　移動 止まっている");
+        }
+
+        static string ModifierName(ModifierFactor x)
+        {
+            switch (x.Kind)
+            {
+                case ModifierKind.MovingOpen: return "<color=#ff8060>開けた所を移動中</color>";
+                case ModifierKind.Trench: return "塹壕";
+                case ModifierKind.TrenchOffArc: return "<color=#ff8060>塹壕（正面の弧の外で効いていない）</color>";
+                case ModifierKind.Entrench: return "陣地構築の途中";
+                case ModifierKind.EntrenchOffArc: return "<color=#ff8060>陣地構築の途中（正面の弧の外で効いていない）</color>";
+                case ModifierKind.Scrape: return "浅い掩体";
+                case ModifierKind.ScrapeOffArc: return "<color=#ff8060>浅い掩体（正面の弧の外で効いていない）</color>";
+                case ModifierKind.Terrain: return TerrainName(x.Terrain);
+                case ModifierKind.FireShaken: return "動揺";
+                case ModifierKind.FireNonFrontTarget: return "正面の弧の外の目標";
+                case ModifierKind.FireDisarray: return "隊形の乱れ";
+                case ModifierKind.FireSuppressed: return "制圧下";
+                case ModifierKind.FireMoving: return "移動中";
+                case ModifierKind.MoveTerrain: return TerrainName(x.Terrain);
+                case ModifierKind.MovePinned: return "拘束";
+                case ModifierKind.MovePassThrough: return "超越中（味方と重なる）";
+                case ModifierKind.MoveSideways: return "横歩き";
+                case ModifierKind.MoveBackward: return "後ろ歩き";
+                case ModifierKind.MoveTurning: return "旋回中";
+                default: return x.Kind.ToString();
+            }
+        }
+
+        static string TerrainName(char ch)
+        {
+            switch (ch)
+            {
+                case TerrainMap.Forest: return "森";
+                case TerrainMap.Village: return "村";
+                case TerrainMap.Trench: return "塹壕";
+                case TerrainMap.Crater: return "砲撃痕";
+                case TerrainMap.Bridge: return "橋";
+                case TerrainMap.Ford: return "浅瀬";
+                default: return "地形";
+            }
         }
 
         /// <summary>

@@ -319,9 +319,12 @@ namespace Battalion.Sim
                    ?? (allowPartial ? PathFinder.Find(_map, start, end, exposure, w, ec, out cost, enemy, true, friend) : null);
         }
 
-        /// <summary>止まっている指揮下の味方か（移動の命令がないか、着いている）。</summary>
-        static bool IsStationaryFriend(Company f, Company c) =>
-            f != c && f.Side == c.Side && f.OnBoard && f.UnderCommand && (!f.CurrentOrder.Moves || f.Arrived);
+        /// <summary>
+        /// 止まっている指揮下の味方か（移動の命令がないか、着いているか、制圧下で伏せて止まっている。R2.1）。
+        /// 動揺で停止中（P2b.2）は、命令が保持に替わって着いた扱いなので、もとから止まっている味方に入る。
+        /// </summary>
+        bool IsStationaryFriend(Company f, Company c) =>
+            f != c && f.Side == c.Side && f.OnBoard && f.UnderCommand && (!f.CurrentOrder.Moves || f.Arrived || PinnedDown(f));
 
         /// <summary>
         /// 止まっている指揮下の味方の中心から 200m 未満のマスの、距離のコストの倍率（×3。それ以外は 1）。

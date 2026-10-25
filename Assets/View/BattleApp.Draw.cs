@@ -279,12 +279,14 @@ namespace Battalion.View
             DrawDisarray(c, pos, facing, px);
             if (c.UnderCommand) DrawAction(c, pos, facing, fv, lv, hd, hf, ex, ey, px);
             DrawBars(c, pos, ey, px);
-            // 制圧下（R1）：駒の上に「伏せ」
-            if (c.UnderCommand && c.Suppressed)
+            // 駒の上の印は1つまで：制圧下（R1）の「伏せ」、開けた所を移動中で被弾 ×3.0 の「露」（R2.1）
+            if (c.UnderCommand && (c.Suppressed || _sim.ExposedWhileMoving(c)))
             {
+                string mark = c.Suppressed ? "伏せ" : "露";
+                var col = c.Suppressed ? new Color(1f, 0.85f, 0.3f) : new Color(1f, 0.5f, 0.35f);
                 var at = V(pos) + new Vector2(0, ey + 8 * px);
-                _texts.Draw("伏せ", at + new Vector2(1.2f * px, -1.2f * px), 13, px, new Color(0, 0, 0, 0.85f));
-                _texts.Draw("伏せ", at, 13, px, new Color(1f, 0.85f, 0.3f));
+                _texts.Draw(mark, at + new Vector2(1.2f * px, -1.2f * px), 13, px, new Color(0, 0, 0, 0.85f));
+                _texts.Draw(mark, at, 13, px, col);
             }
         }
 
