@@ -67,6 +67,7 @@ namespace Battalion.Sim.Tests
             p.Fire.MovingFireMult = 1.0;
             p.Suppression.ThresholdMovingPerMin = double.PositiveInfinity;
             p.Suppression.ThresholdStationaryPerMin = double.PositiveInfinity;
+            p.Terrain.IgnoreFortificationFacing = true;
             string h = RunAndHash(p, scenario, seed, out int n, ",\"disarray\":0");
             Assert.That(n, Is.EqualTo(expectedLines));
             Assert.That(h, Is.EqualTo(expectedHash));

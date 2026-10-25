@@ -27,6 +27,7 @@ namespace Battalion.View
             DrawContourLabels(px);
             DrawHeadquarters(px);
             DrawVillage(px);
+            DrawFortificationFacings(px);
             if (_showTrigger) DrawTrigger(px);
             DrawBlockedSights(px);
             DrawFireLines(px, now);
@@ -81,6 +82,28 @@ namespace Battalion.View
         // ---------------------------------------------------------------- 村の目標
 
         /// <summary>村の中心に旗、中心から 250m の円（判定の範囲）。旗の色は状態（青が確保・赤が確保・争奪中・空き）。</summary>
+        /// <summary>
+        /// 陣地の向きの印（R2）：向きを持つ塹壕のマスの、正面側の辺に沿った短い線と、正面へ向けた小さな刻み。
+        /// </summary>
+        void DrawFortificationFacings(float px)
+        {
+            var map = _sim.Map;
+            double h = map.CellM / 2;
+            var col = new Color32(70, 45, 20, 220);
+            for (int j = 0; j < map.Height; j++)
+                for (int i = 0; i < map.Width; i++)
+                {
+                    if (map.TerrainAt(i, j) != TerrainMap.Trench) continue;
+                    double? f = map.FortificationFacing(i, j);
+                    if (!f.HasValue) continue;
+                    UnitGeometry.Axes(f.Value, out var fv, out var lv);
+                    var c = map.CellCenter(i, j);
+                    var edge = c + fv * (h - 5);
+                    _shapes.Line(V(edge - lv * (h - 6)), V(edge + lv * (h - 6)), 2.5f * px, col);
+                    _shapes.Line(V(edge), V(edge + fv * 9), 2f * px, col);
+                }
+        }
+
         void DrawVillage(float px)
         {
             var center = V(MapScenario.VillageCenter);

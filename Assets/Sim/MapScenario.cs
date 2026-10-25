@@ -96,6 +96,8 @@ namespace Battalion.Sim
             foreach (var u in Units)
                 sim.AddCompany(u.Id, u.Side, TrainingOf(u.Id), PersonalityOf(u.Id), new Vec2(u.X, u.Y), u.FacingDeg);
 
+            AssignTrenchFacings(sim);
+
             var cs = sim.Companies;
             for (int a = 0; a < cs.Count; a++)
                 for (int b = a + 1; b < cs.Count; b++)
@@ -104,6 +106,56 @@ namespace Battalion.Sim
 
             sim.AddScript(new ReserveScript(ReserveUnit, ReserveTriggerCenter, ReserveTriggerRadiusM));
             return sim;
+        }
+
+        /// <summary>
+        /// 地図の塹壕の向き（R2）：塹壕のマスを、隣り合う（8方向）マスでつながった1本ずつに分け、会戦開始時にその1本に中心がある
+        /// 中隊の向きにする。1本に複数の中隊がいれば、マスごとに一番近い中隊の向き。中隊のいない塹壕は向きなし（向きによらず守る）。
+        /// 地図ファイルは変えない。
+        /// </summary>
+        static void AssignTrenchFacings(Simulation sim)
+        {
+            var map = sim.Map;
+            var seen = new bool[map.Width * map.Height];
+            for (int j0 = 0; j0 < map.Height; j0++)
+                for (int i0 = 0; i0 < map.Width; i0++)
+                {
+                    if (seen[j0 * map.Width + i0] || map.BaseTerrainAt(i0, j0) != TerrainMap.Trench) continue;
+                    // つながった1本を集める
+                    var cells = new List<(int i, int j)>();
+                    var stack = new Stack<(int i, int j)>();
+                    stack.Push((i0, j0));
+                    seen[j0 * map.Width + i0] = true;
+                    while (stack.Count > 0)
+                    {
+                        var (i, j) = stack.Pop();
+                        cells.Add((i, j));
+                        for (int di = -1; di <= 1; di++)
+                            for (int dj = -1; dj <= 1; dj++)
+                            {
+                                int a = i + di, b = j + dj;
+                                if (!map.InBounds(a, b) || seen[b * map.Width + a] || map.BaseTerrainAt(a, b) != TerrainMap.Trench) continue;
+                                seen[b * map.Width + a] = true;
+                                stack.Push((a, b));
+                            }
+                    }
+                    var set = new HashSet<(int, int)>(cells);
+                    var occupants = new List<Company>();
+                    foreach (var c in sim.Companies)
+                    {
+                        map.CellOf(c.Position, out int ci, out int cj);
+                        if (set.Contains((ci, cj))) occupants.Add(c);
+                    }
+                    if (occupants.Count == 0) continue;
+                    foreach (var (i, j) in cells)
+                    {
+                        var center = map.CellCenter(i, j);
+                        Company best = null;
+                        foreach (var c in occupants)
+                            if (best == null || Vec2.Distance(c.Position, center) < Vec2.Distance(best.Position, center) - 1e-9) best = c;
+                        map.SetFortificationFacing(i, j, best.Facing);
+                    }
+                }
         }
 
         /// <summary>

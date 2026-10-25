@@ -22,12 +22,13 @@ namespace Battalion.Sim.Tests
             return SimParams.FromJson(s);
         }
         /// <summary>
-        /// R1 の規則を止めたパラメータ：開けた所を動く被弾倍率と、動きながら撃つ倍率を 1.0、制圧のしきい値を無限大にする
-        /// （R1 の前と同じ会戦になることの見張り。S1〜S6 を v3 と比べるのにも使う）。
+        /// R1 以降の規則を止めたパラメータ：開けた所を動く被弾倍率と、動きながら撃つ倍率を 1.0、制圧のしきい値を無限大にし、
+        /// 陣地の向き（R2）を見ない（R1 の前と同じ会戦になることの見張り。S1〜S6 を v3 と比べるのにも使う）。
         /// </summary>
         public static SimParams ParamsWithoutR1()
         {
             var p = SimParams.FromJson(File.ReadAllText(PathOf(ParamsRelPath)));
+            p.Terrain.IgnoreFortificationFacing = true;
             p.Terrain.MovingOpenDamageMult = 1.0;
             p.Fire.MovingFireMult = 1.0;
             p.Suppression.ThresholdMovingPerMin = double.PositiveInfinity;

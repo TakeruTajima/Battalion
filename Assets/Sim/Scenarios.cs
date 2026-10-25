@@ -37,6 +37,7 @@ namespace Battalion.Sim
         public readonly List<CompanySetup> Companies = new List<CompanySetup>();
         /// <summary>
         /// 塹壕を置く中隊の名前（R1）。その中隊の中心のマスと、正面に沿って左右2マスずつ（5マス、250m）を塹壕にする。
+        /// 塹壕の向きは、その中隊の初めの向き（R2）。
         /// </summary>
         public readonly List<string> TrenchUnits = new List<string>();
         /// <summary>時刻順の前進の命令（R1）。時刻 0 の命令は会戦の初めに渡す。</summary>
@@ -69,7 +70,8 @@ namespace Battalion.Sim
                 double a = (s.FacingDeg + 90) * Angles.DegToRad;
                 int di = (int)Math.Round(Math.Cos(a)), dj = (int)Math.Round(Math.Sin(a));
                 for (int k = -2; k <= 2; k++)
-                    if (map.InBounds(ci + k * di, cj + k * dj)) map.SetOverlay(ci + k * di, cj + k * dj, TerrainMap.Trench);
+                    if (map.InBounds(ci + k * di, cj + k * dj) && map.SetOverlay(ci + k * di, cj + k * dj, TerrainMap.Trench))
+                        map.SetFortificationFacing(ci + k * di, cj + k * dj, s.FacingDeg * Angles.DegToRad);
             }
             var sim = new Simulation(p, seed, map, log);
             foreach (var s in Companies)
@@ -177,6 +179,24 @@ namespace Battalion.Sim
             return sc;
         }
 
+        // ---------------------------------------------------------------- R2 の検証の場面（陣地の守りの向き）
+
+        /// <summary>S10 正面から：塹壕の R（原点、西向き。塹壕も西向き）を、正面 250m（西）の A が保持して撃つ。</summary>
+        public static Scenario S10_trench_from_front()
+        {
+            var sc = new Scenario("S10_trench_from_front", Blue("A", -250, 0, 0), Red("R", 0, 0, 180));
+            sc.TrenchUnits.Add("R");
+            return sc;
+        }
+
+        /// <summary>S11 側面から：同じ塹壕の R を、側面 250m（北）の A が保持して撃つ。</summary>
+        public static Scenario S11_trench_from_flank()
+        {
+            var sc = new Scenario("S11_trench_from_flank", Blue("A", 0, 250, -90), Red("R", 0, 0, 180));
+            sc.TrenchUnits.Add("R");
+            return sc;
+        }
+
         public static Scenario ByName(string name)
         {
             switch (name)
@@ -191,6 +211,8 @@ namespace Battalion.Sim
                 case "S7_assault_front": return S7_assault_front();
                 case "S8_suppress_then_assault": return S8_suppress_then_assault();
                 case "S9_cross_field_of_fire": return S9_cross_field_of_fire();
+                case "S10_trench_from_front": return S10_trench_from_front();
+                case "S11_trench_from_flank": return S11_trench_from_flank();
                 default: throw new KeyNotFoundException(name);
             }
         }

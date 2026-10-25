@@ -268,6 +268,15 @@ namespace Battalion.Sim
             /// 開けた場所（平地・砲撃痕・橋・浅瀬・塹壕のマス）をその刻みに移動している中隊の被弾倍率。1.0 なら効かない。
             /// </summary>
             public double MovingOpenDamageMult;
+            /// <summary>
+            /// 向きのある守り（塹壕・陣地構築・浅い掩体）を、陣地の向きの正面の弧の外から撃たれたときの被弾倍率（R2。守りの倍率を
+            /// これに置き換える。1.0 なら守りなし）。
+            /// </summary>
+            public double FortificationOffArcMult;
+            /// <summary>
+            /// 陣地の向きを見ない（R2 の前と同じ）。sim_params.json にはなく、R2 の前のログと比べる見張りのテストだけが使う。
+            /// </summary>
+            public bool IgnoreFortificationFacing;
 
             public bool Knows(char c) => Move.ContainsKey(c);
             /// <summary>移動倍率。表にない文字は 0（通れない）。</summary>
@@ -469,6 +478,7 @@ namespace Battalion.Sim
             ReadCharTable(te["damage_mult"], p.Terrain.Damage);
             ReadCharTable(te["los_weight"], p.Terrain.LosWeight);
             p.Terrain.MovingOpenDamageMult = te.D("moving_open_damage_mult");
+            p.Terrain.FortificationOffArcMult = te.D("fortification_off_arc_mult");
 
             var si = root["sight"];
             p.Sight.BaseRangeM = si.D("base_range_m");

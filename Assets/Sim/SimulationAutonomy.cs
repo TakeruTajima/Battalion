@@ -319,17 +319,23 @@ namespace Battalion.Sim
             if (!IsScrapeGround(_map.TerrainAt(c.Position))) return;
             if (t - c.StillSince < A.ScrapeStillSec - 1e-9) return;
             if (c.ScrapeProgress <= 0 && t - c.LastTargetedTime < A.ScrapeQuietSec - 1e-9) return;
+            // 浅い掩体の向きは、掘り始めたときの中隊の向き（R2）
+            if (c.ScrapeProgress <= 0) c.ScrapeFacing = c.Facing;
             if (c.ScrapeProgress <= 0 && _log.Enabled) _log.Write(Ev(t, "scrape_start", c).Add("side", SideName(c.Side)).ToString());
             c.ScrapeProgress = Math.Min(A.ScrapeDigSec, c.ScrapeProgress + _p.TickSec);
             if (c.ScrapeProgress >= A.ScrapeDigSec && _log.Enabled)
                 _log.Write(Ev(t, "scrape_done", c).Add("side", SideName(c.Side)).ToString());
         }
 
-        /// <summary>浅い掩体の被弾倍率（1.0 から進捗に応じて 0.6 へ）。掘れる地面で止まっているときだけ。</summary>
-        double ScrapeMult(Company c, char ch)
+        /// <summary>
+        /// 浅い掩体の被弾倍率（1.0 から進捗に応じて 0.6 へ）。掘れる地面で止まっているときだけ。掘り始めたときの向きの正面の弧の
+        /// 外から撃たれたとき（<paramref name="inArc"/> が false。R2）は、0.6 の代わりに terrain.fortification_off_arc_mult へ近づく。
+        /// </summary>
+        double ScrapeMult(Company c, char ch, bool inArc)
         {
             if (c.MovedThisTick || c.ScrapeProgress <= 0 || !IsScrapeGround(ch)) return 1.0;
-            return 1.0 + (A.ScrapeDamageMult - 1.0) * Math.Min(1.0, c.ScrapeProgress / A.ScrapeDigSec);
+            double target = inArc ? A.ScrapeDamageMult : _p.Terrain.FortificationOffArcMult;
+            return 1.0 + (target - 1.0) * Math.Min(1.0, c.ScrapeProgress / A.ScrapeDigSec);
         }
 
         // ---------------------------------------------------------------- 撃てる目標がない → 危ない敵の方を向く（P2c.1）

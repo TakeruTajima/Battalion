@@ -31,6 +31,8 @@ namespace Battalion.Sim
         readonly char[] _base;
         readonly char[] _overlay;
         readonly double[] _elev;
+        /// <summary>陣地（塹壕のマス）の向き（ラジアン。NaN は向きがない）。R2。</summary>
+        readonly double[] _fortFacing;
 
         TerrainMap(SimParams.TerrainParams terrain, int width, int height, double cellM, double originX, double originY,
             char[] baseTerrain, double[] elevation)
@@ -44,6 +46,8 @@ namespace Battalion.Sim
             _base = baseTerrain;
             _elev = elevation;
             _overlay = new char[width * height];
+            _fortFacing = new double[width * height];
+            for (int k = 0; k < _fortFacing.Length; k++) _fortFacing[k] = double.NaN;
         }
 
         public double MinX => OriginX;
@@ -157,6 +161,33 @@ namespace Battalion.Sim
             char b = _base[j * Width + i];
             if (b == River || b == Bridge || b == Ford) return false;
             _overlay[j * Width + i] = c;
+            return true;
+        }
+
+        // ---------------------------------------------------------------- 陣地の向き（R2）
+
+        /// <summary>
+        /// 塹壕のマスの向き（ラジアン。null なら向きがない）。地図の塹壕はシナリオの定義で、構築した塹壕は完成したときの中隊の
+        /// 向きで決まり、後から変わらない。
+        /// </summary>
+        public double? FortificationFacing(int i, int j)
+        {
+            double f = _fortFacing[j * Width + i];
+            return double.IsNaN(f) ? (double?)null : f;
+        }
+
+        public double? FortificationFacingAt(Vec2 p)
+        {
+            CellOf(p, out int i, out int j);
+            return InBounds(i, j) ? FortificationFacing(i, j) : null;
+        }
+
+        /// <summary>塹壕のマスの向きを決める（まだ向きがないマスだけ。決まった向きは変えない）。決めたら true。</summary>
+        public bool SetFortificationFacing(int i, int j, double facingRad)
+        {
+            int k = j * Width + i;
+            if (!double.IsNaN(_fortFacing[k])) return false;
+            _fortFacing[k] = Angles.Wrap(facingRad);
             return true;
         }
 

@@ -323,6 +323,8 @@ namespace Battalion.View
             if (c.UnderCommand)
                 GUILayout.Label($"受けている火力 {c.IncomingFirePerMin:0.0}/分（制圧のしきい値 {_sim.SuppressionThreshold(c):0.0}・" +
                                 $"{(_sim.MovingPosture(c) ? "動いている" : "止まっている")}）", _small);
+            // 陣地の向きと、今受けている射撃に陣地が効いているか（R2）
+            if (c.UnderCommand) GUILayout.Label(FortificationText(c), _small);
 
             GUILayout.Space(8);
             bool can = CanCommand(c);
@@ -381,6 +383,28 @@ namespace Battalion.View
             }
             GUILayout.EndScrollView();
             GUILayout.EndArea();
+        }
+
+        /// <summary>
+        /// 陣地の向き（R2）：「陣地の向き 西（直前の射撃：正面の弧から 1・外から 1 ＝一部効いていない）」。陣地がなければ「陣地なし」。
+        /// </summary>
+        string FortificationText(Company c)
+        {
+            double? f = _sim.FortificationFacingOf(c);
+            if (!f.HasValue) return "陣地なし（向きのある守りなし）";
+            double deg = f.Value * Angles.RadToDeg;
+            int inArc = 0, offArc = 0;
+            foreach (var r in _sim.LastTickFire)
+            {
+                if (r.Target != c.Id) continue;
+                if (_sim.InFortificationArc(f, c, _sim.Companies[r.Shooter].Position)) inArc++;
+                else offArc++;
+            }
+            string state = inArc + offArc == 0 ? "撃たれていない"
+                : offArc == 0 ? $"正面の弧から {inArc}　<color=#7fd07f>効いている</color>"
+                : inArc == 0 ? $"外から {offArc}　<color=#ff8060>効いていない</color>"
+                : $"正面の弧から {inArc}・外から {offArc}　<color=#ffb060>一部効いていない</color>";
+            return $"陣地の向き {Compass(deg)}（{deg:0}°）　直前の射撃：{state}";
         }
 
         static string Compass(double deg)

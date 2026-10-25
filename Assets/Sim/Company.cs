@@ -156,6 +156,8 @@ namespace Battalion.Sim
         /// <summary>最後に動いた時刻と、浅い掩体の進捗（秒）。動くと 0 に戻る。</summary>
         public double StillSince;
         public double ScrapeProgress;
+        /// <summary>浅い掩体の向き（掘り始めたときの中隊の向き。R2）。</summary>
+        public double? ScrapeFacing;
         /// <summary>独断の種類と、独断を始める前の持ち場（限度はここから測る）。</summary>
         public IndependentAct Independent;
         public Vec2 IndependentOrigin;

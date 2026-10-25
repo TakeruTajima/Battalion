@@ -797,7 +797,9 @@ namespace Battalion.Sim
             foreach (var (i, j) in EntrenchCells(c))
             {
                 char ch = _map.TerrainAt(i, j);
-                if (ch == TerrainMap.Plain || ch == TerrainMap.Crater) _map.SetOverlay(i, j, TerrainMap.Trench);
+                // 陣地の向きは、完成したときの中隊の向き（R2）。もとからある塹壕の向きは変えない
+                if ((ch == TerrainMap.Plain || ch == TerrainMap.Crater) && _map.SetOverlay(i, j, TerrainMap.Trench))
+                    _map.SetFortificationFacing(i, j, c.Facing);
             }
             if (_log.Enabled)
                 _log.Write(Ev(t, "entrench_complete", c).Add("x", c.Position.X).Add("y", c.Position.Y).ToString());
@@ -821,19 +823,56 @@ namespace Battalion.Sim
         /// 撃たれる側の被弾倍率（中心のマス）。塹壕の 0.3 はその刻みに動いていない中隊にだけ効き、動いていれば 1.0。
         /// 陣地構築の途中は、動いていなければ進捗に応じて地形の値から 0.3 へ近づく。
         /// 開けた場所（平地・砲撃痕・橋・浅瀬・塹壕）を移動中なら、さらに terrain.moving_open_damage_mult を掛ける。
+        /// 向きのある守り（塹壕・陣地構築・浅い掩体。R2）は、撃ってきた敵の位置 <paramref name="from"/> が陣地の向きの正面の弧の
+        /// 外なら、守りの倍率を terrain.fortification_off_arc_mult に置き換える。<paramref name="from"/> がなければ（自律行動の
+        /// 判断など）向きを見ない。村・森などの守りは向きによらない。
         /// </summary>
-        public double TerrainDamageMult(Company c)
+        public double TerrainDamageMult(Company c, Vec2? from = null)
         {
             char ch = _map.TerrainAt(c.Position);
-            double f = ch == TerrainMap.Trench
-                ? (c.MovedThisTick ? 1.0 : _map.DamageMult(TerrainMap.Trench))
-                : _map.DamageMult(ch);
-            if (!c.MovedThisTick && c.EntrenchProgress > 0 && f > _p.MapRules.EntrenchDamageMult)
-                f += (_p.MapRules.EntrenchDamageMult - f) * Math.Min(1.0, c.EntrenchProgress / _p.MapRules.EntrenchSec);
+            double off = _p.Terrain.FortificationOffArcMult;
+            double f;
+            if (ch == TerrainMap.Trench)
+                f = c.MovedThisTick ? 1.0
+                    : InFortificationArc(_map.FortificationFacingAt(c.Position), c, from) ? _map.DamageMult(TerrainMap.Trench) : off;
+            else f = _map.DamageMult(ch);
+            if (!c.MovedThisTick && c.EntrenchProgress > 0 && ch != TerrainMap.Trench)
+            {
+                // 陣地構築の途中の守りは、今の中隊の向きで見る（陣地の向きは完成したときに決まる）。塹壕のマスでは塹壕の向きで見る
+                double target = InFortificationArc(c.Facing, c, from) ? _p.MapRules.EntrenchDamageMult : off;
+                if (f > target) f += (target - f) * Math.Min(1.0, c.EntrenchProgress / _p.MapRules.EntrenchSec);
+            }
             if (c.MovedThisTick && IsOpenGround(ch)) f *= _p.Terrain.MovingOpenDamageMult;
-            // 浅い掩体（P2c）
-            f *= ScrapeMult(c, ch);
+            // 浅い掩体（P2c）。向きは掘り始めたときの中隊の向き（R2）
+            f *= ScrapeMult(c, ch, InFortificationArc(c.ScrapeFacing, c, from));
             return f;
+        }
+
+        /// <summary>
+        /// 撃ってきた敵の位置 <paramref name="from"/> が、向き <paramref name="facing"/> の陣地の正面の弧（±fire.front_arc_deg）にいるか
+        /// （R2）。向きがない陣地、撃ってきた位置が分からないときは true（守りが効く）。
+        /// </summary>
+        public bool InFortificationArc(double? facing, Company c, Vec2? from)
+        {
+            if (!facing.HasValue || !from.HasValue || _p.Terrain.IgnoreFortificationFacing) return true;
+            var d = from.Value - c.Position;
+            if (d.Length < 1e-9) return true;
+            double deg = Math.Abs(Angles.Wrap(Math.Atan2(d.Y, d.X) - facing.Value)) * Angles.RadToDeg;
+            return deg <= _p.Fire.FrontArcDeg + 1e-9;
+        }
+
+        /// <summary>
+        /// 中隊が今いる陣地の向き（R2。表示用）：止まって塹壕にいればそのマスの向き、陣地構築の途中なら今の向き、浅い掩体があれば
+        /// 掘り始めたときの向き。陣地がなければ null。
+        /// </summary>
+        public double? FortificationFacingOf(Company c)
+        {
+            if (c.MovedThisTick) return null;
+            char ch = _map.TerrainAt(c.Position);
+            if (ch == TerrainMap.Trench) return _map.FortificationFacingAt(c.Position);
+            if (c.EntrenchProgress > 0) return c.Facing;
+            if (ScrapeMult(c, ch, true) < 1.0) return c.ScrapeFacing;
+            return null;
         }
 
         /// <summary>移動中の被弾倍率を掛ける、開けた場所のマス（平地・砲撃痕・橋・浅瀬・塹壕）。</summary>

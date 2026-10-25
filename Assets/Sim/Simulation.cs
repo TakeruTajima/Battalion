@@ -384,7 +384,7 @@ namespace Battalion.Sim
                 double fQuality = _p.Of(u.Training).FireMult;
                 bool close = s.Close;
                 double fRange = RangeMultiplier(s.Distance, close);
-                double fTerrain = TerrainDamageMult(tg);
+                double fTerrain = TerrainDamageMult(tg, u.Position);
                 double fAspect = _p.Fire.AspectCasualtyMult[a];
                 double fState = 1.0;
                 if (u.State == CompanyState.Shaken) fState *= _p.Fire.ShakenMult;
