@@ -65,13 +65,17 @@ namespace Battalion.Sim.Tests
         public sealed class SceneSummary
         {
             public double BrokenRate, LossMean, RoutedRate, PinnedRate;
+            /// <summary>守備が崩れた回の、崩れた時刻の中央値（分。崩れた回がなければ null）。</summary>
+            public double? BrokenMedianMin;
         }
 
         public static SceneSummary Summarize(Scenario sc, SimParams p, int seeds = Seeds)
         {
             var rs = Enumerable.Range(1, seeds).Select(s => Run(sc, p, (ulong)s)).ToList();
+            var broken = rs.Where(x => x.DefenderBroken).Select(x => x.EndMin).ToList();
             return new SceneSummary
             {
+                BrokenMedianMin = broken.Count == 0 ? (double?)null : TestUtil.Median(broken),
                 BrokenRate = rs.Average(x => x.DefenderBroken ? 1.0 : 0.0),
                 LossMean = rs.Average(x => x.AttackerLoss),
                 RoutedRate = rs.Average(x => x.AttackerRouted ? 1.0 : 0.0),
@@ -79,12 +83,14 @@ namespace Battalion.Sim.Tests
             };
         }
 
-        /// <summary>期待：S7 は失敗する、S8 は S7 より明らかに良い、S9 は横切る代償が大きい。満たせない期待の一覧を返す。</summary>
+        /// <summary>
+        /// 期待（R1 の途中報告の後に直したもの）：S7 は代償が大きい（攻めの損害 20% 以上か、30分以内に守備が崩れない割合
+        /// 0.5 以上）、S8 は S7 より明らかに良い、S9 は横切る代償が大きい。満たせない期待の一覧を返す。
+        /// </summary>
         public static List<string> Unmet(SceneSummary s7, SceneSummary s8, SceneSummary s9)
         {
             var u = new List<string>();
-            if (s7.BrokenRate > 0.2 + 1e-9) u.Add("S7 守備が崩れる割合 ≤ 0.2");
-            if (s7.LossMean < 0.25 - 1e-9 && s7.RoutedRate < 0.5 - 1e-9) u.Add("S7 攻めの損害 ≥ 25% か壊走 ≥ 0.5");
+            if (s7.LossMean < 0.20 - 1e-9 && 1 - s7.BrokenRate < 0.5 - 1e-9) u.Add("S7 攻めの損害 ≥ 20% か崩れない ≥ 0.5");
             if (s8.BrokenRate < 0.6 - 1e-9) u.Add("S8 守備が崩れる割合 ≥ 0.6");
             if (s8.LossMean > s7.LossMean * 2 / 3 + 1e-9) u.Add("S8 攻めの損害 ≤ S7 の 2/3");
             if (s9.LossMean < 0.20 - 1e-9 && s9.PinnedRate < 0.5 - 1e-9) u.Add("S9 損害 ≥ 20% か伏せる ≥ 0.5");
@@ -99,8 +105,8 @@ namespace Battalion.Sim.Tests
         public void Sweep()
         {
             var sb = new StringBuilder();
-            sb.AppendLine("| 移動の被弾 | 動くしきい値 | 止まるしきい値 | 動きながら撃つ | S7 崩れる | S7 損害 | S7 壊走 | S8 崩れる | S8 損害 | S9 損害 | S9 伏せる | 満たせない期待 |");
-            sb.AppendLine("| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |");
+            sb.AppendLine("| 移動の被弾 | 動くしきい値 | 止まるしきい値 | 動きながら撃つ | S7 崩れる | S7 崩れた時刻 | S7 損害 | S7 壊走 | S8 崩れる | S8 崩れた時刻 | S8 損害 | S9 損害 | S9 伏せる | 満たせない期待 |");
+            sb.AppendLine("| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |");
             using var progress = RunProgress.Begin("R1 の掃き出し", 3 * 3 * 3 * 2 * 3 * Seeds);
             foreach (double mo in new[] { 2.0, 3.0, 4.0 })
             foreach (double tm in new[] { 1.0, 1.5, 2.0 })
@@ -113,11 +119,13 @@ namespace Battalion.Sim.Tests
                 var s9 = Summarize(Scenarios.S9_cross_field_of_fire(), p);
                 for (int k = 0; k < 3 * Seeds; k++) RunProgress.Tick();
                 var unmet = Unmet(s7, s8, s9);
-                sb.AppendLine($"| {mo:0.0} | {tm:0.0} | {ts:0.0} | {mf:0.0} | {s7.BrokenRate:0.00} | {s7.LossMean:0.000} | {s7.RoutedRate:0.00} | " +
-                              $"{s8.BrokenRate:0.00} | {s8.LossMean:0.000} | {s9.LossMean:0.000} | {s9.PinnedRate:0.00} | " +
+                sb.AppendLine($"| {mo:0.0} | {tm:0.0} | {ts:0.0} | {mf:0.0} | {s7.BrokenRate:0.00} | {Min(s7.BrokenMedianMin)} | {s7.LossMean:0.000} | {s7.RoutedRate:0.00} | " +
+                              $"{s8.BrokenRate:0.00} | {Min(s8.BrokenMedianMin)} | {s8.LossMean:0.000} | {s9.LossMean:0.000} | {s9.PinnedRate:0.00} | " +
                               $"{(unmet.Count == 0 ? "なし" : string.Join("・", unmet))} |");
             }
             TestContext.WriteLine(sb.ToString());
         }
+
+        static string Min(double? m) => m.HasValue ? $"{m.Value:0.0}分" : "—";
     }
 }

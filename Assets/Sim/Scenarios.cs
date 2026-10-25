@@ -41,6 +41,8 @@ namespace Battalion.Sim
         public readonly List<string> TrenchUnits = new List<string>();
         /// <summary>時刻順の前進の命令（R1）。時刻 0 の命令は会戦の初めに渡す。</summary>
         public readonly List<SceneOrder> Orders = new List<SceneOrder>();
+        /// <summary>通れない水のマスにする場所（マスの中心で判定。null ならなし。R1 の S7・S8 の両脇）。</summary>
+        public Func<Vec2, bool> Water;
         /// <summary>
         /// 全て平地の地図（60×40マス、3km×2km）。原点を (−1200, −850) にずらして配置の中心付近に置く。
         /// 壊走した中隊が会戦から離脱する範囲は P0 と同じ（x −1200〜1800、y −850〜1150）。
@@ -56,6 +58,10 @@ namespace Battalion.Sim
         public Simulation Build(SimParams p, ulong seed, IEventSink log = null)
         {
             var map = FlatMap(p);
+            if (Water != null)
+                for (int j = 0; j < map.Height; j++)
+                    for (int i = 0; i < map.Width; i++)
+                        if (Water(map.CellCenter(i, j))) map.SetOverlay(i, j, TerrainMap.River);
             foreach (var name in TrenchUnits)
             {
                 var s = Companies.Find(x => x.Name == name);
@@ -123,24 +129,38 @@ namespace Battalion.Sim
             new SceneOrder { AtSec = at, Unit = unit, X = x, Y = y, FacingDeg = facingDeg };
 
         /// <summary>
-        /// S7 正面からの突撃：塹壕の R（x=400、西向き）に、正面 400m から A・B・C（y=−200／0／200）が横に並んで
-        /// 守備の線まで前進する（突撃。R1 の設計で、今の攻撃の命令は 250m の発起点で止まるため前進で作る）。
+        /// S7・S8 の脇を塞いだ陣地：攻める側が近づける幅は 400m（|y| ≤ 200）。守備の線の手前 150m から守備の後ろの辺まで
+        /// （250 ≤ x < 450）は守備の正面幅（|y| ≤ 100）だけになり、守備の両脇は水。守備の正面の弧（±60°）の外へは、正面を
+        /// 通らずに回れない（x = 250 で |y| = 200 の点は、守備から見て 53°）。守備の後ろ（x ≥ 450）は 400m の幅に戻る。
         /// </summary>
-        public static Scenario S7_assault_front()
+        static bool FlankedPositionWater(Vec2 p) => p.X >= 250 && p.X < 450 ? Math.Abs(p.Y) > 100 : Math.Abs(p.Y) > 200;
+
+        /// <summary>S7・S8 の配置：塹壕の R（x=400、西向き）、攻める A・C が前（x=0、y=∓100）、B が後ろ（x=−200）。</summary>
+        static Scenario FlankedPosition(string name)
         {
-            var sc = new Scenario("S7_assault_front", Blue("A", 0, -200, 0), Blue("B", 0, 0, 0), Blue("C", 0, 200, 0), Red("R", 400, 0, 180));
+            var sc = new Scenario(name, Blue("A", 0, -100, 0), Blue("B", -200, 0, 0), Blue("C", 0, 100, 0), Red("R", 400, 0, 180));
             sc.TrenchUnits.Add("R");
-            foreach (var (n, y) in new[] { ("A", -200.0), ("B", 0.0), ("C", 200.0) }) sc.Orders.Add(Advance(0, n, 400, y, 0));
+            sc.Water = FlankedPositionWater;
             return sc;
         }
 
-        /// <summary>S8 抑えてから詰める：S7 と同じ配置。A・C は 300m（x=100）へ出て保持して撃ち、5分後に B が守備の線まで前進する。</summary>
+        /// <summary>
+        /// S7 正面からの突撃：脇を塞いだ陣地の R に、前の A・C と後ろの B が、守備の線まで前進する（突撃。R1 の設計で、今の
+        /// 攻撃の命令は 250m の発起点で止まるため前進で作る）。
+        /// </summary>
+        public static Scenario S7_assault_front()
+        {
+            var sc = FlankedPosition("S7_assault_front");
+            foreach (var (n, y) in new[] { ("A", -100.0), ("C", 100.0), ("B", 0.0) }) sc.Orders.Add(Advance(0, n, 400, y, 0));
+            return sc;
+        }
+
+        /// <summary>S8 抑えてから詰める：S7 と同じ配置。前の A・C は 300m（x=100）へ出て保持して撃ち、5分後に後ろの B が守備の線まで前進する。</summary>
         public static Scenario S8_suppress_then_assault()
         {
-            var sc = new Scenario("S8_suppress_then_assault", Blue("A", 0, -200, 0), Blue("B", 0, 0, 0), Blue("C", 0, 200, 0), Red("R", 400, 0, 180));
-            sc.TrenchUnits.Add("R");
-            sc.Orders.Add(Advance(0, "A", 100, -200, 0));
-            sc.Orders.Add(Advance(0, "C", 100, 200, 0));
+            var sc = FlankedPosition("S8_suppress_then_assault");
+            sc.Orders.Add(Advance(0, "A", 100, -100, 0));
+            sc.Orders.Add(Advance(0, "C", 100, 100, 0));
             sc.Orders.Add(Advance(300, "B", 400, 0, 0));
             return sc;
         }
