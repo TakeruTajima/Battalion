@@ -63,10 +63,10 @@ namespace Battalion.Sim.Tests
 
         /// <summary>
         /// 火力の量は、守りを除いた損害の式の和（1個中隊 150人・400m 以内・正面で 0.0133×150 = 1.995）。止まっている A は
-        /// しきい値 3.5 以上の状態が 10秒（20刻み）続いたら制圧下、半分（1.75）未満が 20秒（40刻み）続いたら解ける。
+        /// しきい値 3.5 以上の状態が 10秒（20刻み）続いたら制圧下、半分（1.75）未満が release_sec 続いたら解ける。
         /// </summary>
         [Test]
-        public void SuppressionStartsAfter10sAndEndsAfter20sBelowHalf()
+        public void SuppressionStartsAfter10sAndEndsAfterReleaseSecBelowHalf()
         {
             var log = new StringEventSink();
             var (sim, a, r1, r2) = TwoOnOne(log: log);
@@ -82,11 +82,12 @@ namespace Battalion.Sim.Tests
             // 撃つ敵を遠ざける（火力の量 0）
             r1.Position = new Vec2(-1400, 1400);
             r2.Position = new Vec2(1400, 1400);
-            Steps(sim, 39);
+            int release = (int)Math.Round(sim.Params.Suppression.ReleaseSec / sim.Params.TickSec);
+            Steps(sim, release - 1);
             Assert.That(a.IncomingFirePerMin, Is.EqualTo(0));
-            Assert.That(a.Suppressed, Is.True, "19.5秒");
+            Assert.That(a.Suppressed, Is.True, "release_sec の 1刻み前");
             Steps(sim, 1);
-            Assert.That(a.Suppressed, Is.False, "20秒で解ける");
+            Assert.That(a.Suppressed, Is.False, "release_sec で解ける");
             StringAssert.Contains("\"type\":\"suppression_end\",\"unit\":\"A\"", log.ToString());
         }
 
@@ -101,13 +102,14 @@ namespace Battalion.Sim.Tests
             r2.Position = new Vec2(1400, 1400);
             Seconds(sim, 60);
             Assert.That(a.Suppressed, Is.True, "1.75 以上が続く間は解けない");
-            // 15秒だけ火力を消して、戻す
+            // release_sec より 5秒短く火力を消して、戻す
+            double rel = sim.Params.Suppression.ReleaseSec;
             r1.Position = new Vec2(-1400, 1400);
-            Seconds(sim, 15);
+            Seconds(sim, rel - 5);
             r1.Position = new Vec2(25, 350);
             Seconds(sim, 10);
             r1.Position = new Vec2(-1400, 1400);
-            Seconds(sim, 15);
+            Seconds(sim, rel - 5);
             Assert.That(a.Suppressed, Is.True, "途切れたら数え直す");
             Seconds(sim, 5);
             Assert.That(a.Suppressed, Is.False);
@@ -136,7 +138,7 @@ namespace Battalion.Sim.Tests
                 "撃つ敵の方を向く");
 
             r.Position = new Vec2(-1400, 1400);
-            Seconds(sim, 19.5);
+            Seconds(sim, sim.Params.Suppression.ReleaseSec - sim.Params.TickSec);
             Assert.That(m.Suppressed, Is.True);
             Assert.That(m.Position, Is.EqualTo(at));
             Steps(sim, 1);
@@ -161,7 +163,7 @@ namespace Battalion.Sim.Tests
             Assert.That(sim.TerrainDamageMult(m), Is.EqualTo(1.0), "伏せている間は掛からない");
         }
 
-        /// <summary>撃つ力：制圧下は ×0.5（R1 の規則2）、動いた刻みは ×0.5（規則3）。</summary>
+        /// <summary>撃つ力：制圧下は ×suppression.fire_mult（R1 の規則2）、動いた刻みは ×fire.moving_fire_mult（規則3）。</summary>
         [Test]
         public void SuppressedAndMovingShootersFireAtHalf()
         {
@@ -174,7 +176,7 @@ namespace Battalion.Sim.Tests
             int s0 = a.Strength;
             Steps(sim, 1);
             double after = sim.LastTickFire.Single(f => f.Shooter == a.Id).ExpectedPerMin / s0;
-            Assert.That(after, Is.EqualTo(before * 0.5).Within(1e-9), "制圧下 ×0.5");
+            Assert.That(after, Is.EqualTo(before * sim.Params.Suppression.FireMult).Within(1e-9), "制圧下 ×suppression.fire_mult");
 
             // 動きながら撃つ：撃たれない（射程の外から見えている敵を撃つ）向きで比べる
             var sim2 = Flat();
@@ -185,7 +187,7 @@ namespace Battalion.Sim.Tests
             Give(sim2, Order.Advance(m.Id, new Vec2(600, 0), 90 * Angles.DegToRad));
             UntilMoving(sim2, m);
             double moving = sim2.LastTickFire.Single(f => f.Shooter == m.Id).ExpectedPerMin;
-            Assert.That(moving, Is.EqualTo(still * 0.5).Within(1e-9), "動いた刻みは ×0.5");
+            Assert.That(moving, Is.EqualTo(still * sim2.Params.Fire.MovingFireMult).Within(1e-9), "動いた刻みは ×fire.moving_fire_mult");
         }
 
         // ---------------------------------------------------------------- 性格・接触の距離・自律行動・後退
@@ -208,7 +210,7 @@ namespace Battalion.Sim.Tests
             Assert.That(m.MovedThisTick, Is.EqualTo(!liesDown));
         }
 
-        /// <summary>接触の距離（矩形の隙間 50m 以内）では、制圧下でも伏せて止まらない（撃つ力 ×0.5 は効く）。</summary>
+        /// <summary>接触の距離（矩形の隙間 50m 以内）では、制圧下でも伏せて止まらない（制圧下の撃つ力の倍率は効く）。</summary>
         [Test]
         public void DoesNotLieDownInCloseCombat()
         {
@@ -224,7 +226,8 @@ namespace Battalion.Sim.Tests
             Steps(sim, 1);
             Assert.That(m.MovedThisTick, Is.True, "動き続ける");
             Assert.That(sim.LastTickFire.Single(f => f.Shooter == m.Id).ExpectedPerMin,
-                Is.EqualTo(0.0133 * m.Strength * 2.0 * 0.5 * 0.5).Within(1e-9), "接近戦 ×2.0・動いた ×0.5・制圧下 ×0.5");
+                Is.EqualTo(0.0133 * m.Strength * 2.0 * sim.Params.Fire.MovingFireMult * sim.Params.Suppression.FireMult).Within(1e-9),
+                "接近戦 ×2.0・動いた刻み・制圧下");
         }
 
         /// <summary>

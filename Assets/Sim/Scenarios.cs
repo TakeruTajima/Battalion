@@ -155,13 +155,13 @@ namespace Battalion.Sim
             return sc;
         }
 
-        /// <summary>S8 抑えてから詰める：S7 と同じ配置。前の A・C は 300m（x=100）へ出て保持して撃ち、5分後に後ろの B が守備の線まで前進する。</summary>
+        /// <summary>S8 抑えてから詰める：S7 と同じ配置。前の A・C は 300m（x=100）へ出て保持して撃ち、3分後に後ろの B が守備の線まで前進する。</summary>
         public static Scenario S8_suppress_then_assault()
         {
             var sc = FlankedPosition("S8_suppress_then_assault");
             sc.Orders.Add(Advance(0, "A", 100, -100, 0));
             sc.Orders.Add(Advance(0, "C", 100, 100, 0));
-            sc.Orders.Add(Advance(300, "B", 400, 0, 0));
+            sc.Orders.Add(Advance(180, "B", 400, 0, 0));
             return sc;
         }
 

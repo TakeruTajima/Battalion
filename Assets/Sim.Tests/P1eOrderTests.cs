@@ -4,11 +4,12 @@ using NUnit.Framework;
 
 namespace Battalion.Sim.Tests
 {
+    // R1：撃たれながら動く場面で、制圧（伏せて止まる）と関係のない動きを確かめるので、R1 の規則を止めたパラメータで回す。
     /// <summary>P1e：行動と命令の改善（仕様「P1e：行動と命令の改善（確定）」の1〜5）。</summary>
     public class P1eOrderTests
     {
         static Simulation Flat(IEventSink log = null) =>
-            new Simulation(TestUtil.Params, 1, TerrainMap.FlatCovering(TestUtil.Params.Terrain, -3000, -3000, 3000, 3000), log);
+            new Simulation(TestUtil.ParamsNoR1, 1, TerrainMap.FlatCovering(TestUtil.ParamsNoR1.Terrain, -3000, -3000, 3000, 3000), log);
 
         static Company Add(Simulation sim, string name, Side side, double x, double y, double facingDeg,
             Personality pers = Personality.Calm, double? morale = null) =>
@@ -174,7 +175,7 @@ namespace Battalion.Sim.Tests
         public void EnemyBehindTheRidgeIsNotContact(double x, bool contact)
         {
             var s = MapScenario.LoadFile(TestUtil.PathOf("maps/scenario_a1.json"));
-            var sim = new Simulation(TestUtil.Params, 1, TerrainMap.FromJson(s.Source, TestUtil.Params.Terrain));
+            var sim = new Simulation(TestUtil.ParamsNoR1, 1, TerrainMap.FromJson(s.Source, TestUtil.ParamsNoR1.Terrain));
             Add(sim, "R1", Side.Red, 1825, 1000, 180);
             var b = Add(sim, "B", Side.Blue, x, 1000, 0);
             sim.Issue(Order.Advance(b.Id, new Vec2(x, 700))); // 接敵の判定は動いている中隊だけ

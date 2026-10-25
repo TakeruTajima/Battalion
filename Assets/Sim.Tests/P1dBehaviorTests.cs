@@ -4,11 +4,12 @@ using NUnit.Framework;
 
 namespace Battalion.Sim.Tests
 {
+    // R1：撃たれながら動く場面で、制圧（伏せて止まる）と関係のない動きを確かめるので、R1 の規則を止めたパラメータで回す。
     /// <summary>P1d：行動の規則（仕様「P1d：行動の規則（確定）」の1〜7）。</summary>
     public class P1dBehaviorTests
     {
         static Simulation Flat() =>
-            new Simulation(TestUtil.Params, 1, TerrainMap.FlatCovering(TestUtil.Params.Terrain, -3000, -3000, 3000, 3000));
+            new Simulation(TestUtil.ParamsNoR1, 1, TerrainMap.FlatCovering(TestUtil.ParamsNoR1.Terrain, -3000, -3000, 3000, 3000));
 
         static Company Add(Simulation sim, string name, Side side, double x, double y, double facingDeg,
             Personality pers = Personality.Calm, double? morale = null) =>

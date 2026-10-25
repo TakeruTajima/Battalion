@@ -88,7 +88,8 @@ namespace Battalion.Sim.Tests
 
         /// <summary>
         /// シナリオA の作戦（ステージ2 の段階つき、シード1、90分。中隊の伝令の行を含むログ全体）のハッシュが、.NET で取った値と同じ。
-        /// Unity でも通れば、会戦の計算とログの書き方が両方で同じ。
+        /// Unity でも通れば、会戦の計算とログの書き方が両方で同じ。R1 の規則（制圧など）を入れた値で取り直した
+        /// （R1 の前は 3929行・67e779d0…）。
         /// </summary>
         [Test]
         public void ScenarioALogIsTheSameOnUnityAndDotNet()
@@ -96,8 +97,8 @@ namespace Battalion.Sim.Tests
             var sc = MapScenario.LoadFile(TestUtil.PathOf("maps/scenario_a2.json"));
             string log = ScenarioLogHashTests.RunAndLog(sc, new ScenarioAReportTests.PlannedOrder[0], 1, out int n,
                 s => ScenarioAReportTests.StagedPinAndFlankStart(s, 2), ScenarioAReportTests.StagedPinAndFlankTick);
-            Assert.That(n, Is.EqualTo(3929));
-            Assert.That(ScenarioLogHashTests.Hash(log), Is.EqualTo("67e779d0c3a1f7748de19ce9c1819ebad977244804fcd1ba6028f60666fecfb9"));
+            Assert.That(n, Is.EqualTo(3924));
+            Assert.That(ScenarioLogHashTests.Hash(log), Is.EqualTo("6637bf002ca0a81fc4e06eb7f0d1b7e1baf5091c4d76a4e14869fd036a04edb0"));
         }
     }
 }

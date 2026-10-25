@@ -19,9 +19,10 @@ namespace Battalion.Sim.Tests
         }
 
         [Test]
-        public void MovingOpenDamageMultDefaultsToOne()
+        public void MovingOpenDamageMultIsTheR1Value()
         {
-            Assert.That(TestUtil.Params.Terrain.MovingOpenDamageMult, Is.EqualTo(1.0));
+            // R1 の掃き出しで 3.0 に決めた（P1b では 1.0）
+            Assert.That(TestUtil.Params.Terrain.MovingOpenDamageMult, Is.EqualTo(3.0));
         }
 
         static SimParams WithMovingOpenMult(double mult)

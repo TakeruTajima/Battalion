@@ -391,8 +391,8 @@ namespace Battalion.Sim
                 if (!s.TargetInFrontArc) fState *= _p.Fire.NonFrontTargetMult;
                 // 隊形の乱れ（壊走中の味方にすり抜けられた。P1d の6）
                 if (u.DisarrayUntil >= t) fState *= _p.Behavior.DisarrayFireMult;
-                // 制圧下（R1。砲撃による制圧は P3 で同じ倍率を使う）、動きながら撃つ（R1 の規則3）
-                if (u.Suppressed) fState *= _p.Fire.SuppressedMult;
+                // 小銃の制圧下（R1。砲撃による制圧は P3 で fire.suppressed_mult）、動きながら撃つ（R1 の規則3）
+                if (u.Suppressed) fState *= _p.Suppression.FireMult;
                 if (u.MovedThisTick) fState *= _p.Fire.MovingFireMult;
 
                 double fExtra = 1.0;

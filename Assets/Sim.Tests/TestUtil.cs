@@ -35,14 +35,25 @@ namespace Battalion.Sim.Tests
             return p;
         }
 
-        /// <summary>R1 の値を置き換えたパラメータ（掃き出し用）。</summary>
-        public static SimParams ParamsWithR1(double movingOpenDamageMult, double thresholdMoving, double thresholdStationary, double movingFireMult)
+        static SimParams _noR1;
+
+        /// <summary>
+        /// R1 の規則を止めたパラメータ（<see cref="ParamsWithoutR1"/> を一度だけ読んだもの。書き換えないこと）。撃たれながら動く
+        /// 場面で、制圧と関係のない動きを確かめるテストに使う。
+        /// </summary>
+        public static SimParams ParamsNoR1 => _noR1 ?? (_noR1 = ParamsWithoutR1());
+
+        /// <summary>R1 の値を置き換えたパラメータ（掃き出し用。解けるまでの秒数と制圧下の撃つ力は、省けば sim_params.json の値）。</summary>
+        public static SimParams ParamsWithR1(double movingOpenDamageMult, double thresholdMoving, double thresholdStationary, double movingFireMult,
+            double? releaseSec = null, double? suppressedFireMult = null)
         {
             var p = SimParams.FromJson(File.ReadAllText(PathOf(ParamsRelPath)));
             p.Terrain.MovingOpenDamageMult = movingOpenDamageMult;
             p.Suppression.ThresholdMovingPerMin = thresholdMoving;
             p.Suppression.ThresholdStationaryPerMin = thresholdStationary;
             p.Fire.MovingFireMult = movingFireMult;
+            if (releaseSec.HasValue) p.Suppression.ReleaseSec = releaseSec.Value;
+            if (suppressedFireMult.HasValue) p.Suppression.FireMult = suppressedFireMult.Value;
             return p;
         }
 

@@ -3,17 +3,18 @@ using NUnit.Framework;
 
 namespace Battalion.Sim.Tests
 {
+    // R1：撃たれながら動く場面で、制圧（伏せて止まる）と関係のない動きを確かめるので、R1 の規則を止めたパラメータで回す。
     /// <summary>P1g：目標が見えないときの中隊長の判断（仕様「P1g：目標が見えないときの中隊長の判断（確定）」）。</summary>
     public class P1gSightTests
     {
         static Simulation Stage1(IEventSink log = null)
         {
             var s = MapScenario.LoadFile(TestUtil.PathOf("maps/scenario_a1.json"));
-            return new Simulation(TestUtil.Params, 1, TerrainMap.FromJson(s.Source, TestUtil.Params.Terrain), log);
+            return new Simulation(TestUtil.ParamsNoR1, 1, TerrainMap.FromJson(s.Source, TestUtil.ParamsNoR1.Terrain), log);
         }
 
         static Simulation Flat(IEventSink log = null) =>
-            new Simulation(TestUtil.Params, 1, TerrainMap.FlatCovering(TestUtil.Params.Terrain, -3000, -3000, 3000, 3000), log);
+            new Simulation(TestUtil.ParamsNoR1, 1, TerrainMap.FlatCovering(TestUtil.ParamsNoR1.Terrain, -3000, -3000, 3000, 3000), log);
 
         static Company Add(Simulation sim, string name, Side side, double x, double y, double facingDeg) =>
             sim.AddCompany(name, side, Training.Regular, Personality.Calm, new Vec2(x, y), facingDeg);

@@ -135,7 +135,7 @@
       "S": 1.0,
       "W": 1.0
     },
-    "moving_open_damage_mult": 1.0,
+    "moving_open_damage_mult": 3.0,
     "_note_moving_open": "平地・砲撃痕・橋・浅瀬・塹壕を移動中の中隊の被弾倍率。P1b の調整候補（案は 2.0）",
     "los_weight": {
       "F": 1.0,
@@ -275,7 +275,8 @@
     "threshold_stationary_per_min": 3.5,
     "onset_sec": 10,
     "release_ratio": 0.5,
-    "release_sec": 20,
+    "release_sec": 60,
+    "fire_mult": 0.25,
     "moving_threshold_personality_mult": { "cautious": 0.75, "calm": 1.0, "agile": 1.0, "reckless": 1.5 }
   }
 }

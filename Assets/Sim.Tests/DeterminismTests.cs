@@ -11,8 +11,9 @@ namespace Battalion.Sim.Tests
         static string RunAndHash(string scenario, ulong seed, out int lines) => RunAndHash(scenario, seed, out lines, null);
 
         /// <param name="strip">ログから取り除く文字列（後から足した項目を除いて昔のログと比べるため）。</param>
+        /// <remarks>昔のログと比べるので、R1 の規則は止めて回す。</remarks>
         static string RunAndHash(string scenario, ulong seed, out int lines, string strip) =>
-            RunAndHash(TestUtil.Params, scenario, seed, out lines, strip);
+            RunAndHash(TestUtil.ParamsNoR1, scenario, seed, out lines, strip);
 
         static string RunAndHash(SimParams p, string scenario, ulong seed, out int lines, string strip)
         {
@@ -60,7 +61,12 @@ namespace Battalion.Sim.Tests
         {
             // P2c の浅い掩体（止まって静かな中隊が掘る）は平地の S1〜S6 にも効くので、掘り始めない値にして比べる。
             // P2c の他の規則（向き・物陰・独断）では S1〜S6 のログは変わらない（冷静だけで、物陰のない平地のため）
+            // R1 の規則（制圧・開けた所を動く代償・動きながら撃つ）も止める
             var p = TestUtil.ParamsWith(("\"scrape_still_sec\": 120", "\"scrape_still_sec\": 1e9"));
+            p.Terrain.MovingOpenDamageMult = 1.0;
+            p.Fire.MovingFireMult = 1.0;
+            p.Suppression.ThresholdMovingPerMin = double.PositiveInfinity;
+            p.Suppression.ThresholdStationaryPerMin = double.PositiveInfinity;
             string h = RunAndHash(p, scenario, seed, out int n, ",\"disarray\":0");
             Assert.That(n, Is.EqualTo(expectedLines));
             Assert.That(h, Is.EqualTo(expectedHash));

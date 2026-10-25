@@ -4,16 +4,17 @@ using NUnit.Framework;
 
 namespace Battalion.Sim.Tests
 {
+    // R1：撃たれながら動く場面で、制圧（伏せて止まる）と関係のない動きを確かめるので、R1 の規則を止めたパラメータで回す。
     /// <summary>P1a の命令の挙動、陣地構築、重なりの禁止、予備隊の台本、地形と視線の効果。</summary>
     public class MapBehaviourTests
     {
         static Simulation Flat(double minX = -2000, double minY = -2000, double maxX = 2000, double maxY = 2000) =>
-            new Simulation(TestUtil.Params, 1, TerrainMap.FlatCovering(TestUtil.Params.Terrain, minX, minY, maxX, maxY));
+            new Simulation(TestUtil.ParamsNoR1, 1, TerrainMap.FlatCovering(TestUtil.ParamsNoR1.Terrain, minX, minY, maxX, maxY));
 
         static Simulation OnStage(string stage)
         {
             var s = MapScenario.LoadFile(TestUtil.PathOf($"maps/scenario_{stage}.json"));
-            return new Simulation(TestUtil.Params, 1, TerrainMap.FromJson(s.Source, TestUtil.Params.Terrain));
+            return new Simulation(TestUtil.ParamsNoR1, 1, TerrainMap.FromJson(s.Source, TestUtil.ParamsNoR1.Terrain));
         }
 
         static Company Add(Simulation sim, string name, Side side, double x, double y, double facingDeg,
@@ -326,7 +327,7 @@ namespace Battalion.Sim.Tests
         [Test]
         public void EscapeOffTheMapStopsCountingAtTheEdge()
         {
-            var sim = new Simulation(TestUtil.Params, 1, TerrainMap.Flat(TestUtil.Params.Terrain, 0, 0, 60, 40));
+            var sim = new Simulation(TestUtil.ParamsNoR1, 1, TerrainMap.Flat(TestUtil.ParamsNoR1.Terrain, 0, 0, 60, 40));
             var a = Add(sim, "A", Side.Blue, 100, 1000, 0);
             Add(sim, "E", Side.Red, 200, 1000, 180);
             var est = sim.EstimateEscape(a);
@@ -343,7 +344,7 @@ namespace Battalion.Sim.Tests
             var hill = OnStage("a1");
             var a = Add(hill, "A", Side.Blue, 1825 - 250, 1000, 0);
             Add(hill, "R1", Side.Red, 1825, 1000, 180);
-            var flat = new Simulation(TestUtil.Params, 1, TerrainMap.Flat(TestUtil.Params.Terrain, 0, 0, 60, 40));
+            var flat = new Simulation(TestUtil.ParamsNoR1, 1, TerrainMap.Flat(TestUtil.ParamsNoR1.Terrain, 0, 0, 60, 40));
             var b = Add(flat, "A", Side.Blue, 1825 - 250, 1000, 0);
             Add(flat, "R1", Side.Red, 1825, 1000, 180);
             double onHill = hill.EstimateEscape(a).Loss[4], onFlat = flat.EstimateEscape(b).Loss[4]; // 北へ逃げる
@@ -373,7 +374,7 @@ namespace Battalion.Sim.Tests
         {
             var sc = MapScenario.LoadFile(TestUtil.PathOf("maps/scenario_a1.json"));
             var log = new StringEventSink();
-            var sim = sc.Build(TestUtil.Params, 1, log);
+            var sim = sc.Build(TestUtil.ParamsNoR1, 1, log);
             var r3 = sim.Find("R3");
             var b2 = sim.Find("B2");
             Run(sim, 5);
@@ -401,7 +402,7 @@ namespace Battalion.Sim.Tests
             foreach (var stage in MapReferenceTests.Stages)
             {
                 var sc = MapScenario.LoadFile(TestUtil.PathOf($"maps/scenario_{stage}.json"));
-                Assert.DoesNotThrow(() => sc.Build(TestUtil.Params, 1));
+                Assert.DoesNotThrow(() => sc.Build(TestUtil.ParamsNoR1, 1));
             }
         }
     }

@@ -43,6 +43,8 @@ namespace Battalion.Sim
             public double OnsetSec;
             public double ReleaseRatio;
             public double ReleaseSec;
+            /// <summary>制圧下の射手の撃つ力の倍率（小銃の制圧。砲撃の <see cref="FireParams.SuppressedMult"/> とは別）。</summary>
+            public double FireMult;
             /// <summary>動いている間のしきい値に掛ける性格の倍率（表にない性格は 1.0）。</summary>
             public readonly Dictionary<Personality, double> MovingThresholdPersonalityMult = new Dictionary<Personality, double>();
         }
@@ -152,7 +154,7 @@ namespace Battalion.Sim
             public double FlankArcDeg;
             public double NonFrontTargetMult;
             public double ShakenMult;
-            /// <summary>制圧下の射手の撃つ力の倍率（R1。砲撃の制圧と共通）。</summary>
+            /// <summary>砲撃で制圧された射手の撃つ力の倍率（P3）。小銃の制圧は <see cref="SuppressionParams.FireMult"/>。</summary>
             public double SuppressedMult;
             /// <summary>その刻みに実際に動いた射手の撃つ力の倍率（R1 の規則3。動きながら撃つと当たりにくい）。</summary>
             public double MovingFireMult;
@@ -578,6 +580,7 @@ namespace Battalion.Sim
             p.Suppression.OnsetSec = su.D("onset_sec");
             p.Suppression.ReleaseRatio = su.D("release_ratio");
             p.Suppression.ReleaseSec = su.D("release_sec");
+            p.Suppression.FireMult = su.D("fire_mult");
             ReadPersonalityTable(su["moving_threshold_personality_mult"], p.Suppression.MovingThresholdPersonalityMult);
 
             return p;
