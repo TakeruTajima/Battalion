@@ -132,17 +132,35 @@ namespace Battalion.Sim.Tests
             return (sim, v, log);
         }
 
-        /// <summary>予備は伝令なしで逆襲する。目標は、引き金の円の中の見えている青のうち、守る地点に最も近い中隊。</summary>
+        /// <summary>
+        /// 予備は伝令なしで突撃の逆襲をする。目標は、引き金の円の中の見えている青のうち、弱っていて孤立している中隊の中で、守る地点に
+        /// 最も近い中隊。弱っていない青には出ない。
+        /// </summary>
         [Test]
-        public void ReserveCounterattacksTheDeepestEnemyWithoutRunner()
+        public void ReserveCounterattacksTheDeepestWeakEnemyWithoutRunner()
         {
-            var (sim, v, log) = ReserveScene(("A", -325, 25), ("B", -175, 225));
+            var (sim, v, log) = ReserveScene(("A", -325, 25), ("B", -175, 625), ("C", -175, 225));
+            var a = sim.Find("A");
+            var c = sim.Find("C");
             Steps(sim, 6);
+            Assert.That(Count(log, "defense_counterattack"), Is.EqualTo(0), "弱っていない青には出ない");
+            // A と C を動揺させる（弱っている）。C のほうが守る地点に近い
+            Steps(sim, 6, () => { a.Morale = 45; c.Morale = 45; });
             Assert.That(v.Reserve, Is.EqualTo(ReserveState.Attacking));
-            StringAssert.Contains("\"type\":\"defense_counterattack\",\"unit\":\"V\",\"side\":\"red\",\"target\":\"B\"", log.ToString());
+            StringAssert.Contains("\"type\":\"defense_counterattack\",\"unit\":\"V\",\"side\":\"red\",\"target\":\"C\"", log.ToString());
             Assert.That(Count(log, "runner_sent"), Is.EqualTo(0), "伝令なし");
-            Steps(sim, 30);
-            Assert.That(v.CurrentOrder.Type, Is.EqualTo(OrderType.Attack));
+            Steps(sim, 30, () => { a.Morale = 45; c.Morale = 45; });
+            Assert.That(v.CurrentOrder.Type, Is.EqualTo(OrderType.Advance), "突撃（目標の位置への前進）");
+        }
+
+        /// <summary>孤立していない青（300m 以内にほかの青が2個以上）には、弱っていても逆襲しない。</summary>
+        [Test]
+        public void ReserveDoesNotCounterattackASupportedEnemy()
+        {
+            var (sim, v, log) = ReserveScene(("A", -175, 225), ("B", -175, 25), ("C", -375, 225));
+            var a = sim.Find("A");
+            Steps(sim, 12, () => a.Morale = 45);
+            Assert.That(Count(log, "defense_counterattack"), Is.EqualTo(0));
         }
 
         /// <summary>余力がない（士気が動揺のしきい値以下、または損害 3割以上）予備は逆襲しない。</summary>
@@ -181,12 +199,14 @@ namespace Battalion.Sim.Tests
             Assert.That(JsonValue.Parse(lines.First(l => l.Contains("\"type\":\"retake_attack\""))).D("assembled"), Is.EqualTo(1));
         }
 
-        /// <summary>守る地点の 250m 以内に指揮下の赤がいれば、村に青がいても奪回しない。</summary>
+        /// <summary>村のマスに赤がいなければ、守る地点の 250m 以内に赤が残っていても奪回に出る（条件は村そのもので見る）。</summary>
         [Test]
-        public void NoRetakeWhileRedHoldsNearTheObjective()
+        public void RetakeEvenWhenRedStaysNearTheObjective()
         {
             var sc = Scenarios.S17_retake();
             sc.Companies.Single(c => c.Name == "C1").X = 225;
+            // 青は初めから村の中（C1 に撃たれて村に入る前に伏せないように）
+            sc.Companies.Single(c => c.Name == "A").X = 0;
             var log = new StringEventSink();
             var sim = sc.Build(TestUtil.Params, 1, log);
             int next = 0;
@@ -196,7 +216,7 @@ namespace Battalion.Sim.Tests
                 foreach (var c in sim.Companies) c.Morale = 100;
                 sim.Step();
             }
-            Assert.That(Count(log, "retake_order"), Is.EqualTo(0));
+            Assert.That(Count(log, "retake_order"), Is.GreaterThan(0));
         }
 
         // ---------------------------------------------------------------- C12：占領の乱れ

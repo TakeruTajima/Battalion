@@ -181,7 +181,7 @@ namespace Battalion.Sim.Tests
         /// <summary>S18・S19：赤が攻撃を始めてから 30分以内に、塹壕の青が崩れる割合。</summary>
         public static double BlueBrokenWithin30(Scenario sc, SimParams p)
         {
-            double attackAt = sc.Orders.Single(o => o.Target != null).AtSec;
+            double attackAt = sc.Orders.Single(o => o.Unit == "E").AtSec;
             int broken = 0;
             for (int s = 1; s <= Seeds; s++)
             {
@@ -192,16 +192,16 @@ namespace Battalion.Sim.Tests
         }
 
         /// <summary>
-        /// S18：取った直後（占領の乱れの間）の逆襲で青が崩れる割合が、固めた後（S19）より 0.3 以上高い。E1 の値では満たさず、
-        /// 占領の乱れの掃き出しでも満たす組がない（E1 の報告）。仕様の判断を待つ間はふだん回さない。
+        /// S18：取った直後（占領の乱れの間）の突撃の逆襲で青が崩れる割合が、固めた後（S19。乱れが解けた状態）より 0.5 以上高い
+        /// （E1 の報告の後に決めたこと 3）。
         /// </summary>
-        [Test, Explicit("S18・S19 の期待を満たす占領の乱れの値がない（E1 の報告）")]
+        [Test]
         public void S18CounterRightAfterCaptureBreaksMoreOftenThanS19()
         {
             double s18 = BlueBrokenWithin30(Scenarios.S18_counter_right_after_capture(), TestUtil.Params);
             double s19 = BlueBrokenWithin30(Scenarios.S19_counter_after_consolidation(), TestUtil.Params);
             TestContext.WriteLine($"S18 崩れる {s18:0.00}／S19 崩れる {s19:0.00}");
-            Assert.That(s18 - s19, Is.GreaterThanOrEqualTo(0.3 - 1e-9));
+            Assert.That(s18 - s19, Is.GreaterThanOrEqualTo(0.5 - 1e-9));
         }
 
         /// <summary>占領の乱れの値の掃き出し（S18・S19 の期待を満たさないとき用。ふだんは回さない）。</summary>

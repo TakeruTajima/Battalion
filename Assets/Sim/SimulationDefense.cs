@@ -168,6 +168,7 @@ namespace Battalion.Sim
         void UpdateDefense(double t)
         {
             if (!D.Enabled || _defense == null) return;
+            UpdateAssaults(t);
             foreach (var c in _companies)
             {
                 if (c.Side != _defenseSide || !c.OnBoard || !c.UnderCommand) continue;
@@ -179,6 +180,65 @@ namespace Battalion.Sim
                 else if (c.Role == DefenseRole.Reserve) UpdateReserve(c, t);
             }
             UpdateRetake(t);
+        }
+
+        // ---- 突撃（E1 の報告の後に決めたこと 1）
+
+        /// <summary>
+        /// 突撃を始める：目標の中隊の今いる位置への前進（S7 と同じ形。接近戦の距離まで詰める）。伝令なしで、練度の遅れの後に動く。
+        /// </summary>
+        void Assault(Company c, Company tgt, double t)
+        {
+            var sheet = OrderSheet.Single(AssaultOrder(c, tgt));
+            c.AssaultTargetId = tgt.Id;
+            c.AssaultSheet = sheet;
+            c.NextAssaultReplan = t + D.CheckSec;
+            SelfOrder(c, sheet, t);
+        }
+
+        Order AssaultOrder(Company c, Company tgt)
+        {
+            var d = tgt.Position - c.Position;
+            return Order.Advance(c.Id, tgt.Position, d.Length < 1e-9 ? c.Facing : Math.Atan2(d.Y, d.X));
+        }
+
+        /// <summary>
+        /// 突撃の途中（毎刻み）：目標が指揮下でなくなったら、その場で確保（保持）する。目標が動いたら、5秒ごとに目標の位置へ引き直す
+        /// （命令は出し直さないので、練度の遅れは掛からない）。突撃の命令書が始まる前（伝令が着く前、練度の遅れの間）は待つ。
+        /// </summary>
+        void UpdateAssaults(double t)
+        {
+            foreach (var c in _companies)
+            {
+                if (c.AssaultTargetId < 0) continue;
+                if (!c.OnBoard || !c.UnderCommand)
+                {
+                    c.AssaultTargetId = -1;
+                    continue;
+                }
+                if (!ReferenceEquals(c.ActiveSheet, c.AssaultSheet))
+                {
+                    // ほかの命令書に替わった
+                    if (c.ActiveSheet != null && c.StageStarted) c.AssaultTargetId = -1;
+                    continue;
+                }
+                if (c.StartWaitOrder != null || !c.StageStarted) continue;
+                var tgt = _companies[c.AssaultTargetId];
+                if (!tgt.OnBoard || !tgt.UnderCommand)
+                {
+                    c.AssaultTargetId = -1;
+                    HoldInPlace(c);
+                    c.StageCompleted = true;
+                    if (_log.Enabled) _log.Write(Ev(t, "defense_assault_done", c).Add("side", SideName(c.Side)).Add("target", tgt.Name).ToString());
+                    continue;
+                }
+                if (t < c.NextAssaultReplan - 1e-9) continue;
+                c.NextAssaultReplan = t + D.CheckSec;
+                var o = c.CurrentOrder;
+                if (o.Type != OrderType.Advance || !o.Destination.HasValue) continue;
+                if (Vec2.Distance(o.Destination.Value, tgt.Position) < 1.0) continue;
+                StartOrder(c, AssaultOrder(c, tgt), t, t);
+            }
         }
 
         // ---- 規則1：前線の後退
@@ -210,7 +270,10 @@ namespace Battalion.Sim
 
         // ---- 規則2：即座の逆襲
 
-        /// <summary>引き金の円の中の、見えている指揮下の敵のうち、守る地点に最も近い中隊（一番深く入った敵）。</summary>
+        /// <summary>
+        /// 引き金の円の中の、見えている指揮下の敵のうち、弱っていて（占領の乱れ・動揺・制圧下）孤立している（300m 以内にほかの指揮下の
+        /// 敵が1個以下）中隊のうち、守る地点に最も近い中隊（E1 の報告の後に決めたこと 4。強い所へは出ない）。
+        /// </summary>
         Company ReserveTarget(Company c, DefenseUnitPlan plan)
         {
             Company best = null;
@@ -218,6 +281,7 @@ namespace Battalion.Sim
             foreach (var e in SeenEnemies(c.Side))
             {
                 if (Vec2.Distance(e.Position, plan.TriggerCenter) > plan.TriggerRadiusM + 1e-9) continue;
+                if (!WeakTarget(e) || !IsolatedTarget(e)) continue;
                 double d = Vec2.Distance(e.Position, _defense.ObjectiveCenter);
                 if (d < bestD - 1e-9) { bestD = d; best = e; }
             }
@@ -240,8 +304,8 @@ namespace Battalion.Sim
                     return;
                 }
                 case ReserveState.Attacking:
-                    // 攻撃が終わった（目標が指揮下でなくなって確保に移った、または別の命令に替わった）
-                    if (c.StartWaitOrder == null && (c.CurrentOrder.Type != OrderType.Attack || c.StageCompleted))
+                    // 突撃が終わった（目標が指揮下でなくなって確保に移った、または別の命令に替わった）
+                    if (c.StartWaitOrder == null && c.AssaultTargetId < 0)
                     {
                         c.Reserve = ReserveState.AfterAttack;
                         goto case ReserveState.AfterAttack;
@@ -271,17 +335,31 @@ namespace Battalion.Sim
             }
         }
 
+        /// <summary>弱っている：占領の乱れ、動揺、制圧下のどれか。</summary>
+        bool WeakTarget(Company e) => InOccupationDisarray(e) || e.State == CompanyState.Shaken || e.Suppressed;
+
+        /// <summary>孤立している：中心どうし defense.counter_isolation_radius_m（300m）以内の、ほかの指揮下の敵が defense.counter_max_support（1）個以下。</summary>
+        bool IsolatedTarget(Company e)
+        {
+            int n = 0;
+            foreach (var o in _companies)
+                if (o != e && o.Side == e.Side && o.OnBoard && o.UnderCommand &&
+                    Vec2.Distance(o.Position, e.Position) <= D.CounterIsolationRadiusM + 1e-9) n++;
+            return n <= D.CounterMaxSupport;
+        }
+
         void Counterattack(Company c, Company tgt, double t)
         {
             c.Reserve = ReserveState.Attacking;
             c.ThreatWeightOverride = _p.MapRules.ScriptedThreatWeight;
-            SelfOrder(c, OrderSheet.Single(Order.Attack(c.Id, tgt.Id, AttackAspect.Flank, AttackOnBreak.Secure)), t);
+            Assault(c, tgt, t);
             if (_log.Enabled)
                 _log.Write(Ev(t, "defense_counterattack", c).Add("side", SideName(c.Side)).Add("target", tgt.Name).ToString());
         }
 
         void ReturnToPost(Company c, DefenseUnitPlan plan, double t)
         {
+            c.AssaultTargetId = -1;
             SelfOrder(c, OrderSheet.Single(Order.Advance(c.Id, plan.Post, FacingToObjective(plan.Post))), t);
             if (_log.Enabled)
                 _log.Write(Ev(t, "defense_return", c).Add("side", SideName(c.Side)).Add("spent", !HasReserveStrength(c)).ToString());
@@ -295,12 +373,14 @@ namespace Battalion.Sim
             return r != null && r.Ordered.Contains(c.Id);
         }
 
-        /// <summary>奪回の条件：見えている指揮下の敵の中心が村のマスにあり、守る地点から 250m 以内に指揮下の味方がいない。</summary>
+        /// <summary>
+        /// 奪回の条件（E1 の報告の後に決めたこと 5）：見えている指揮下の敵の中心が村のマスにあり、村のマスに指揮下の味方の中心がない
+        /// （250m の円ではなく村そのもので見る）。
+        /// </summary>
         bool RetakeNeeded()
         {
             foreach (var c in _companies)
-                if (c.Side == _defenseSide && c.OnBoard && c.UnderCommand &&
-                    Vec2.Distance(c.Position, _defense.ObjectiveCenter) <= MapScenario.VillageHoldRadiusM + 1e-9) return false;
+                if (c.Side == _defenseSide && c.OnBoard && c.UnderCommand && _map.TerrainAt(c.Position) == TerrainMap.Village) return false;
             return RetakeTarget() != null;
         }
 
@@ -349,9 +429,17 @@ namespace Battalion.Sim
                 if (c.Role == DefenseRole.Reserve && c.Reserve == ReserveState.Attacking) continue;
                 var sheet = D.RetakeAssemble
                     ? OrderSheet.Single(Order.Advance(c.Id, _defense.Assembly, FacingToObjective(_defense.Assembly)))
-                    : OrderSheet.Single(Order.Attack(c.Id, target.Id, AttackAspect.None, AttackOnBreak.Secure));
+                    : OrderSheet.Single(AssaultOrder(c, target));
                 if (SendSheet(sheet, false) == SendResult.Invalid) continue;
                 r.Ordered.Add(c.Id);
+                c.AssaultTargetId = -1;
+                if (!D.RetakeAssemble)
+                {
+                    // 小出しの版：伝令が着いたら、その中隊がすぐ突撃する
+                    c.AssaultTargetId = target.Id;
+                    c.AssaultSheet = sheet;
+                    c.NextAssaultReplan = t;
+                }
                 // 前線の中隊も、本部の命令に従った後は守備（自分では下がらない）
                 if (c.Role == DefenseRole.Front) { c.Role = DefenseRole.Garrison; c.FellBack = true; }
             }
@@ -398,8 +486,8 @@ namespace Battalion.Sim
             foreach (var c in arrived)
             {
                 r.Attacking.Add(c.Id);
-                // 命令書に言い含めてあるので伝令は使わない（練度の遅れの後に攻撃に移る）
-                SelfOrder(c, OrderSheet.Single(Order.Attack(c.Id, target.Id, AttackAspect.None, AttackOnBreak.Secure)), t);
+                // 命令書に言い含めてあるので伝令は使わない（練度の遅れの後に突撃に移る）
+                Assault(c, target, t);
                 if (_log.Enabled)
                     _log.Write(Ev(t, "retake_attack_unit", c).Add("side", SideName(c.Side)).Add("target", target.Name).ToString());
             }

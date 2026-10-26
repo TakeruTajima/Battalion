@@ -336,11 +336,12 @@ namespace Battalion.Sim
         /// </summary>
         public static Scenario S19_counter_after_consolidation() => CaptureScene("S19_counter_after_consolidation", 600, 900);
 
+        /// <summary>赤 E の逆襲は、塹壕の位置（青 A のいる所）への突撃（E1 の報告の後に決めたこと 3）。</summary>
         static Scenario CaptureScene(string name, double redX, double attackAt)
         {
             var sc = new Scenario(name, Blue("A", 0, 0, 0), Red("E", redX, 0, 180));
             sc.Trenches.Add(new SceneTrench { X = 0, Y = 0, FacingDeg = 180, Owner = Side.Red });
-            sc.Orders.Add(new SceneOrder { AtSec = attackAt, Unit = "E", Target = "A" });
+            sc.Orders.Add(Advance(attackAt, "E", 0, 0, 180));
             return sc;
         }
 

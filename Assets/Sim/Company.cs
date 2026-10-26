@@ -195,6 +195,10 @@ namespace Battalion.Sim
         public double LastOffArcFireTime = double.NegativeInfinity;
         /// <summary>予備の状態（規則2）。</summary>
         public ReserveState Reserve;
+        /// <summary>突撃（即座の逆襲・奪回の攻撃）の目標の ID（−1 はなし）と、その命令書、次に目標の位置へ引き直す時刻。</summary>
+        public int AssaultTargetId = -1;
+        public OrderSheet AssaultSheet;
+        public double NextAssaultReplan;
         /// <summary>占領の乱れが続く時刻（C12）。</summary>
         public double OccupationDisarrayUntil = double.NegativeInfinity;
 

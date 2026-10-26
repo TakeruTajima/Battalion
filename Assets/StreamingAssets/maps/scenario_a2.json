@@ -7,8 +7,8 @@
   "objective_center": [1975, 1000],
   "assembly": [2400, 1000],
   "units": {
-   "R1": {"role": "front", "fallback": [1925, 1000], "fallback_facing": 180},
-   "R2": {"role": "front", "fallback": [2050, 1000], "fallback_facing": 180},
+   "R1": {"role": "front", "fallback": [1975, 1200], "fallback_facing": 90},
+   "R2": {"role": "front", "fallback": [1975, 800], "fallback_facing": 270},
    "R3": {"role": "reserve", "post": [2250, 1000], "trigger_center": [1725, 1000], "trigger_radius_m": 450}
   }
  },

@@ -7,7 +7,7 @@
   "objective_center": [1975, 1000],
   "assembly": [2450, 1000],
   "units": {
-   "R1": {"role": "front", "fallback": [1925, 1000], "fallback_facing": 180},
+   "R1": {"role": "garrison"},
    "R2": {"role": "garrison"},
    "R3": {"role": "reserve", "post": [2450, 1000], "trigger_center": [1975, 1000], "trigger_radius_m": 400}
   }
