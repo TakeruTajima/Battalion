@@ -117,17 +117,21 @@ namespace Battalion.Sim.Tests
 
         // ---------------------------------------------------------------- 規則2：即座の逆襲
 
-        static (Simulation sim, Company v, StringEventSink log) ReserveScene(params (string name, double x, double y)[] blues)
+        static (Simulation sim, Company v, StringEventSink log) ReserveScene(params (string name, double x, double y)[] blues) =>
+            ReserveScene(true, blues);
+
+        /// <summary>守る地点 (25,25) に守備 G（<paramref name="garrison"/> が false なら置かない）、東 500m に予備 V、引き金は 400m。</summary>
+        static (Simulation sim, Company v, StringEventSink log) ReserveScene(bool garrison, params (string name, double x, double y)[] blues)
         {
             var log = new StringEventSink();
             var sim = Flat(log);
             var v = Add(sim, "V", Side.Red, 525, 25, 180);
-            var g = Add(sim, "G", Side.Red, 25, 25, 180);
+            if (garrison) Add(sim, "G", Side.Red, 25, 25, 180);
             foreach (var (name, x, y) in blues) Add(sim, name, Side.Blue, x, y, 0);
             sim.SetHeadquarters(Side.Red, new Vec2(1025, 25));
             var plan = new DefensePlan { ObjectiveCenter = new Vec2(25, 25), Assembly = new Vec2(525, 25) };
             plan.Units["V"] = new DefenseUnitPlan { Role = DefenseRole.Reserve, Post = new Vec2(525, 25), TriggerCenter = new Vec2(25, 25), TriggerRadiusM = 400 };
-            plan.Units["G"] = new DefenseUnitPlan { Role = DefenseRole.Garrison };
+            if (garrison) plan.Units["G"] = new DefenseUnitPlan { Role = DefenseRole.Garrison };
             sim.SetDefensePlan(plan);
             return (sim, v, log);
         }
@@ -161,6 +165,36 @@ namespace Battalion.Sim.Tests
             var a = sim.Find("A");
             Steps(sim, 12, () => a.Morale = 45);
             Assert.That(Count(log, "defense_counterattack"), Is.EqualTo(0));
+        }
+
+        /// <summary>守る地点を空けない：自分のほかに守る地点の 250m 以内に味方がいなければ、弱って孤立した青がいても逆襲しない。</summary>
+        [Test]
+        public void ReserveDoesNotLeaveTheObjectiveEmpty()
+        {
+            var (sim, v, log) = ReserveScene(false, ("C", -175, 225));
+            var c = sim.Find("C");
+            Steps(sim, 12, () => c.Morale = 45);
+            Assert.That(Count(log, "defense_counterattack"), Is.EqualTo(0));
+            Assert.That(v.Reserve, Is.EqualTo(ReserveState.Waiting));
+        }
+
+        /// <summary>追う限り：逆襲の目標の中心が引き金の円の外に出たら、崩れていなくてもやめて戻る位置へ戻る。</summary>
+        [Test]
+        public void CounterattackStopsWhenTheTargetLeavesTheTriggerCircle()
+        {
+            var (sim, v, log) = ReserveScene(("C", -175, 225));
+            var c = sim.Find("C");
+            Steps(sim, 12, () => c.Morale = 45);
+            Assert.That(v.Reserve, Is.EqualTo(ReserveState.Attacking));
+            Steps(sim, 30, () => c.Morale = 45);
+            Assert.That(Count(log, "defense_assault_stop"), Is.EqualTo(0), "円の中にいる間は追う");
+            // C が円（中心 (25,25)、400m）の外へ出る
+            c.Position = new Vec2(-500, 25);
+            Steps(sim, 6, () => c.Morale = 45);
+            Assert.That(Count(log, "defense_assault_stop"), Is.EqualTo(1));
+            Assert.That(v.Reserve, Is.EqualTo(ReserveState.Returning));
+            Assert.That(v.AssaultTargetId, Is.EqualTo(-1));
+            Assert.That(Count(log, "defense_return"), Is.EqualTo(1));
         }
 
         /// <summary>余力がない（士気が動揺のしきい値以下、または損害 3割以上）予備は逆襲しない。</summary>
@@ -197,6 +231,64 @@ namespace Battalion.Sim.Tests
             double attack = JsonValue.Parse(lines.First(l => l.Contains("\"type\":\"retake_attack\""))).D("t");
             Assert.That(attack - order, Is.EqualTo(sim.Params.Defense.AssembleMaxWaitSec).Within(0.5 + 1e-9), "600秒で出す");
             Assert.That(JsonValue.Parse(lines.First(l => l.Contains("\"type\":\"retake_attack\""))).D("assembled"), Is.EqualTo(1));
+        }
+
+        /// <summary>集まれなくても出る：600秒たっても集結点に1個も着かなければ、命じた中隊が今いる所から同時に突撃する。</summary>
+        [Test]
+        public void RetakeLaunchesFromPlaceWhenNoneAssembles()
+        {
+            var sc = Scenarios.S17_retake();
+            sc.Defense.Assembly = new Vec2(1400, 1400);
+            var log = new StringEventSink();
+            var sim = sc.Build(TestUtil.Params, 1, log);
+            int next = 0;
+            while (sim.Time < 30 * 60)
+            {
+                sc.IssueDue(sim, ref next);
+                sim.Step();
+            }
+            var lines = log.ToString().Split('\n');
+            double order = JsonValue.Parse(lines.First(l => l.Contains("\"type\":\"retake_order\""))).D("t");
+            var attack = JsonValue.Parse(lines.First(l => l.Contains("\"type\":\"retake_attack\"")));
+            Assert.That(attack.D("t") - order, Is.EqualTo(sim.Params.Defense.AssembleMaxWaitSec).Within(0.5 + 1e-9));
+            Assert.That(attack.D("assembled"), Is.EqualTo(0));
+            Assert.That(attack.D("from_place"), Is.EqualTo(2));
+            Assert.That(sim.Find("C1").AssaultTargetId, Is.EqualTo(sim.Find("A").Id).Or.EqualTo(-1));
+        }
+
+        /// <summary>
+        /// 奪回の突撃は、目標が村のマスから出たら村のマスにいるほかの青へ目標を移し、いなければ村の中心へ前進して保持する。
+        /// 村のマスは (25,25) と (25,325)、青 A・B がそれぞれにいる。赤 C は東 600m（小出しの版で、命令が着くとすぐ突撃）。
+        /// </summary>
+        [Test]
+        public void RetakeAssaultRetargetsThenOccupiesTheVillage()
+        {
+            var p = SimParams.FromJson(System.IO.File.ReadAllText(TestUtil.PathOf(TestUtil.ParamsRelPath)));
+            p.Defense.RetakeAssemble = false;
+            var log = new StringEventSink();
+            var sim = Flat(log, p);
+            SetCell(sim, new Vec2(25, 25), TerrainMap.Village);
+            SetCell(sim, new Vec2(25, 325), TerrainMap.Village);
+            var a = Add(sim, "A", Side.Blue, 25, 25, 0);
+            var b = Add(sim, "B", Side.Blue, 25, 325, 0);
+            var c = Add(sim, "C", Side.Red, 625, 25, 180);
+            sim.SetHeadquarters(Side.Red, new Vec2(1025, 25));
+            var plan = new DefensePlan { ObjectiveCenter = new Vec2(25, 25), Assembly = new Vec2(625, 25) };
+            plan.Units["C"] = new DefenseUnitPlan { Role = DefenseRole.Garrison };
+            sim.SetDefensePlan(plan);
+            Action calm = () => { foreach (var x in sim.Companies) x.Morale = 100; };
+            for (int k = 0; k < 20000 && !(c.AssaultTargetId == a.Id && c.StageStarted && c.StartWaitOrder == null); k++) { calm(); sim.Step(); }
+            Assert.That(c.AssaultTargetId, Is.EqualTo(a.Id), "目標は守る地点に近い A");
+            a.Position = new Vec2(-400, 25);
+            Steps(sim, 6, calm);
+            Assert.That(c.AssaultTargetId, Is.EqualTo(b.Id), "村のマスにいる B へ移す");
+            Assert.That(Count(log, "retake_retarget"), Is.EqualTo(1));
+            b.Position = new Vec2(-400, 425);
+            Steps(sim, 6, calm);
+            Assert.That(c.AssaultTargetId, Is.EqualTo(-1));
+            Assert.That(Count(log, "retake_occupy"), Is.EqualTo(1));
+            Assert.That(c.CurrentOrder.Type, Is.EqualTo(OrderType.Advance));
+            Assert.That(Vec2.Distance(c.CurrentOrder.Destination.Value, new Vec2(25, 25)), Is.LessThan(1.0), "村の中心へ");
         }
 
         /// <summary>村のマスに赤がいなければ、守る地点の 250m 以内に赤が残っていても奪回に出る（条件は村そのもので見る）。</summary>

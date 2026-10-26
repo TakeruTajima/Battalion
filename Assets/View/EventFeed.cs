@@ -108,7 +108,18 @@ namespace Battalion.View
                     Add(t, $"赤 奪回の命令（{v["units"].String.Replace(",", "・")}）", true);
                     break;
                 case "retake_attack":
-                    Add(t, $"赤 奪回の攻撃（集結 {v.D("assembled"):0}個）", true);
+                    Add(t, v.Has("from_place") && v.D("from_place") > 0
+                        ? $"赤 奪回の攻撃（集まれず、その場から {v.D("from_place"):0}個）"
+                        : $"赤 奪回の攻撃（集結 {v.D("assembled"):0}個）", true);
+                    break;
+                case "defense_assault_stop":
+                    Add(t, $"{unit} 逆襲をやめる（{v["target"].String} が引き金の円の外へ）", false);
+                    break;
+                case "retake_retarget":
+                    Add(t, $"{unit} 奪回の目標を {v["target"].String} へ移す", false);
+                    break;
+                case "retake_occupy":
+                    Add(t, $"{unit} 奪回：村に入って守る", false);
                     break;
                 case "occupation_disarray":
                     Add(t, $"{unit} 占領の乱れ（{(v["position"].String == "village" ? "村" : "塹壕")}を取った直後）", false);

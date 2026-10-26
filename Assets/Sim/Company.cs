@@ -199,6 +199,8 @@ namespace Battalion.Sim
         public int AssaultTargetId = -1;
         public OrderSheet AssaultSheet;
         public double NextAssaultReplan;
+        /// <summary>突撃が即座の逆襲（true）か奪回の攻撃（false）か。追う限りが違う（直しの後に決めたこと 2）。</summary>
+        public bool AssaultIsCounter;
         /// <summary>占領の乱れが続く時刻（C12）。</summary>
         public double OccupationDisarrayUntil = double.NegativeInfinity;
 

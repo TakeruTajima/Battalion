@@ -187,10 +187,11 @@ namespace Battalion.Sim
         /// <summary>
         /// 突撃を始める：目標の中隊の今いる位置への前進（S7 と同じ形。接近戦の距離まで詰める）。伝令なしで、練度の遅れの後に動く。
         /// </summary>
-        void Assault(Company c, Company tgt, double t)
+        void Assault(Company c, Company tgt, double t, bool counter)
         {
             var sheet = OrderSheet.Single(AssaultOrder(c, tgt));
             c.AssaultTargetId = tgt.Id;
+            c.AssaultIsCounter = counter;
             c.AssaultSheet = sheet;
             c.NextAssaultReplan = t + D.CheckSec;
             SelfOrder(c, sheet, t);
@@ -205,6 +206,8 @@ namespace Battalion.Sim
         /// <summary>
         /// 突撃の途中（毎刻み）：目標が指揮下でなくなったら、その場で確保（保持）する。目標が動いたら、5秒ごとに目標の位置へ引き直す
         /// （命令は出し直さないので、練度の遅れは掛からない）。突撃の命令書が始まる前（伝令が着く前、練度の遅れの間）は待つ。
+        /// 追う限り（直しの後に決めたこと 2）：即座の逆襲は、目標の中心が引き金の円の外に出たら、やめて戻る位置へ戻る。奪回の攻撃は、
+        /// 目標が村のマスから出たら、村のマスにいるほかの敵へ目標を移し、いなければ村の中心へ前進して保持する。
         /// </summary>
         void UpdateAssaults(double t)
         {
@@ -234,6 +237,34 @@ namespace Battalion.Sim
                 }
                 if (t < c.NextAssaultReplan - 1e-9) continue;
                 c.NextAssaultReplan = t + D.CheckSec;
+                if (c.AssaultIsCounter)
+                {
+                    var plan = PlanOf(c);
+                    if (plan != null && Vec2.Distance(tgt.Position, plan.TriggerCenter) > plan.TriggerRadiusM + 1e-9)
+                    {
+                        if (_log.Enabled) _log.Write(Ev(t, "defense_assault_stop", c).Add("side", SideName(c.Side)).Add("target", tgt.Name).ToString());
+                        ReturnToPost(c, plan, t);
+                        c.Reserve = ReserveState.Returning;
+                        continue;
+                    }
+                }
+                else if (_map.TerrainAt(tgt.Position) != TerrainMap.Village)
+                {
+                    var next = RetakeTarget();
+                    if (next == null)
+                    {
+                        // 村に敵がいない：村の中心へ前進して保持する（村に入って守る）
+                        c.AssaultTargetId = -1;
+                        var d = _defense.ObjectiveCenter - c.Position;
+                        StartOrder(c, Order.Advance(c.Id, _defense.ObjectiveCenter, d.Length < 1e-9 ? c.Facing : Math.Atan2(d.Y, d.X)), t, t);
+                        if (_log.Enabled) _log.Write(Ev(t, "retake_occupy", c).Add("side", SideName(c.Side)).ToString());
+                        continue;
+                    }
+                    if (next != tgt && _log.Enabled)
+                        _log.Write(Ev(t, "retake_retarget", c).Add("side", SideName(c.Side)).Add("target", next.Name).ToString());
+                    c.AssaultTargetId = next.Id;
+                    tgt = next;
+                }
                 var o = c.CurrentOrder;
                 if (o.Type != OrderType.Advance || !o.Destination.HasValue) continue;
                 if (Vec2.Distance(o.Destination.Value, tgt.Position) < 1.0) continue;
@@ -298,7 +329,7 @@ namespace Battalion.Sim
                 case ReserveState.Waiting:
                 case ReserveState.Returning:
                 {
-                    if (!able) return;
+                    if (!able || !ObjectiveHeldByOthers(c)) return;
                     var tgt = ReserveTarget(c, plan);
                     if (tgt != null) Counterattack(c, tgt, t);
                     return;
@@ -322,7 +353,7 @@ namespace Battalion.Sim
                         c.Reserve = ReserveState.Spent;
                         return;
                     }
-                    var tgt = ReserveTarget(c, plan);
+                    var tgt = ObjectiveHeldByOthers(c) ? ReserveTarget(c, plan) : null;
                     if (tgt != null)
                     {
                         if (!held) Counterattack(c, tgt, t);
@@ -333,6 +364,18 @@ namespace Battalion.Sim
                     return;
                 }
             }
+        }
+
+        /// <summary>
+        /// 守る地点を空けない（直しの後に決めたこと 1。G7）：自分のほかに、守る地点から 250m（勝ちの判定の円）以内に指揮下の味方の中隊が
+        /// いる。いなければ即座の逆襲に出ない。
+        /// </summary>
+        bool ObjectiveHeldByOthers(Company c)
+        {
+            foreach (var o in _companies)
+                if (o != c && o.Side == c.Side && o.OnBoard && o.UnderCommand &&
+                    Vec2.Distance(o.Position, _defense.ObjectiveCenter) <= MapScenario.VillageHoldRadiusM + 1e-9) return true;
+            return false;
         }
 
         /// <summary>弱っている：占領の乱れ、動揺、制圧下のどれか。</summary>
@@ -352,7 +395,7 @@ namespace Battalion.Sim
         {
             c.Reserve = ReserveState.Attacking;
             c.ThreatWeightOverride = _p.MapRules.ScriptedThreatWeight;
-            Assault(c, tgt, t);
+            Assault(c, tgt, t, true);
             if (_log.Enabled)
                 _log.Write(Ev(t, "defense_counterattack", c).Add("side", SideName(c.Side)).Add("target", tgt.Name).ToString());
         }
@@ -438,6 +481,7 @@ namespace Battalion.Sim
                     // 小出しの版：伝令が着いたら、その中隊がすぐ突撃する
                     c.AssaultTargetId = target.Id;
                     c.AssaultSheet = sheet;
+                    c.AssaultIsCounter = false;
                     c.NextAssaultReplan = t;
                 }
                 // 前線の中隊も、本部の命令に従った後は守備（自分では下がらない）
@@ -459,7 +503,11 @@ namespace Battalion.Sim
             }
         }
 
-        /// <summary>集めてから出す（assemble）：揃ったら（2個 または 600秒）着いている中隊が同時に攻撃し、後から着いた中隊も攻撃に移る。</summary>
+        /// <summary>
+        /// 集めてから出す（assemble）：揃ったら（2個 または 600秒）着いている中隊が同時に攻撃し、後から着いた中隊も攻撃に移る。
+        /// 600秒たっても1個も着いていなければ、命じた中隊のうち余力があり拘束されていないものが、今いる所から同時に突撃する
+        /// （直しの後に決めたこと 3）。
+        /// </summary>
         void UpdateAssembly(Retake r, double t)
         {
             var arrived = new List<Company>();
@@ -474,12 +522,26 @@ namespace Battalion.Sim
             if (!r.Launched)
             {
                 int need = Math.Min(D.AssembleMinCompanies, r.Ordered.Count);
-                bool ready = (arrived.Count >= need && arrived.Count > 0) || t - r.StartTime >= D.AssembleMaxWaitSec - 1e-9;
-                if (!ready || arrived.Count == 0) return;
+                bool timedOut = t - r.StartTime >= D.AssembleMaxWaitSec - 1e-9;
+                bool ready = (arrived.Count >= need && arrived.Count > 0) || timedOut;
+                if (!ready) return;
+                int fromPlace = 0;
+                if (arrived.Count == 0)
+                {
+                    // 集まれなくても出る：今いる所から突撃する
+                    foreach (int id in r.Ordered)
+                    {
+                        var c = _companies[id];
+                        if (!NormalUnderCommand(c) || !HasReserveStrength(c) || HeldByFront(c, c.Facing)) continue;
+                        arrived.Add(c);
+                    }
+                    if (arrived.Count == 0) return;
+                    fromPlace = arrived.Count;
+                }
                 r.Launched = true;
                 if (_log.Enabled)
                     _log.Write(new JsonLineBuilder().Add("t", t).Add("type", "retake_attack").Add("side", SideName(_defenseSide))
-                        .Add("assembled", arrived.Count).ToString());
+                        .Add("assembled", fromPlace > 0 ? 0 : arrived.Count).Add("from_place", fromPlace).ToString());
             }
             var target = RetakeTarget();
             if (target == null) return;
@@ -487,7 +549,7 @@ namespace Battalion.Sim
             {
                 r.Attacking.Add(c.Id);
                 // 命令書に言い含めてあるので伝令は使わない（練度の遅れの後に突撃に移る）
-                Assault(c, target, t);
+                Assault(c, target, t, false);
                 if (_log.Enabled)
                     _log.Write(Ev(t, "retake_attack_unit", c).Add("side", SideName(c.Side)).Add("target", target.Name).ToString());
             }
