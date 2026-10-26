@@ -14,7 +14,7 @@ namespace Battalion.Sim
         /// <summary>中隊の今の矩形。</summary>
         public UnitRect RectOf(Company c) => RectAt(c.Position, c.Facing);
 
-        UnitRect RectAt(Vec2 pos, double facing) => new UnitRect(pos, facing, _p.Movement.FrontageM, _p.Movement.DepthM);
+        public UnitRect RectAt(Vec2 pos, double facing) => new UnitRect(pos, facing, _p.Movement.FrontageM, _p.Movement.DepthM);
 
         /// <summary>敵の矩形として数える中隊：盤上にいる（降伏・離脱を除く）。壊走中・再集結中の敵も含む。</summary>
         static bool BlocksAsEnemy(Company e, Company c) => e.OnBoard && e.Side != c.Side;

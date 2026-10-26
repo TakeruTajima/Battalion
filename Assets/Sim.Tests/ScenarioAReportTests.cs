@@ -204,6 +204,9 @@ namespace Battalion.Sim.Tests
             public readonly Dictionary<string, double> FirstRoutMin = new Dictionary<string, double>();
             public readonly Dictionary<string, double> FirstTurnMin = new Dictionary<string, double>();
             public readonly Dictionary<string, double> AttackFixedMin = new Dictionary<string, double>();
+            /// <summary>E1 の出来事：前線の後退の時刻（分）、即座の逆襲・奪回の命令・奪回の攻撃・占領の乱れの回数。</summary>
+            public readonly List<double> FallbackMin = new List<double>();
+            public int Counterattacks, RetakeOrders, RetakeAttacks, Disarrays;
         }
 
         sealed class RoutCounter : IEventSink
@@ -213,6 +216,9 @@ namespace Battalion.Sim.Tests
             public readonly Dictionary<string, double> RoutAt = new Dictionary<string, double>();
             public readonly Dictionary<string, double> TurnAt = new Dictionary<string, double>();
             public readonly Dictionary<string, int> Autonomy = new Dictionary<string, int>();
+            /// <summary>E1 の出来事（前線の後退の時刻（秒）と、逆襲・奪回・占領の乱れの回数）。</summary>
+            public readonly List<double> FallbackSec = new List<double>();
+            public int Counterattacks, RetakeOrders, RetakeAttacks, Disarrays;
             public bool Enabled => true;
 
             static readonly string[] AutonomyTypes =
@@ -220,6 +226,12 @@ namespace Battalion.Sim.Tests
 
             public void Write(string jsonLine)
             {
+                // E1 の出来事
+                if (jsonLine.Contains("\"type\":\"defense_fallback\"")) FallbackSec.Add(JsonValue.Parse(jsonLine).D("t"));
+                else if (jsonLine.Contains("\"type\":\"defense_counterattack\"")) Counterattacks++;
+                else if (jsonLine.Contains("\"type\":\"retake_order\"")) RetakeOrders++;
+                else if (jsonLine.Contains("\"type\":\"retake_attack\"")) RetakeAttacks++;
+                else if (jsonLine.Contains("\"type\":\"occupation_disarray\"")) Disarrays++;
                 // 自律行動・独断の回数（P2c）
                 foreach (var key in AutonomyTypes)
                 {
@@ -340,6 +352,12 @@ namespace Battalion.Sim.Tests
             foreach (var kv in counter.TurnAt) result.FirstTurnMin[kv.Key] = kv.Value / 60;
             foreach (var kv in fixedAt) result.AttackFixedMin[kv.Key] = kv.Value;
             foreach (var kv in counter.Autonomy) result.Autonomy[kv.Key] = kv.Value;
+            foreach (double s in counter.FallbackSec) result.FallbackMin.Add(s / 60);
+            result.Counterattacks = counter.Counterattacks;
+            result.RetakeOrders = counter.RetakeOrders;
+            // 小出しの版は命令がそのまま攻撃
+            result.RetakeAttacks = (ParamsForRuns ?? TestUtil.Params).Defense.RetakeAssemble ? counter.RetakeAttacks : counter.RetakeOrders;
+            result.Disarrays = counter.Disarrays;
             return result;
         }
 
@@ -467,6 +485,9 @@ namespace Battalion.Sim.Tests
             using var progress = RunProgress.Begin("通し実行の表", AllPlanRuns());
             var sketch = JsonValue.Parse(File.ReadAllText(TestUtil.PathOf("docs/reference/sketch/battle_sketch_v3_results.json")));
             var sb = new StringBuilder();
+            var events = new StringBuilder();
+            events.AppendLine("| ステージ | 作戦 | 前線の後退（回/会戦） | 後退の時刻の中央値 | 即座の逆襲（回/会戦） | 奪回の命令（回/会戦） | 奪回の攻撃（回/会戦） | 奪回して守り切った割合 | 占領の乱れ（回/会戦） |");
+            events.AppendLine("| --- | --- | --- | --- | --- | --- | --- | --- | --- |");
             sb.AppendLine("| ステージ | 作戦 | 勝率 | 第一目標 | 第二目標 | 両方 | 村を取った時刻の中央値 | 赤が全て崩れた割合 | 青の損害率 | 崩れた青（終了時） | 崩れた赤（終了時） | 降伏した赤 | 終了時刻の中央値 |");
             sb.AppendLine("| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |");
             foreach (int stage in new[] { 1, 2 })
@@ -491,9 +512,70 @@ namespace Battalion.Sim.Tests
                                   $"{rs.Average(r => r.RedBroken):0.00}（{rs.Average(r => r.RedOutAtEnd):0.00}）{Ref("red_out", "0.00")} | " +
                                   $"{rs.Average(r => r.RedSurrendered):0.00}{Ref("red_surr", "0.00")} | " +
                                   $"{TestUtil.Median(rs.Select(r => r.EndMin).ToList()):0.0}分{Ref("t_end", "0.0")} |");
+                    events.AppendLine(EventRow(stage, name, rs));
                 }
             }
             TestContext.WriteLine("［ ］内は概算シミュレーションの値。崩れた中隊は、会戦中に一度でも壊走した数（ ）内は終了時に指揮下にない数");
+            TestContext.WriteLine(sb.ToString());
+            TestContext.WriteLine("E1 の出来事の回数（1回の会戦あたりの平均、20回）。奪回して守り切った割合＝奪回の攻撃があった会戦のうち、終わりに青の勝ちでない割合");
+            TestContext.WriteLine(events.ToString());
+            Assert.Pass();
+        }
+
+        static string EventRow(int stage, string name, List<RunResult> rs)
+        {
+            var times = rs.SelectMany(r => r.FallbackMin).ToList();
+            var retaken = rs.Where(r => r.RetakeAttacks > 0).ToList();
+            return $"| {stage} | {name} | {rs.Average(r => r.FallbackMin.Count):0.00} | {(times.Count == 0 ? "—" : $"{TestUtil.Median(times):0.0}分")} | " +
+                   $"{rs.Average(r => r.Counterattacks):0.00} | {rs.Average(r => r.RetakeOrders):0.00} | {rs.Average(r => r.RetakeAttacks):0.00} | " +
+                   $"{(retaken.Count == 0 ? "—" : $"{retaken.Average(r => r.Win ? 0.0 : 1.0):0.00}（{retaken.Count}/{rs.Count}）")} | {rs.Average(r => r.Disarrays):0.00} |";
+        }
+
+        /// <summary>E1 の比べの表の主な4作戦（総員突撃、村への前進、拘束＋迂回の遠い・近い）。</summary>
+        static readonly string[] E1ComparePlans = { "総員突撃", VillageAdvancePlanName, "拘束＋迂回（遠い拘束）", "拘束＋迂回（近い拘束）" };
+
+        /// <summary>
+        /// E1 の比べの表：主な4作戦を、受け身の赤（defense・occupation とも止める）、E1 で占領の乱れなし、E1 で小出しの奪回（immediate）で
+        /// 各 20回回す（E1 そのものの値は作戦ごとの表）。
+        /// </summary>
+        [Test]
+        public void E1ComparisonTable()
+        {
+            var variants = new (string name, Action<SimParams> set)[]
+            {
+                ("受け身の赤", p => { p.Defense.Enabled = false; p.Occupation.Enabled = false; }),
+                ("E1・占領の乱れなし", p => { p.Occupation.Enabled = false; }),
+                ("E1・小出しの奪回", p => { p.Defense.RetakeAssemble = false; }),
+            };
+            using var progress = RunProgress.Begin("E1 の比べの表", variants.Length * 2 * E1ComparePlans.Length * Runs);
+            var sb = new StringBuilder();
+            sb.AppendLine("| ステージ | 作戦 | 版 | 勝率 | 第一目標 | 第二目標 | 両方 | 村を取った時刻の中央値 | 青の損害率 | 赤の損害率 | 前線の後退（回/会戦） | 即座の逆襲（回/会戦） | 奪回の攻撃（回/会戦） | 占領の乱れ（回/会戦） |");
+            sb.AppendLine("| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |");
+            try
+            {
+                foreach (int stage in new[] { 1, 2 })
+                {
+                    var sc = MapScenario.LoadFile(TestUtil.PathOf($"maps/scenario_a{stage}.json"));
+                    var plans = PlansWithPinAndFlank(stage).Where(p => E1ComparePlans.Contains(p.name)).ToList();
+                    foreach (var (name, plan) in plans)
+                        foreach (var (vname, set) in variants)
+                        {
+                            var p = SimParams.FromJson(File.ReadAllText(TestUtil.PathOf(TestUtil.ParamsRelPath)));
+                            set(p);
+                            ParamsForRuns = p;
+                            var rs = Enumerable.Range(1, Runs).Select(s => RunOne(sc, plan, (ulong)s)).ToList();
+                            sb.AppendLine($"| {stage} | {name} | {vname} | {rs.Average(r => r.Win ? 1.0 : 0.0):0.00} | " + ObjectiveCells(rs) +
+                                          $" | {rs.Average(r => r.BlueLoss):0.000} | {rs.Average(r => r.Record.RedLost / (double)r.Record.RedInitial):0.000} | " +
+                                          $"{rs.Average(r => r.FallbackMin.Count):0.00} | {rs.Average(r => r.Counterattacks):0.00} | " +
+                                          $"{rs.Average(r => r.RetakeAttacks):0.00} | {rs.Average(r => r.Disarrays):0.00} |");
+                        }
+                }
+            }
+            finally
+            {
+                ParamsForRuns = null;
+            }
+            TestContext.WriteLine("E1 の比べの表（各 20回、任せる版）。E1 そのもの（攻めを集めて出す奪回・占領の乱れあり）は作戦ごとの表");
             TestContext.WriteLine(sb.ToString());
             Assert.Pass();
         }

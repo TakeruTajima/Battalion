@@ -184,6 +184,20 @@ namespace Battalion.Sim
         public double SuppressOnSec;
         public double SuppressOffSec;
 
+        // ---- E1：赤の守り方、C12：占領の乱れ
+        /// <summary>守りの計画での今の役目（前線は下がって着くと守備になる）。</summary>
+        public DefenseRole Role;
+        /// <summary>前線の後退（規則1）をした（会戦中に1回だけ）。</summary>
+        public bool FellBack;
+        /// <summary>次に守りの判断をする時刻（秒）。</summary>
+        public double NextDefenseCheck;
+        /// <summary>陣地の向きの正面の弧の外から撃たれた最後の刻みの時刻（迂回の判定）。</summary>
+        public double LastOffArcFireTime = double.NegativeInfinity;
+        /// <summary>予備の状態（規則2）。</summary>
+        public ReserveState Reserve;
+        /// <summary>占領の乱れが続く時刻（C12）。</summary>
+        public double OccupationDisarrayUntil = double.NegativeInfinity;
+
         /// <summary>直前の刻みで狙った目標の ID（-1 はなし）。</summary>
         public int TargetId = -1;
 

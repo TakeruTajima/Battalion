@@ -5,7 +5,7 @@ using System.IO;
 namespace Battalion.Sim
 {
     /// <summary>
-    /// 地図ファイル（maps/scenario_*.json）のシナリオ：地図、初期配置、予備隊の台本、村のマス、制限時間。
+    /// 地図ファイル（maps/scenario_*.json）のシナリオ：地図、初期配置、守りの計画（E1）、村のマス、制限時間。
     /// 中隊の性格と練度は地図ファイルにないので、仕様の兵力の表から持たせる
     /// （第1 慎重・通常、第2 冷静・通常、第3 猪突・古参、第4 機敏・通常。敵は全て通常）。
     /// </summary>
@@ -25,6 +25,10 @@ namespace Battalion.Sim
         public readonly HashSet<(int i, int j)> VillageCells = new HashSet<(int i, int j)>();
         public double TimeLimitMin;
 
+        /// <summary>守りの計画（E1。地図ファイルの defense_plan）。</summary>
+        public DefensePlan Defense;
+
+        /// <summary>予備の中隊と引き金の円（defense.enabled が false のときの、今までの予備隊の台本に使う）。</summary>
         public string ReserveUnit;
         public Vec2 ReserveTriggerCenter;
         public double ReserveTriggerRadiusM;
@@ -62,13 +66,88 @@ namespace Battalion.Sim
             }
             foreach (var c in d["objects"]["village"]["cells"].Array)
                 s.VillageCells.Add(((int)c.Array[0].Number, (int)c.Array[1].Number));
-            var rs = d["reserve_script"];
-            s.ReserveUnit = rs["unit"].String;
-            var tc = rs["trigger_center"].Array;
-            s.ReserveTriggerCenter = new Vec2(tc[0].Number, tc[1].Number);
-            s.ReserveTriggerRadiusM = rs.D("trigger_radius_m");
+            s.Defense = ReadDefensePlan(d["defense_plan"]);
+            foreach (var kv in s.Defense.Units)
+            {
+                if (kv.Value.Role != DefenseRole.Reserve) continue;
+                s.ReserveUnit = kv.Key;
+                s.ReserveTriggerCenter = kv.Value.TriggerCenter;
+                s.ReserveTriggerRadiusM = kv.Value.TriggerRadiusM;
+            }
+            if (s.ReserveUnit == null) throw new FormatException("defense_plan に予備（reserve）の中隊がない");
             s.TrenchUnits.AddRange(TrenchUnitsOf(s.Stage));
             return s;
+        }
+
+        static Vec2 Point(JsonValue v) => new Vec2(v.Array[0].Number, v.Array[1].Number);
+
+        /// <summary>地図ファイルの defense_plan を読む（E1）。</summary>
+        public static DefensePlan ReadDefensePlan(JsonValue d)
+        {
+            var plan = new DefensePlan { ObjectiveCenter = Point(d["objective_center"]), Assembly = Point(d["assembly"]) };
+            foreach (var kv in d["units"].Object)
+            {
+                var u = kv.Value;
+                var p = new DefenseUnitPlan();
+                switch (u["role"].String)
+                {
+                    case "front":
+                        p.Role = DefenseRole.Front;
+                        p.Fallback = Point(u["fallback"]);
+                        p.FallbackFacingDeg = u.D("fallback_facing");
+                        break;
+                    case "garrison":
+                        p.Role = DefenseRole.Garrison;
+                        break;
+                    case "reserve":
+                        p.Role = DefenseRole.Reserve;
+                        p.Post = Point(u["post"]);
+                        p.TriggerCenter = Point(u["trigger_center"]);
+                        p.TriggerRadiusM = u.D("trigger_radius_m");
+                        break;
+                    default:
+                        throw new FormatException($"defense_plan の役目が不明: {kv.Key} {u["role"].String}");
+                }
+                plan.Units[kv.Key] = p;
+            }
+            return plan;
+        }
+
+        /// <summary>
+        /// 守りの計画を確かめる（E1）：守る地点・集結点・後退先・戻る位置が地図の中で通れるマスにあり、計画の中隊が配置にいる
+        /// （でなければ例外）。後退先（後退先の向き）と戻る位置（守る地点の方角）に置いた中隊の矩形が、ほかの中隊の初めの矩形と
+        /// 重なる（辺で接するものを含む）ときは、その一覧を返す。会戦中は、今の目的地の探し直し（味方の間隔）に任せる。
+        /// </summary>
+        public static List<string> ValidateDefensePlan(DefensePlan plan, Simulation sim)
+        {
+            var overlaps = new List<string>();
+            void Inside(string what, Vec2 p)
+            {
+                if (!sim.Map.Contains(p) || !sim.Map.Passable(p)) throw new InvalidOperationException($"守りの計画の{what} ({p.X}, {p.Y}) が地図の中の通れるマスにない");
+            }
+            Inside("守る地点", plan.ObjectiveCenter);
+            Inside("集結点", plan.Assembly);
+            foreach (var kv in plan.Units)
+            {
+                var c = sim.Find(kv.Key);
+                if (c == null) throw new InvalidOperationException($"守りの計画の {kv.Key} が配置にいない");
+                Vec2? at = null;
+                double facing = 0;
+                if (kv.Value.Role == DefenseRole.Front) { at = kv.Value.Fallback; facing = kv.Value.FallbackFacingDeg * Angles.DegToRad; Inside($"{kv.Key} の後退先", at.Value); }
+                if (kv.Value.Role == DefenseRole.Reserve)
+                {
+                    at = kv.Value.Post;
+                    var d = plan.ObjectiveCenter - at.Value;
+                    facing = Math.Atan2(d.Y, d.X);
+                    Inside($"{kv.Key} の戻る位置", at.Value);
+                }
+                if (!at.HasValue) continue;
+                var rect = sim.RectAt(at.Value, facing);
+                foreach (var o in sim.Companies)
+                    if (o != c && UnitRect.Overlap(rect, sim.RectOf(o)))
+                        overlaps.Add($"{kv.Key} の位置 ({at.Value.X}, {at.Value.Y}) が {o.Name} の初めの矩形と重なる");
+            }
+            return overlaps;
         }
 
         public static Personality PersonalityOf(string id)
@@ -97,6 +176,7 @@ namespace Battalion.Sim
                 sim.AddCompany(u.Id, u.Side, TrainingOf(u.Id), PersonalityOf(u.Id), new Vec2(u.X, u.Y), u.FacingDeg);
 
             AssignTrenchFacings(sim);
+            ValidateDefensePlan(Defense, sim);
 
             var cs = sim.Companies;
             for (int a = 0; a < cs.Count; a++)
@@ -104,7 +184,9 @@ namespace Battalion.Sim
                     if (cs[a].Side == cs[b].Side && Vec2.Distance(cs[a].Position, cs[b].Position) < p.Movement.FriendlyMinSpacingM - 1e-9)
                         throw new InvalidOperationException($"初期配置で {cs[a].Name} と {cs[b].Name} が近すぎる");
 
-            sim.AddScript(new ReserveScript(ReserveUnit, ReserveTriggerCenter, ReserveTriggerRadiusM));
+            // 守りの計画（E1）。defense.enabled が false なら、今までの予備隊の台本（伝令あり、一度だけ）
+            if (p.Defense.Enabled) sim.SetDefensePlan(Defense);
+            else sim.AddScript(new ReserveScript(ReserveUnit, ReserveTriggerCenter, ReserveTriggerRadiusM));
             return sim;
         }
 

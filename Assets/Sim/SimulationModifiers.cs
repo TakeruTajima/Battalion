@@ -8,7 +8,7 @@ namespace Battalion.Sim
         // 被弾
         MovingOpen, Trench, TrenchOffArc, Entrench, EntrenchOffArc, Scrape, ScrapeOffArc, Terrain,
         // 撃つ力
-        FireShaken, FireNonFrontTarget, FireDisarray, FireSuppressed, FireMoving,
+        FireShaken, FireNonFrontTarget, FireDisarray, FireSuppressed, FireMoving, FireOccupation,
         // 移動
         MoveTerrain, MovePinned, MovePassThrough, MoveSideways, MoveBackward, MoveTurning,
     }
@@ -51,6 +51,8 @@ namespace Battalion.Sim
             // 小銃の制圧下（R1。砲撃による制圧は P3 で fire.suppressed_mult）、動きながら撃つ（R1 の規則3）
             if (u.Suppressed) Mul(ModifierKind.FireSuppressed, _p.Suppression.FireMult);
             if (u.MovedThisTick) Mul(ModifierKind.FireMoving, _p.Fire.MovingFireMult);
+            // 占領の乱れ（C12。隊形の乱れとは別に持ち、重なれば掛け合わせる）
+            if (_p.Occupation.Enabled && t < u.OccupationDisarrayUntil - 1e-9) Mul(ModifierKind.FireOccupation, _p.Occupation.DisarrayFireMult);
             return f;
         }
 

@@ -33,6 +33,17 @@ namespace Battalion.Sim.Tests
             p.Fire.MovingFireMult = 1.0;
             p.Suppression.ThresholdMovingPerMin = double.PositiveInfinity;
             p.Suppression.ThresholdStationaryPerMin = double.PositiveInfinity;
+            p.Defense.Enabled = false;
+            p.Occupation.Enabled = false;
+            return p;
+        }
+
+        /// <summary>E1 の規則を止めたパラメータ：受け身の赤（defense.enabled false）、占領の乱れなし（occupation.enabled false）。</summary>
+        public static SimParams ParamsWithoutE1()
+        {
+            var p = SimParams.FromJson(File.ReadAllText(PathOf(ParamsRelPath)));
+            p.Defense.Enabled = false;
+            p.Occupation.Enabled = false;
             return p;
         }
 

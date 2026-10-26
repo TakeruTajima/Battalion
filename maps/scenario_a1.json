@@ -2,15 +2,15 @@
  "name": "scenario_a1",
  "title": "シナリオA ステージ1：リーデル村の奪取（頂上の塹壕）",
  "stage": 1,
- "reserve_script": {
-  "unit": "R3",
-  "trigger": "攻撃側の中隊が、守備の中心から trigger_radius_m 以内に入った",
-  "trigger_center": [
-   1975,
-   1000
-  ],
-  "trigger_radius_m": 400,
-  "action": "引き金になった中隊のうち R3 に最も近いものの側面（R3 側）250m へ攻撃"
+ "defense_plan": {
+  "note": "E1 の守りの計画（予備隊の台本を置き換えた）。向きは 0＝東、180＝西。defense.enabled が false のときは、予備の引き金で今までの台本を使う",
+  "objective_center": [1975, 1000],
+  "assembly": [2450, 1000],
+  "units": {
+   "R1": {"role": "front", "fallback": [1925, 1000], "fallback_facing": 180},
+   "R2": {"role": "garrison"},
+   "R3": {"role": "reserve", "post": [2450, 1000], "trigger_center": [1975, 1000], "trigger_radius_m": 400}
+  }
  },
  "cell_m": 50,
  "width": 60,

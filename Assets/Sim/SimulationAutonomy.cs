@@ -319,6 +319,8 @@ namespace Battalion.Sim
             if (!IsScrapeGround(_map.TerrainAt(c.Position))) return;
             if (t - c.StillSince < A.ScrapeStillSec - 1e-9) return;
             if (c.ScrapeProgress <= 0 && t - c.LastTargetedTime < A.ScrapeQuietSec - 1e-9) return;
+            // 占領の乱れの間は、守りの用意を始めない（C12）
+            if (c.ScrapeProgress <= 0 && InOccupationDisarray(c)) return;
             // 浅い掩体の向きは、掘り始めたときの中隊の向き（R2）
             if (c.ScrapeProgress <= 0) c.ScrapeFacing = c.Facing;
             if (c.ScrapeProgress <= 0 && _log.Enabled) _log.Write(Ev(t, "scrape_start", c).Add("side", SideName(c.Side)).ToString());

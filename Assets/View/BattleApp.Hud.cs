@@ -405,7 +405,8 @@ namespace Battalion.View
             double f = _sim.CurrentFireMult(c, fire);
             double m = _sim.MoveFactors(c, move);
             string Line(string name, double total, List<ModifierFactor> fs) =>
-                $"　{name} ×{total:0.00}" + (fs.Count == 0 ? "" : "：" + string.Join("・", fs.Select(x => $"{ModifierName(x)} ×{x.Mult:0.##}")));
+                $"　{name} ×{total:0.00}" + (fs.Count == 0 ? "" : "：" + string.Join("・", fs.Select(x => $"{ModifierName(x)} ×{x.Mult:0.##}" +
+                    (x.Kind == ModifierKind.FireOccupation ? $"（残り {Math.Max(0, c.OccupationDisarrayUntil - _sim.Time):0}秒）" : ""))));
             return Line("被弾", d, dmg) + "\n" + Line("撃つ力", f, fire) + "\n" +
                    (c.MovedThisTick ? Line("移動", m, move) : "　移動 止まっている");
         }
@@ -427,6 +428,7 @@ namespace Battalion.View
                 case ModifierKind.FireDisarray: return "隊形の乱れ";
                 case ModifierKind.FireSuppressed: return "制圧下";
                 case ModifierKind.FireMoving: return "移動中";
+                case ModifierKind.FireOccupation: return "<color=#ffb060>占領の乱れ</color>";
                 case ModifierKind.MoveTerrain: return TerrainName(x.Terrain);
                 case ModifierKind.MovePinned: return "拘束";
                 case ModifierKind.MovePassThrough: return "超越中（味方と重なる）";

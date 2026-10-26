@@ -280,5 +280,26 @@
     "release_sec": 60,
     "fire_mult": 0.25,
     "moving_threshold_personality_mult": { "cautious": 0.75, "calm": 1.0, "agile": 1.0, "reckless": 1.5 }
+  },
+  "defense": {
+    "_note": "E1 の赤の守り方（前線の後退・即座の逆襲・奪回）。enabled が false なら今までの赤（予備は台本で一度だけ逆襲）。retake_mode は assemble（集めてから出す）か immediate（小出し。比べ用）",
+    "enabled": true,
+    "check_sec": 5,
+    "bypass_radius_m": 600,
+    "bypass_behind_m": 50,
+    "flank_fire_memory_sec": 30,
+    "pin_radius_m": 400,
+    "reserve_spent_loss": 0.3,
+    "hq_eval_sec": 60,
+    "retake_mode": "assemble",
+    "assemble_radius_m": 200,
+    "assemble_min_companies": 2,
+    "assemble_max_wait_sec": 600
+  },
+  "occupation": {
+    "_note": "C12 の占領の乱れ（両軍）。敵の側が持ち主の陣地（塹壕の1本・つながった村）に入った中隊は、disarray_sec の間、撃つ力 ×disarray_fire_mult で、浅い掩体・陣地構築を始めない",
+    "enabled": true,
+    "disarray_sec": 300,
+    "disarray_fire_mult": 0.5
   }
 }

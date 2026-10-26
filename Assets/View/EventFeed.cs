@@ -90,6 +90,29 @@ namespace Battalion.View
                     // 壊走で命令書を中断した（P2b.2）。この直後の rout の行で「壊走（命令書は中断）」と出す
                     if (v["side"].String == "blue") _sheetAborted.Add(unit);
                     break;
+                // E1：赤の守り方（敵の目に見える動きなので出す）
+                case "defense_fallback":
+                {
+                    string r = v["reason"].String;
+                    string why = r == "flank_fire" ? "側面から撃たれた" : $"迂回された：{DirJa(r)}";
+                    Add(t, $"{unit} 後退（{why}）", false);
+                    break;
+                }
+                case "defense_counterattack":
+                    Add(t, $"{unit} 逆襲（{v["target"].String} へ）", true);
+                    break;
+                case "defense_return":
+                    Add(t, v["spent"].Bool ? $"{unit} 逆襲の余力なし、戻る" : $"{unit} 逆襲を終えて戻る", false);
+                    break;
+                case "retake_order":
+                    Add(t, $"赤 奪回の命令（{v["units"].String.Replace(",", "・")}）", true);
+                    break;
+                case "retake_attack":
+                    Add(t, $"赤 奪回の攻撃（集結 {v.D("assembled"):0}個）", true);
+                    break;
+                case "occupation_disarray":
+                    Add(t, $"{unit} 占領の乱れ（{(v["position"].String == "village" ? "村" : "塹壕")}を取った直後）", false);
+                    break;
                 case "halt_resume":
                     if (v["side"].String == "blue") Add(t, $"{unit} 動揺から回復、止めていた段を再開", false);
                     break;
@@ -227,6 +250,22 @@ namespace Battalion.View
         static string FlareJa(string c) => c == "red" ? "赤" : c == "green" ? "緑" : "白";
 
         static string PersonalityJa(string p) => p == "cautious" ? "慎重" : p == "reckless" ? "猪突" : p == "agile" ? "機敏" : "冷静";
+
+        static string DirJa(string d)
+        {
+            switch (d)
+            {
+                case "east": return "東";
+                case "northeast": return "北東";
+                case "north": return "北";
+                case "northwest": return "北西";
+                case "west": return "西";
+                case "southwest": return "南西";
+                case "south": return "南";
+                case "southeast": return "南東";
+                default: return d;
+            }
+        }
 
         static string StateJa(string s) => s == "shaken" ? "動揺中" : s == "routed" ? "壊走中" : s == "normal" ? "正常" : s;
 

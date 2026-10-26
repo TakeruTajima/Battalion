@@ -28,6 +28,41 @@ namespace Battalion.Sim
         public AutonomyParams Autonomy = new AutonomyParams();
         public CouriersParams Couriers = new CouriersParams();
         public SuppressionParams Suppression = new SuppressionParams();
+        public DefenseParams Defense = new DefenseParams();
+        public OccupationParams Occupation = new OccupationParams();
+
+        /// <summary>E1 の赤の守り方（"defense"）：前線の後退・即座の逆襲・奪回。</summary>
+        public sealed class DefenseParams
+        {
+            /// <summary>false なら今までの赤（受け身、予備は台本で一度だけ逆襲。伝令あり）。</summary>
+            public bool Enabled;
+            /// <summary>前線・予備の中隊が判断する間隔（秒）。</summary>
+            public double CheckSec;
+            /// <summary>迂回：見えている青がこの距離以内で、陣地の線より <see cref="BypassBehindM"/> 以上後ろにいる。</summary>
+            public double BypassRadiusM;
+            public double BypassBehindM;
+            /// <summary>迂回：直近この秒数に、陣地の正面の弧の外から撃たれた。</summary>
+            public double FlankFireMemorySec;
+            /// <summary>拘束：見えている青が、正面の弧の中でこの距離以内にいる。</summary>
+            public double PinRadiusM;
+            /// <summary>予備の余力：損害が初めの兵力のこの割合未満（士気は morale.shaken_threshold より上）。</summary>
+            public double ReserveSpentLoss;
+            /// <summary>赤の本部が奪回を判断する間隔（秒）。</summary>
+            public double HqEvalSec;
+            /// <summary>奪回の出し方："assemble"（集めてから出す）か "immediate"（小出し。比べ用）。</summary>
+            public bool RetakeAssemble;
+            public double AssembleRadiusM;
+            public int AssembleMinCompanies;
+            public double AssembleMaxWaitSec;
+        }
+
+        /// <summary>C12 の占領の乱れ（"occupation"。両軍）：敵の側が持ち主の陣地に入った中隊は、しばらく撃つ力が落ち、守りの用意を始めない。</summary>
+        public sealed class OccupationParams
+        {
+            public bool Enabled;
+            public double DisarraySec;
+            public double DisarrayFireMult;
+        }
 
         /// <summary>
         /// R1 の制圧（"suppression"）。受けている火力の量（自分を撃つ全ての敵の、損害の式から守りを除いた値の和。毎分）が
@@ -592,6 +627,27 @@ namespace Battalion.Sim
             p.Suppression.ReleaseSec = su.D("release_sec");
             p.Suppression.FireMult = su.D("fire_mult");
             ReadPersonalityTable(su["moving_threshold_personality_mult"], p.Suppression.MovingThresholdPersonalityMult);
+
+            var de = root["defense"];
+            p.Defense.Enabled = de["enabled"].Bool;
+            p.Defense.CheckSec = de.D("check_sec");
+            p.Defense.BypassRadiusM = de.D("bypass_radius_m");
+            p.Defense.BypassBehindM = de.D("bypass_behind_m");
+            p.Defense.FlankFireMemorySec = de.D("flank_fire_memory_sec");
+            p.Defense.PinRadiusM = de.D("pin_radius_m");
+            p.Defense.ReserveSpentLoss = de.D("reserve_spent_loss");
+            p.Defense.HqEvalSec = de.D("hq_eval_sec");
+            string mode = de["retake_mode"].String;
+            if (mode != "assemble" && mode != "immediate") throw new FormatException("defense.retake_mode は assemble か immediate: " + mode);
+            p.Defense.RetakeAssemble = mode == "assemble";
+            p.Defense.AssembleRadiusM = de.D("assemble_radius_m");
+            p.Defense.AssembleMinCompanies = (int)de.D("assemble_min_companies");
+            p.Defense.AssembleMaxWaitSec = de.D("assemble_max_wait_sec");
+
+            var oc = root["occupation"];
+            p.Occupation.Enabled = oc["enabled"].Bool;
+            p.Occupation.DisarraySec = oc.D("disarray_sec");
+            p.Occupation.DisarrayFireMult = oc.D("disarray_fire_mult");
 
             return p;
         }

@@ -22,12 +22,21 @@ namespace Battalion.Sim
         }
     }
 
-    /// <summary>場面の中で、決まった時刻に出す前進の命令（R1 の検証の場面。伝令は使わない）。</summary>
+    /// <summary>場面の中で、決まった時刻に出す命令（R1 の検証の場面。伝令は使わない）。Target があれば攻撃、なければ前進。</summary>
     public sealed class SceneOrder
     {
         public double AtSec;
         public string Unit;
         public double X, Y, FacingDeg;
+        /// <summary>攻撃の目標（E1。null なら前進）。</summary>
+        public string Target;
+    }
+
+    /// <summary>場面の塹壕（E1）：中心のマスと、向きに直交する左右2マスずつ（5マス）。向きと、初めの持ち主（null なら会戦開始時にいる中隊の側）。</summary>
+    public sealed class SceneTrench
+    {
+        public double X, Y, FacingDeg;
+        public Side? Owner;
     }
 
     /// <summary>検算用の配置。命令がなければ、全部隊はその場で保持する。</summary>
@@ -44,6 +53,14 @@ namespace Battalion.Sim
         public readonly List<SceneOrder> Orders = new List<SceneOrder>();
         /// <summary>通れない水のマスにする場所（マスの中心で判定。null ならなし。R1 の S7・S8 の両脇）。</summary>
         public Func<Vec2, bool> Water;
+        /// <summary>村のマスにする場所（E1。マスの中心で判定）と、村の初めの持ち主（null なら会戦開始時にいる中隊の側）。</summary>
+        public Func<Vec2, bool> Village;
+        public Side? VillageOwner;
+        /// <summary>中隊を置かない塹壕（E1）。</summary>
+        public readonly List<SceneTrench> Trenches = new List<SceneTrench>();
+        /// <summary>守りの計画（E1。defense.enabled のときだけ載せる）と、赤の本部の位置（null なら本部なし：伝令を使わない）。</summary>
+        public DefensePlan Defense;
+        public Vec2? RedHeadquarters;
         /// <summary>
         /// 全て平地の地図（60×40マス、3km×2km）。原点を (−1200, −850) にずらして配置の中心付近に置く。
         /// 壊走した中隊が会戦から離脱する範囲は P0 と同じ（x −1200〜1800、y −850〜1150）。
@@ -63,6 +80,24 @@ namespace Battalion.Sim
                 for (int j = 0; j < map.Height; j++)
                     for (int i = 0; i < map.Width; i++)
                         if (Water(map.CellCenter(i, j))) map.SetOverlay(i, j, TerrainMap.River);
+            Vec2? villagePoint = null;
+            if (Village != null)
+                for (int j = 0; j < map.Height; j++)
+                    for (int i = 0; i < map.Width; i++)
+                        if (Village(map.CellCenter(i, j)))
+                        {
+                            map.SetOverlay(i, j, TerrainMap.Village);
+                            villagePoint = villagePoint ?? map.CellCenter(i, j);
+                        }
+            foreach (var tr in Trenches)
+            {
+                map.CellOf(new Vec2(tr.X, tr.Y), out int ci, out int cj);
+                double a = (tr.FacingDeg + 90) * Angles.DegToRad;
+                int di = (int)Math.Round(Math.Cos(a)), dj = (int)Math.Round(Math.Sin(a));
+                for (int k = -2; k <= 2; k++)
+                    if (map.InBounds(ci + k * di, cj + k * dj) && map.SetOverlay(ci + k * di, cj + k * dj, TerrainMap.Trench))
+                        map.SetFortificationFacing(ci + k * di, cj + k * dj, tr.FacingDeg * Angles.DegToRad);
+            }
             foreach (var name in TrenchUnits)
             {
                 var s = Companies.Find(x => x.Name == name);
@@ -76,6 +111,11 @@ namespace Battalion.Sim
             var sim = new Simulation(p, seed, map, log);
             foreach (var s in Companies)
                 sim.AddCompany(s.Name, s.Side, s.Training, s.Personality, new Vec2(s.X, s.Y), s.FacingDeg);
+            if (RedHeadquarters.HasValue) sim.SetHeadquarters(Side.Red, RedHeadquarters.Value);
+            if (villagePoint.HasValue && VillageOwner.HasValue) sim.SetInitialOwner(villagePoint.Value, VillageOwner.Value);
+            foreach (var tr in Trenches)
+                if (tr.Owner.HasValue) sim.SetInitialOwner(new Vec2(tr.X, tr.Y), tr.Owner.Value);
+            if (Defense != null && p.Defense.Enabled) sim.SetDefensePlan(Defense);
             return sim;
         }
 
@@ -85,7 +125,8 @@ namespace Battalion.Sim
             while (next < Orders.Count && Orders[next].AtSec <= sim.Time + 1e-9)
             {
                 var o = Orders[next++];
-                sim.Issue(Order.Advance(sim.Find(o.Unit).Id, new Vec2(o.X, o.Y), o.FacingDeg * Angles.DegToRad));
+                if (o.Target != null) sim.Issue(Order.Attack(sim.Find(o.Unit).Id, sim.Find(o.Target).Id));
+                else sim.Issue(Order.Advance(sim.Find(o.Unit).Id, new Vec2(o.X, o.Y), o.FacingDeg * Angles.DegToRad));
             }
         }
     }
@@ -213,6 +254,96 @@ namespace Battalion.Sim
             return sc;
         }
 
+        // ---------------------------------------------------------------- E1 の検証の場面（赤の守り方・占領の乱れ）
+
+        static DefenseUnitPlan Front(double x, double y, double facingDeg) =>
+            new DefenseUnitPlan { Role = DefenseRole.Front, Fallback = new Vec2(x, y), FallbackFacingDeg = facingDeg };
+
+        static DefenseUnitPlan Reserve(double postX, double postY, double cx, double cy, double r) =>
+            new DefenseUnitPlan { Role = DefenseRole.Reserve, Post = new Vec2(postX, postY), TriggerCenter = new Vec2(cx, cy), TriggerRadiusM = r };
+
+        static DefenseUnitPlan Garrison() => new DefenseUnitPlan { Role = DefenseRole.Garrison };
+
+        /// <summary>中心 (<paramref name="cx"/>, <paramref name="cy"/>) のまわり 2×2 マス（100m 四方）の村。</summary>
+        static Func<Vec2, bool> VillageSquare(double cx, double cy) => p => Math.Abs(p.X - cx) < 50 && Math.Abs(p.Y - cy) < 50;
+
+        /// <summary>
+        /// S14 迂回された前線：塹壕（西向き）の赤 R（前線、後退先は東 300m の村のマス）。青 A が塹壕の北 300m を東へ抜け、
+        /// 塹壕の線より 400m 後ろ（x=400）まで進む。
+        /// </summary>
+        public static Scenario S14_bypassed_front()
+        {
+            var sc = new Scenario("S14_bypassed_front", Blue("A", -300, 300, 0), Red("R", 0, 0, 180));
+            sc.TrenchUnits.Add("R");
+            sc.Village = VillageSquare(300, 0);
+            sc.Defense = new DefensePlan { ObjectiveCenter = new Vec2(300, 0), Assembly = new Vec2(600, 0) };
+            sc.Defense.Units["R"] = Front(300, 0, 180);
+            sc.Orders.Add(Advance(0, "A", 400, 300, 0));
+            return sc;
+        }
+
+        /// <summary>S15 拘束された前線：S14 に、塹壕の正面 350m（西）で保持する青 P を足す。</summary>
+        public static Scenario S15_pinned_front()
+        {
+            var sc = S14_bypassed_front();
+            sc.Name = "S15_pinned_front";
+            sc.Companies.Insert(1, Blue("P", -350, 0, 0));
+            return sc;
+        }
+
+        /// <summary>
+        /// S16 即座の逆襲と戻り：村（2×2 マス、原点）に赤の守備 G、その東 500m に赤の予備 V（戻る位置は今の位置、引き金は村の中心から
+        /// 400m）。青 A が西から村の北側（0, 250）へ前進し、引き金の円に入る。赤の本部（東 1000m）があるので、本部の命令なら伝令が要る。
+        /// </summary>
+        public static Scenario S16_counterattack_and_return()
+        {
+            var sc = new Scenario("S16_counterattack_and_return", Blue("A", -600, 250, 0), Red("G", 0, 0, 180), Red("V", 500, 0, 180));
+            sc.Village = VillageSquare(0, 0);
+            sc.RedHeadquarters = new Vec2(1000, 0);
+            sc.Defense = new DefensePlan { ObjectiveCenter = new Vec2(0, 0), Assembly = new Vec2(500, 0) };
+            sc.Defense.Units["G"] = Garrison();
+            sc.Defense.Units["V"] = Reserve(500, 0, 0, 0, 400);
+            sc.Orders.Add(Advance(0, "A", 0, 250, 0));
+            return sc;
+        }
+
+        /// <summary>
+        /// S17 奪回：空の村（2×2 マス、原点。持ち主は赤）に青 A が西から入って保持する。赤 C1・C2 が村の東 600m と南東 600m、
+        /// 集結点は東 500m、赤の本部は東 1000m。
+        /// </summary>
+        public static Scenario S17_retake()
+        {
+            var sc = new Scenario("S17_retake", Blue("A", -200, 0, 0), Red("C1", 600, 0, 180), Red("C2", 424, -424, 135));
+            sc.Village = VillageSquare(0, 0);
+            sc.VillageOwner = Side.Red;
+            sc.RedHeadquarters = new Vec2(1000, 0);
+            sc.Defense = new DefensePlan { ObjectiveCenter = new Vec2(0, 0), Assembly = new Vec2(500, 0) };
+            sc.Defense.Units["C1"] = Garrison();
+            sc.Defense.Units["C2"] = Garrison();
+            sc.Orders.Add(Advance(0, "A", 0, 0, 0));
+            return sc;
+        }
+
+        /// <summary>
+        /// S18 取った直後の逆襲：持ち主が赤の塹壕（西向き、原点）に青 A（東向き）が入った瞬間から始める。赤 E が東 300m から
+        /// すぐに攻撃する。
+        /// </summary>
+        public static Scenario S18_counter_right_after_capture() => CaptureScene("S18_counter_right_after_capture", 300, 0);
+
+        /// <summary>
+        /// S19 固めた後の逆襲：S18 と同じ塹壕で、赤 E は青が入ってから 900秒後に攻撃を始める（乱れが解け、浅い掩体ができている）。
+        /// E は射程の外（東 600m）で待つ（東 300m で待つと、会戦の初めから撃ち合いになり、青が固められないため）。
+        /// </summary>
+        public static Scenario S19_counter_after_consolidation() => CaptureScene("S19_counter_after_consolidation", 600, 900);
+
+        static Scenario CaptureScene(string name, double redX, double attackAt)
+        {
+            var sc = new Scenario(name, Blue("A", 0, 0, 0), Red("E", redX, 0, 180));
+            sc.Trenches.Add(new SceneTrench { X = 0, Y = 0, FacingDeg = 180, Owner = Side.Red });
+            sc.Orders.Add(new SceneOrder { AtSec = attackAt, Unit = "E", Target = "A" });
+            return sc;
+        }
+
         public static Scenario ByName(string name)
         {
             switch (name)
@@ -231,6 +362,12 @@ namespace Battalion.Sim
                 case "S11_trench_from_flank": return S11_trench_from_flank();
                 case "S12_trench_front_and_flank": return S12_trench_front_and_flank();
                 case "S13_trench_two_from_front": return S13_trench_two_from_front();
+                case "S14_bypassed_front": return S14_bypassed_front();
+                case "S15_pinned_front": return S15_pinned_front();
+                case "S16_counterattack_and_return": return S16_counterattack_and_return();
+                case "S17_retake": return S17_retake();
+                case "S18_counter_right_after_capture": return S18_counter_right_after_capture();
+                case "S19_counter_after_consolidation": return S19_counter_after_consolidation();
                 default: throw new KeyNotFoundException(name);
             }
         }

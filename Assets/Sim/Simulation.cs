@@ -87,6 +87,7 @@ namespace Battalion.Sim
             double t = Time;
             double tickStart = t - _p.TickSec;
 
+            if (Tick == 1) InitPositions();
             if ((Tick - 1) % _exposureEveryTicks == 0) RebuildVisibility();
             foreach (var s in _scripts) s.Update(this, tickStart);
 
@@ -94,6 +95,7 @@ namespace Battalion.Sim
             ApplyOrders(t, tickStart);
             Move(t, tickStart);
             UpdateFortified();
+            UpdateOccupation(t);
             var shots = SelectTargets();
             Resolve(shots, t, tickStart);
             UpdateSuppression(t);
@@ -101,6 +103,7 @@ namespace Battalion.Sim
             Transitions(t);
             UpdateStages(t);
             UpdateAutonomy(t);
+            UpdateDefense(t);
             UpdateDispatches(t);
 
             if (_log.Enabled && Tick % _snapshotEveryTicks == 0)
@@ -385,6 +388,8 @@ namespace Battalion.Sim
                 bool close = s.Close;
                 double fRange = RangeMultiplier(s.Distance, close);
                 double fTerrain = TerrainDamageMult(tg, u.Position);
+                // 陣地の向きの正面の弧の外から撃たれた（E1 の迂回の判定）
+                if (D.Enabled && tg.Role != DefenseRole.None && !InFortificationArc(PositionFacing(tg), tg, u.Position)) tg.LastOffArcFireTime = t;
                 double fAspect = _p.Fire.AspectCasualtyMult[a];
                 // 射手の状態（動揺・正面の弧の外の目標・隊形の乱れ・制圧下・動きながら撃つ）。表示と同じ関数（R2.1）
                 double fState = FireStateMult(u, s.TargetInFrontArc, t);

@@ -778,6 +778,8 @@ namespace Battalion.Sim
                 }
                 if (c.CurrentOrder.Type != OrderType.Entrench || c.EntrenchProgress >= _p.MapRules.EntrenchSec) continue;
                 if (!ReadyToDig(c)) continue;
+                // 占領の乱れの間は、陣地構築を始めない（C12）
+                if (c.EntrenchProgress <= 0 && InOccupationDisarray(c)) continue;
                 c.EntrenchProgress = Math.Min(_p.MapRules.EntrenchSec, c.EntrenchProgress + _p.TickSec);
                 if (c.EntrenchProgress >= _p.MapRules.EntrenchSec) CompleteEntrenchment(c, t);
             }

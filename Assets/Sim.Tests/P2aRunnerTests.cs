@@ -219,9 +219,10 @@ namespace Battalion.Sim.Tests
         [Test]
         public void ReserveCounterattackArrivesByRunnerFromRedHeadquarters()
         {
+            // E1 の後は、defense.enabled が false のとき（受け身の赤）だけ、今までの予備隊の台本（伝令あり）を使う
             var log = new StringEventSink();
             var sc = MapScenario.LoadFile(TestUtil.PathOf("maps/scenario_a1.json"));
-            var sim = sc.Build(TestUtil.Params, 1, log);
+            var sim = sc.Build(TestUtil.ParamsWithoutE1(), 1, log);
             var r3 = sim.Find("R3");
             var b1 = sim.Find("B1");
             b1.Position = new Vec2(1975, 1300); // 引き金の円（村の中心から 400m）の中

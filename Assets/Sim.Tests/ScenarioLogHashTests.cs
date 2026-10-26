@@ -110,6 +110,82 @@ namespace Battalion.Sim.Tests
             "stage2 拘束＋迂回（段階つき） seed2 3859 97606be7c95b09657b14256f081653047cb7dc69012fa952b75c22221e4510c6",
         };
 
+        /// <summary>
+        /// R2.1（proto-r2.1-fix）の通し実行の作戦のログ全体のハッシュ（40通り。中隊の伝令の行も含む）。E1 の規則を止めた値
+        /// （受け身の赤、占領の乱れなし）のログは、これと一致するはず。
+        /// </summary>
+        static readonly string[] R21Hashes =
+        {
+            "stage1 総員突撃 seed1 3945 1b4e17c733d69eda9c8022f3666b4716aea97933d4fdd3290f4bb6351d7ca32c",
+            "stage1 総員突撃 seed2 3956 cbcb1221a91af143f18292bfd47626aad49afca562e6a534925f2f0a6c74f200",
+            "stage1 正面火力戦 seed1 3874 b9bbaf13b67f57b0ee59f49f8d5f43b6fa38be9e8c2ab875f705e546a9a61d29",
+            "stage1 正面火力戦 seed2 3874 078900c428d48a2c691c1e00877dafa511f829070adadbd906cacfde05f1f5e7",
+            "stage1 側面攻撃（1個中隊） seed1 3886 872957b2fce00ed92adbdaeb03e25275669265af5422157f3cb913d41241a16d",
+            "stage1 側面攻撃（1個中隊） seed2 3887 9677e892c012fec266310fd5f4b45f144be1214d6a879b3e67056e1ce720cd19",
+            "stage1 側面攻撃（2個中隊） seed1 3905 32b501b7352bd67afc6085729a30d4c84e63dabfb34294b65233857ccd5f0d84",
+            "stage1 側面攻撃（2個中隊） seed2 3908 29019585f60e1b8a92aed53607a67ad22fade41e1c3cf6c3eb0894787c4b6ef5",
+            "stage1 両翼包囲（鶴翼） seed1 3923 d1cdeffe1cf872f1d1af571cd107e391fce9358840916f23d13a3875109c877e",
+            "stage1 両翼包囲（鶴翼） seed2 3932 6db92917e6170306cbbb2de6ed27852eb8089590326aa8a20b351c1e034da650",
+            "stage1 拘束＋迂回（遠い拘束） seed1 3953 335f1e8f87b8b46e37e71400eed1a335231167c0f5f0c586c00d5b356dceacbf",
+            "stage1 拘束＋迂回（遠い拘束） seed2 3947 cb6d2d7e2e2f03d5a4bd02c6539b5471f77ad964fd67f2fe305a1fb1dfe54d4c",
+            "stage1 拘束＋迂回（近い拘束） seed1 3756 27dcbcc819578ff098026854a705f49098b121a5c45722baf528457dbc532427",
+            "stage1 拘束＋迂回（近い拘束） seed2 3977 0adc743e2085045e0c14fa8d45c01e730d4501749a9b7cb60512c983daa70778",
+            "stage1 拘束＋猪突の攻撃（確保） seed1 3977 aeec3d29e4efc6dc6d6720888570cb2fd8021cf5f5638137e30ed6c1aef70d59",
+            "stage1 拘束＋猪突の攻撃（確保） seed2 3958 7bd802586658f85efd0e4f3a8cedde617fd0fa60b16a49a8b459522bfc90ba9a",
+            "stage1 村への前進（全中隊） seed1 3579 8171758402a4a10fc2cd97cc369535c4407a625f756a62335c123b33a1f41402",
+            "stage1 村への前進（全中隊） seed2 3562 e4c092467711007ab125ba9abaa58db213f72212588e7a88edf7fc4b0a6823b6",
+            "stage1 拘束＋迂回（段階つき） seed1 3923 ff496b9152758fb3fb1080e755ddff6f65be354852d327431bfcca0918058072",
+            "stage1 拘束＋迂回（段階つき） seed2 3928 5465e0955af364cf4eaca9f086f82b09c3fbcd9188b82320c9ddef2a5c75eb12",
+            "stage2 総員突撃 seed1 3908 6e006f3e993c2b950cc00108126142121ddb07d09fdcfcc58763bffed56566e2",
+            "stage2 総員突撃 seed2 3926 efc1fc30ca5120251a9b1ce18e87e1c535a4e4c8ffa28c8c5344bf9c6a4bb480",
+            "stage2 正面火力戦 seed1 3917 0c81a29f08e422d2da5d6fa4e0925098430a523fd92a1baf6718ec6627faa14e",
+            "stage2 正面火力戦 seed2 3923 7bedbdab77f8d249ff364a7c8e435d90d31793e863c62f81dc719d7c7e1b1db7",
+            "stage2 側面攻撃（1個中隊） seed1 3899 ac56db7e72efddb384a61308e77b067ca09fdc50e8e3d3b99dcd8ab62386f698",
+            "stage2 側面攻撃（1個中隊） seed2 3910 86636611cd08f0a0d948d9469fb0298317b14a5dc06ad380f00ada461237c4c6",
+            "stage2 側面攻撃（2個中隊） seed1 3917 a18f3347ce860e28742d15291277c543b6a2042d2567f29af578c02b78d56285",
+            "stage2 側面攻撃（2個中隊） seed2 3926 916dd2763e808301b614b74deb94840587e95429b65e1e00566c31be6cd33dbb",
+            "stage2 両翼包囲（鶴翼） seed1 3540 88126b3a26c76e8ed718beeb54e4b41eb193b653ba8fc9c05b20fdec39d8113e",
+            "stage2 両翼包囲（鶴翼） seed2 3915 3b6e8b0336fbc4ffc59363b4581b392867a3a3c64fe8e2ade62b89bbaa683a0c",
+            "stage2 拘束＋迂回（遠い拘束） seed1 3996 7eb735ec9daa7a1c3f0280807d6e6decbfddcf8cdc2c5597604cb362b1d10a31",
+            "stage2 拘束＋迂回（遠い拘束） seed2 3964 1629bff77b2dcc1c8c687f9ecb49084152c88b75dbcd82c9ab84871254569c15",
+            "stage2 拘束＋迂回（近い拘束） seed1 4028 d20a5ae4d0fd5dfd46981a6dae0b6dd3e03190b9ef9985d1f8d15183997d5d77",
+            "stage2 拘束＋迂回（近い拘束） seed2 3976 5d3e550c6c92c1c4ed4445d1e76fdf022efee7f4a0aa040e1038d55d7b106486",
+            "stage2 拘束＋猪突の攻撃（確保） seed1 3996 d68efc30a70dd906d2f33c2138ad13e09767910cd55c3055ba1797048c8a6d8d",
+            "stage2 拘束＋猪突の攻撃（確保） seed2 3970 82c339b7d1e15628b833b7127a873436abee575b1b4d6e67eebc3366f0a85b43",
+            "stage2 村への前進（全中隊） seed1 3915 b85c2441014aa88f0596648ccf3184c459518568307eff6edaf5b76b95ccbdbb",
+            "stage2 村への前進（全中隊） seed2 3916 b8af9b01690cb83a5a2a93fbd645e15e7e427a0f2b642eb328c380a33801a746",
+            "stage2 拘束＋迂回（段階つき） seed1 3939 ac0c6f8abbaf3778f864e2d218b5b30a3b4d7fc825f500bd0d92ab998c744fea",
+            "stage2 拘束＋迂回（段階つき） seed2 3962 78f792b445a8acc825793f9f85acdbce4035736cb281468e2ecf9defe5a305af",
+        };
+
+        /// <summary>E1 の規則を止めた値（defense.enabled・occupation.enabled が false）のログ全体が、R2.1 と1文字も違わないこと（40通り）。</summary>
+        [Test]
+        public void PassiveRedLogMatchesR21()
+        {
+            var p = TestUtil.ParamsWithoutE1();
+            using var progress = RunProgress.Begin("受け身の赤のログの一致", R21Hashes.Length);
+            var got = new System.Collections.Generic.List<string>();
+            foreach (int stage in new[] { 1, 2 })
+            {
+                var sc = MapScenario.LoadFile(TestUtil.PathOf($"maps/scenario_a{stage}.json"));
+                foreach (var (name, plan) in ScenarioAReportTests.PlansWithPinAndFlank(stage))
+                    foreach (ulong seed in new ulong[] { 1, 2 })
+                    {
+                        string text = RunAndLog(sc, plan, seed, out int n, p: p);
+                        got.Add($"stage{stage} {name} seed{seed} {n} {Hash(text)}");
+                    }
+                int st = stage;
+                foreach (ulong seed in new ulong[] { 1, 2 })
+                {
+                    string text = RunAndLog(sc, new ScenarioAReportTests.PlannedOrder[0], seed, out int n,
+                        s => ScenarioAReportTests.StagedPinAndFlankStart(s, st), ScenarioAReportTests.StagedPinAndFlankTick, p);
+                    got.Add($"stage{stage} {ScenarioAReportTests.StagedPlanName} seed{seed} {n} {Hash(text)}");
+                }
+            }
+            for (int k = 0; k < got.Count; k++) TestContext.WriteLine((got[k] == R21Hashes[k] ? "一致 " : "違う ") + got[k]);
+            Assert.That(got, Is.EqualTo(R21Hashes));
+        }
+
         /// <summary>P2c.1.2 のハッシュの行（「stage1 作戦 seed1 」で始まる行）。</summary>
         public static string P2c12Hash(string prefix) => System.Array.Find(P2c12Hashes, h => h.StartsWith(prefix, StringComparison.Ordinal));
 
