@@ -296,7 +296,9 @@
     "assemble_min_companies": 2,
     "assemble_max_wait_sec": 600,
     "counter_isolation_radius_m": 300,
-    "counter_max_support": 1
+    "counter_max_support": 1,
+    "assault_stall_sec": 120,
+    "assault_stall_progress_m": 50
   },
   "occupation": {
     "_note": "C12 の占領の乱れ（両軍）。敵の側が持ち主の陣地（塹壕の1本・つながった村）に入った中隊は、disarray_sec の間、撃つ力 ×disarray_fire_mult で、浅い掩体・陣地構築を始めない",

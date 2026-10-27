@@ -201,6 +201,15 @@ namespace Battalion.Sim
         public double NextAssaultReplan;
         /// <summary>突撃が即座の逆襲（true）か奪回の攻撃（false）か。追う限りが違う（直しの後に決めたこと 2）。</summary>
         public bool AssaultIsCounter;
+        /// <summary>止められた突撃の判定（3回目の直しの3）：目標との距離の、これまでで一番近い値と、その時刻。</summary>
+        public double AssaultBestDist, AssaultBestTime;
+        /// <summary>進めずにやめた逆襲の目標（−1 はなし）と、その目標へ出直さない時刻まで（4回目の直しの1）。</summary>
+        public int CounterBannedTargetId = -1;
+        public double CounterBannedUntil;
+        /// <summary>戻る位置へ戻るはずが、最後の守り手なのでその場で保持している（5回目の直しの1）。ほかに守り手が来たら戻る。</summary>
+        public bool PendingReturn;
+        /// <summary>会戦開始時の位置（E1 の規則1：前線の後退は、陣地（初めの位置の近く）にいる間だけ判断する）。</summary>
+        public Vec2 InitialPosition;
         /// <summary>占領の乱れが続く時刻（C12）。</summary>
         public double OccupationDisarrayUntil = double.NegativeInfinity;
 
@@ -233,6 +242,7 @@ namespace Battalion.Sim
             CurrentOrder = Order.Hold(id);
             Arrived = true;
             PostPoint = position;
+            InitialPosition = position;
         }
 
         /// <summary>盤上にいる（降伏・離脱していない）。</summary>

@@ -32,11 +32,14 @@ namespace Battalion.Sim.Tests
             public readonly string Target;
             /// <summary>条件つきの命令（P1e.1）：この中隊が指揮下でなくなったら出す（null なら時刻だけで出す）。</summary>
             public readonly string WhenBroken;
+            /// <summary>第2段（前の段の完了で）に村の中心への前進を足す（E1 の3回目の直しの4。両翼包囲）。</summary>
+            public readonly bool ThenVillage;
 
             public PlannedOrder(double atSec, string unit, double x, double y, double facingDeg,
-                PlannedKind kind = PlannedKind.Advance, string target = null, string whenBroken = null)
+                PlannedKind kind = PlannedKind.Advance, string target = null, string whenBroken = null, bool thenVillage = false)
             {
                 WhenBroken = whenBroken;
+                ThenVillage = thenVillage;
                 AtSec = atSec;
                 Unit = unit;
                 X = x;
@@ -157,10 +160,22 @@ namespace Battalion.Sim.Tests
         public const string StagedPlanName = "拘束＋迂回（段階つき）";
         public const string RecklessPlanName = "拘束＋猪突の攻撃（確保）";
 
-        /// <summary>5作戦に「拘束＋迂回」の遠い版・近い版を足したもの（P1e の6）。</summary>
-        public static List<(string name, PlannedOrder[] orders)> PlansWithPinAndFlank(int stage)
+        public const string EnvelopmentPlanName = "両翼包囲（鶴翼）";
+
+        /// <summary>
+        /// 5作戦に「拘束＋迂回」の遠い版・近い版などを足したもの（P1e の6）。両翼包囲（鶴翼）は、4つの命令の後に第2段
+        /// （前の段の完了で）として村の中心への前進を足す（E1 の3回目の直しの4。概算シミュレーションとは比べない）。
+        /// <paramref name="legacyEnvelopment"/> が true なら、両翼包囲は概算と同じ4つの命令だけ（前の版のログと比べるテスト用）。
+        /// </summary>
+        public static List<(string name, PlannedOrder[] orders)> PlansWithPinAndFlank(int stage, bool legacyEnvelopment = false)
         {
             var plans = Plans(stage);
+            if (!legacyEnvelopment)
+            {
+                int k = plans.FindIndex(p => p.name == EnvelopmentPlanName);
+                plans[k] = (EnvelopmentPlanName, plans[k].orders.Select(o =>
+                    new PlannedOrder(o.AtSec, o.Unit, o.X, o.Y, o.FacingDeg, o.Kind, o.Target, o.WhenBroken, thenVillage: true)).ToArray());
+            }
             plans.Add(("拘束＋迂回（遠い拘束）", PinAndFlank(stage, false)));
             plans.Add(("拘束＋迂回（近い拘束）", PinAndFlank(stage, true)));
             plans.Add((RecklessPlanName, PinAndRecklessAttack(stage)));
@@ -311,13 +326,25 @@ namespace Battalion.Sim.Tests
         }
 
         /// <summary>作戦の命令を伝令で出す（P2a）。出せた（判断枠があった）ら true。</summary>
-        public static bool Issue(Simulation sim, PlannedOrder o) => sim.SendOrder(ToOrder(sim, o)) != SendResult.NoSlot;
+        public static bool Issue(Simulation sim, PlannedOrder o) =>
+            o.ThenVillage ? Issue(sim, o, Discretion.Delegate) : sim.SendOrder(ToOrder(sim, o)) != SendResult.NoSlot;
 
-        /// <summary>作戦の命令を、裁量 <paramref name="d"/> の1段の命令書として伝令で出す（P2c）。</summary>
-        public static bool Issue(Simulation sim, PlannedOrder o, Discretion d) =>
-            d == Discretion.Delegate
+        /// <summary>
+        /// 作戦の命令を、裁量 <paramref name="d"/> の1段の命令書として伝令で出す（P2c）。<see cref="PlannedOrder.ThenVillage"/> なら、
+        /// 第2段（前の段の完了で）に村の中心への前進を足した2段の命令書。
+        /// </summary>
+        public static bool Issue(Simulation sim, PlannedOrder o, Discretion d)
+        {
+            if (o.ThenVillage)
+                return sim.SendSheet(new OrderSheet(new[]
+                {
+                    new Stage(ToOrder(sim, o), StageTrigger.None, d),
+                    new Stage(Order.Advance(sim.Find(o.Unit).Id, MapScenario.VillageCenter, 0), StageTrigger.Complete, d),
+                })) != SendResult.NoSlot;
+            return d == Discretion.Delegate
                 ? Issue(sim, o)
                 : sim.SendSheet(new OrderSheet(new[] { new Stage(ToOrder(sim, o), StageTrigger.None, d) })) != SendResult.NoSlot;
+        }
 
         public static Order ToOrder(Simulation sim, PlannedOrder o)
         {
@@ -500,8 +527,8 @@ namespace Battalion.Sim.Tests
                 {
                     var rs = Enumerable.Range(1, Runs).Select(s => RunOne(sc, plan, (ulong)s, start, tick)).ToList();
                     WriteRecords(rs, name, "delegate");
-                    // 「拘束＋迂回」は概算シミュレーションにない
-                    bool hasSketch = sketch.TryGet($"stage{stage}:{name}", out var k);
+                    // 「拘束＋迂回」は概算シミュレーションにない。両翼包囲は村へ入る段を足したので比べない（E1 の3回目の直しの4）
+                    bool hasSketch = sketch.TryGet($"stage{stage}:{name}", out var k) && name != EnvelopmentPlanName;
                     string Ref(string key, string fmt) => hasSketch ? "［" + k.D(key).ToString(fmt) + "］" : "";
                     sb.AppendLine($"| {stage} | {name} | " +
                                   $"{rs.Average(r => r.Win ? 1.0 : 0.0):0.00}{Ref("win", "0.00")} | " +
@@ -531,11 +558,11 @@ namespace Battalion.Sim.Tests
                    $"{(retaken.Count == 0 ? "—" : $"{retaken.Average(r => r.Win ? 0.0 : 1.0):0.00}（{retaken.Count}/{rs.Count}）")} | {rs.Average(r => r.Disarrays):0.00} |";
         }
 
-        /// <summary>E1 の比べの表の主な4作戦（総員突撃、村への前進、拘束＋迂回の遠い・近い）。</summary>
-        static readonly string[] E1ComparePlans = { "総員突撃", VillageAdvancePlanName, "拘束＋迂回（遠い拘束）", "拘束＋迂回（近い拘束）" };
+        /// <summary>E1 の比べの表の主な作戦（総員突撃、村への前進、拘束＋迂回の遠い・近い、村へ入る段を足した両翼包囲）。</summary>
+        static readonly string[] E1ComparePlans = { "総員突撃", VillageAdvancePlanName, "拘束＋迂回（遠い拘束）", "拘束＋迂回（近い拘束）", EnvelopmentPlanName };
 
         /// <summary>
-        /// E1 の比べの表：主な4作戦を、受け身の赤（defense・occupation とも止める）、E1 で占領の乱れなし、E1 で小出しの奪回（immediate）で
+        /// E1 の比べの表：主な作戦を、受け身の赤（defense・occupation とも止める）、E1 で占領の乱れなし、E1 で小出しの奪回（immediate）で
         /// 各 20回回す（E1 そのものの値は作戦ごとの表）。
         /// </summary>
         [Test]

@@ -57,6 +57,9 @@ namespace Battalion.Sim
             /// <summary>即座の逆襲の目標の孤立：中心どうしこの距離以内のほかの指揮下の敵が <see cref="CounterMaxSupport"/> 個以下。</summary>
             public double CounterIsolationRadiusM;
             public int CounterMaxSupport;
+            /// <summary>止められた突撃（3回目の直しの3）：この秒数の間に、目標との距離が <see cref="AssaultStallProgressM"/> 以上縮まなければやめる。</summary>
+            public double AssaultStallSec;
+            public double AssaultStallProgressM;
         }
 
         /// <summary>C12 の占領の乱れ（"occupation"。両軍）：敵の側が持ち主の陣地に入った中隊は、しばらく撃つ力が落ち、守りの用意を始めない。</summary>
@@ -648,6 +651,8 @@ namespace Battalion.Sim
             p.Defense.AssembleMaxWaitSec = de.D("assemble_max_wait_sec");
             p.Defense.CounterIsolationRadiusM = de.D("counter_isolation_radius_m");
             p.Defense.CounterMaxSupport = (int)de.D("counter_max_support");
+            p.Defense.AssaultStallSec = de.D("assault_stall_sec");
+            p.Defense.AssaultStallProgressM = de.D("assault_stall_progress_m");
 
             var oc = root["occupation"];
             p.Occupation.Enabled = oc["enabled"].Bool;

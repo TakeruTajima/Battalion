@@ -171,6 +171,12 @@ namespace Battalion.Sim
             UpdateAssaults(t);
             foreach (var c in _companies)
             {
+                // 一度でも壊走したら、役目を外す（3回目の直しの1。奪回には命じられる）
+                if (c.Side == _defenseSide && c.Role != DefenseRole.None && c.State == CompanyState.Routed)
+                {
+                    if (_log.Enabled) _log.Write(Ev(t, "defense_role_lost", c).Add("side", SideName(c.Side)).Add("role", RoleName(c.Role)).ToString());
+                    c.Role = DefenseRole.None;
+                }
                 if (c.Side != _defenseSide || !c.OnBoard || !c.UnderCommand) continue;
                 // 奪回で命じられている間は、本部の命令に従う
                 if (InActiveRetake(c)) continue;
@@ -192,10 +198,14 @@ namespace Battalion.Sim
             var sheet = OrderSheet.Single(AssaultOrder(c, tgt));
             c.AssaultTargetId = tgt.Id;
             c.AssaultIsCounter = counter;
+            ResetStall(c, tgt, t);
             c.AssaultSheet = sheet;
             c.NextAssaultReplan = t + D.CheckSec;
             SelfOrder(c, sheet, t);
         }
+
+        static string RoleName(DefenseRole r) =>
+            r == DefenseRole.Front ? "front" : r == DefenseRole.Garrison ? "garrison" : r == DefenseRole.Reserve ? "reserve" : "none";
 
         Order AssaultOrder(Company c, Company tgt)
         {
@@ -225,14 +235,28 @@ namespace Battalion.Sim
                     if (c.ActiveSheet != null && c.StageStarted) c.AssaultTargetId = -1;
                     continue;
                 }
-                if (c.StartWaitOrder != null || !c.StageStarted) continue;
                 var tgt = _companies[c.AssaultTargetId];
+                if (c.StartWaitOrder != null || !c.StageStarted)
+                {
+                    // 動き出すまで（伝令・練度の遅れ）は、止められた突撃の時計を進めない
+                    ResetStall(c, tgt, t);
+                    continue;
+                }
                 if (!tgt.OnBoard || !tgt.UnderCommand)
                 {
                     c.AssaultTargetId = -1;
                     HoldInPlace(c);
                     c.StageCompleted = true;
                     if (_log.Enabled) _log.Write(Ev(t, "defense_assault_done", c).Add("side", SideName(c.Side)).Add("target", tgt.Name).ToString());
+                    continue;
+                }
+                // 止められた突撃はやめる（3回目の直しの3）
+                double dist = Vec2.Distance(c.Position, tgt.Position);
+                if (dist < c.AssaultBestDist - D.AssaultStallProgressM - 1e-9) { c.AssaultBestDist = dist; c.AssaultBestTime = t; }
+                string stop = !HasReserveStrength(c) ? "spent" : t - c.AssaultBestTime >= D.AssaultStallSec - 1e-9 ? "stalled" : null;
+                if (stop != null)
+                {
+                    StopAssault(c, tgt, stop, t);
                     continue;
                 }
                 if (t < c.NextAssaultReplan - 1e-9) continue;
@@ -242,7 +266,9 @@ namespace Battalion.Sim
                     var plan = PlanOf(c);
                     if (plan != null && Vec2.Distance(tgt.Position, plan.TriggerCenter) > plan.TriggerRadiusM + 1e-9)
                     {
-                        if (_log.Enabled) _log.Write(Ev(t, "defense_assault_stop", c).Add("side", SideName(c.Side)).Add("target", tgt.Name).ToString());
+                        if (_log.Enabled)
+                            _log.Write(Ev(t, "defense_assault_stop", c).Add("side", SideName(c.Side)).Add("target", tgt.Name)
+                                .Add("kind", "counter").Add("reason", "left_trigger").ToString());
                         ReturnToPost(c, plan, t);
                         c.Reserve = ReserveState.Returning;
                         continue;
@@ -263,12 +289,53 @@ namespace Battalion.Sim
                     if (next != tgt && _log.Enabled)
                         _log.Write(Ev(t, "retake_retarget", c).Add("side", SideName(c.Side)).Add("target", next.Name).ToString());
                     c.AssaultTargetId = next.Id;
+                    if (next != tgt) ResetStall(c, next, t);
                     tgt = next;
                 }
                 var o = c.CurrentOrder;
                 if (o.Type != OrderType.Advance || !o.Destination.HasValue) continue;
                 if (Vec2.Distance(o.Destination.Value, tgt.Position) < 1.0) continue;
                 StartOrder(c, AssaultOrder(c, tgt), t, t);
+            }
+        }
+
+        void ResetStall(Company c, Company tgt, double t)
+        {
+            c.AssaultBestDist = Vec2.Distance(c.Position, tgt.Position);
+            c.AssaultBestTime = t;
+        }
+
+        /// <summary>
+        /// 止められた突撃をやめる（3回目の直しの3）：余力がなくなった（"spent"）か、defense.assault_stall_sec の間に目標との距離が
+        /// defense.assault_stall_progress_m 以上縮まらない（"stalled"）。
+        /// 即座の逆襲：進めずにやめたら、その場で目標の方を向いて保持し、「攻撃が終わった後」に移る。やめた時の目標へは
+        /// defense.assault_stall_sec の間は出直さない（4回目の直しの1）。余力がなくてやめたら、戻る位置へ戻る（以後は逆襲しない）。
+        /// 奪回：その場で保持する（本部が条件を見て出し直す）。
+        /// </summary>
+        void StopAssault(Company c, Company tgt, string reason, double t)
+        {
+            bool counter = c.AssaultIsCounter;
+            c.AssaultTargetId = -1;
+            if (_log.Enabled)
+                _log.Write(Ev(t, "defense_assault_stop", c).Add("side", SideName(c.Side)).Add("target", tgt.Name)
+                    .Add("kind", counter ? "counter" : "retake").Add("reason", reason).ToString());
+            var plan = PlanOf(c);
+            if (counter && plan != null && c.Role == DefenseRole.Reserve && reason == "spent")
+            {
+                ReturnToPost(c, plan, t);
+                c.Reserve = ReserveState.Spent;
+                return;
+            }
+            var d = tgt.Position - c.Position;
+            c.CurrentOrder = Order.Hold(c.Id, d.Length < 1e-9 ? c.Facing : Math.Atan2(d.Y, d.X));
+            c.Arrived = true;
+            c.Path = null;
+            c.StageCompleted = true;
+            if (counter && c.Role == DefenseRole.Reserve)
+            {
+                c.Reserve = ReserveState.AfterAttack;
+                c.CounterBannedTargetId = tgt.Id;
+                c.CounterBannedUntil = t + D.AssaultStallSec;
             }
         }
 
@@ -289,6 +356,8 @@ namespace Battalion.Sim
                 return;
             }
             if (c.State != CompanyState.Normal || c.Suppressed) return;
+            // 陣地（初めの位置の autonomy.post_radius_m 以内）にいる間だけ判断する（3回目の直しの1）
+            if (Vec2.Distance(c.Position, c.InitialPosition) > _p.Autonomy.PostRadiusM + 1e-9) return;
             string reason = BypassReason(c, t);
             if (reason == null) return;
             if (HeldByFront(c, PositionFacing(c))) return;
@@ -305,18 +374,30 @@ namespace Battalion.Sim
         /// 引き金の円の中の、見えている指揮下の敵のうち、弱っていて（占領の乱れ・動揺・制圧下）孤立している（300m 以内にほかの指揮下の
         /// 敵が1個以下）中隊のうち、守る地点に最も近い中隊（E1 の報告の後に決めたこと 4。強い所へは出ない）。
         /// </summary>
-        Company ReserveTarget(Company c, DefenseUnitPlan plan)
+        Company ReserveTarget(Company c, DefenseUnitPlan plan, double t)
         {
             Company best = null;
             double bestD = double.MaxValue;
             foreach (var e in SeenEnemies(c.Side))
             {
-                if (Vec2.Distance(e.Position, plan.TriggerCenter) > plan.TriggerRadiusM + 1e-9) continue;
-                if (!WeakTarget(e) || !IsolatedTarget(e)) continue;
+                if (!CounterTargetable(e, plan)) continue;
+                // 進めずにやめた目標へは、defense.assault_stall_sec の間は出直さない（4回目の直しの1）
+                if (e.Id == c.CounterBannedTargetId && t < c.CounterBannedUntil - 1e-9) continue;
                 double d = Vec2.Distance(e.Position, _defense.ObjectiveCenter);
                 if (d < bestD - 1e-9) { bestD = d; best = e; }
             }
             return best;
+        }
+
+        /// <summary>引き金の円の中で、弱っていて孤立している（即座の逆襲の目標になりうる）。</summary>
+        bool CounterTargetable(Company e, DefenseUnitPlan plan) =>
+            Vec2.Distance(e.Position, plan.TriggerCenter) <= plan.TriggerRadiusM + 1e-9 && WeakTarget(e) && IsolatedTarget(e);
+
+        bool BannedTargetStillThere(Company c, DefenseUnitPlan plan, double t)
+        {
+            if (c.CounterBannedTargetId < 0 || t >= c.CounterBannedUntil - 1e-9) return false;
+            var e = _companies[c.CounterBannedTargetId];
+            return e.OnBoard && e.UnderCommand && SeenBySide(e, c.Side) && CounterTargetable(e, plan);
         }
 
         void UpdateReserve(Company c, double t)
@@ -324,13 +405,19 @@ namespace Battalion.Sim
             var plan = PlanOf(c);
             if (plan == null) return;
             bool able = c.State == CompanyState.Normal && HasReserveStrength(c);
+            // 最後の守り手として残っていた予備は、ほかに守り手が来たら、今の規則どおり戻る位置へ戻る（5回目の直しの1）
+            if (c.PendingReturn)
+            {
+                if (LastDefender(c)) return;
+                ReturnToPost(c, plan, t);
+            }
             switch (c.Reserve)
             {
                 case ReserveState.Waiting:
                 case ReserveState.Returning:
                 {
-                    if (!able || !ObjectiveHeldByOthers(c)) return;
-                    var tgt = ReserveTarget(c, plan);
+                    if (!able || LastDefender(c)) return;
+                    var tgt = ReserveTarget(c, plan, t);
                     if (tgt != null) Counterattack(c, tgt, t);
                     return;
                 }
@@ -353,12 +440,14 @@ namespace Battalion.Sim
                         c.Reserve = ReserveState.Spent;
                         return;
                     }
-                    var tgt = ObjectiveHeldByOthers(c) ? ReserveTarget(c, plan) : null;
+                    var tgt = LastDefender(c) ? null : ReserveTarget(c, plan, t);
                     if (tgt != null)
                     {
                         if (!held) Counterattack(c, tgt, t);
                         return;
                     }
+                    // 進めずにやめた目標が、まだ引き金の円の中で弱って孤立していれば、その場で保持を続ける（出直さないだけ）
+                    if (BannedTargetStillThere(c, plan, t)) return;
                     ReturnToPost(c, plan, t);
                     c.Reserve = ReserveState.Returning;
                     return;
@@ -367,15 +456,28 @@ namespace Battalion.Sim
         }
 
         /// <summary>
-        /// 守る地点を空けない（直しの後に決めたこと 1。G7）：自分のほかに、守る地点から 250m（勝ちの判定の円）以内に指揮下の味方の中隊が
-        /// いる。いなければ即座の逆襲に出ない。
+        /// 守り手（5回目の直しの2）：指揮下で通常（動揺・壊走・再集結中でない）の、役目が守備か予備の味方の中隊。
+        /// 壊走して役目を外れた中隊は数えない。
         /// </summary>
-        bool ObjectiveHeldByOthers(Company c)
+        bool IsDefender(Company o, Side side) =>
+            o.Side == side && o.OnBoard && o.State == CompanyState.Normal &&
+            (o.Role == DefenseRole.Garrison || o.Role == DefenseRole.Reserve);
+
+        static bool WithinObjective(Vec2 p, DefensePlan plan) =>
+            Vec2.Distance(p, plan.ObjectiveCenter) <= MapScenario.VillageHoldRadiusM + 1e-9;
+
+        /// <summary>
+        /// 最後の守り手（5回目の直しの1。G7・G9。2回目の直しの1「守る地点を空けない」を置き換えた）：守備か予備の中隊が守る地点の
+        /// 250m（勝ちの判定の円）以内にいて、自分のほかに 250m 以内に守り手がいない。最後の守り手は、250m の外へ出る動き（逆襲に出る、
+        /// 戻る位置へ戻る）をしない。
+        /// </summary>
+        bool LastDefender(Company c)
         {
+            if (c.Role != DefenseRole.Garrison && c.Role != DefenseRole.Reserve) return false;
+            if (!c.OnBoard || !c.UnderCommand || !WithinObjective(c.Position, _defense)) return false;
             foreach (var o in _companies)
-                if (o != c && o.Side == c.Side && o.OnBoard && o.UnderCommand &&
-                    Vec2.Distance(o.Position, _defense.ObjectiveCenter) <= MapScenario.VillageHoldRadiusM + 1e-9) return true;
-            return false;
+                if (o != c && IsDefender(o, c.Side) && WithinObjective(o.Position, _defense)) return false;
+            return true;
         }
 
         /// <summary>弱っている：占領の乱れ、動揺、制圧下のどれか。</summary>
@@ -403,6 +505,19 @@ namespace Battalion.Sim
         void ReturnToPost(Company c, DefenseUnitPlan plan, double t)
         {
             c.AssaultTargetId = -1;
+            // 最後の守り手は、守る地点の 250m の外の戻る位置へは戻らず、その場で保持する（5回目の直しの1）
+            if (!WithinObjective(plan.Post, _defense) && LastDefender(c))
+            {
+                if (!c.PendingReturn)
+                {
+                    c.PendingReturn = true;
+                    HoldInPlace(c);
+                    c.StageCompleted = true;
+                    if (_log.Enabled) _log.Write(Ev(t, "defense_last_hold", c).Add("side", SideName(c.Side)).ToString());
+                }
+                return;
+            }
+            c.PendingReturn = false;
             SelfOrder(c, OrderSheet.Single(Order.Advance(c.Id, plan.Post, FacingToObjective(plan.Post))), t);
             if (_log.Enabled)
                 _log.Write(Ev(t, "defense_return", c).Add("side", SideName(c.Side)).Add("spent", !HasReserveStrength(c)).ToString());
@@ -444,6 +559,9 @@ namespace Battalion.Sim
         void UpdateRetake(double t)
         {
             var active = ActiveRetake;
+            // 攻撃に移った中隊が全て突撃を終えた（崩した・やめた）ら、この奪回は終わり。条件が続いていれば、本部が次の判断で出し直す
+            if (active != null && active.Launched && AllAssaultsOver(active)) active.Active = false;
+            active = ActiveRetake;
             if (active != null)
             {
                 if (!RetakeNeeded())
@@ -553,6 +671,13 @@ namespace Battalion.Sim
                 if (_log.Enabled)
                     _log.Write(Ev(t, "retake_attack_unit", c).Add("side", SideName(c.Side)).Add("target", target.Name).ToString());
             }
+        }
+
+        bool AllAssaultsOver(Retake r)
+        {
+            foreach (int id in r.Attacking)
+                if (_companies[id].AssaultTargetId >= 0) return false;
+            return true;
         }
 
         /// <summary>奪回の回数（命令・攻撃）。通し実行の出来事の回数に使う。</summary>

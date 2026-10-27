@@ -88,8 +88,8 @@ namespace Battalion.Sim.Tests
 
         /// <summary>
         /// シナリオA の作戦（ステージ2 の段階つき、シード1、90分。中隊の伝令の行を含むログ全体）のハッシュが、.NET で取った値と同じ。
-        /// Unity でも通れば、会戦の計算とログの書き方が両方で同じ。E1（赤の守り方、占領の乱れ。報告の後の直しと、直しの後の2回目を含む）を入れた値で取り直した
-        /// （R1 の前は 3929行・67e779d0…、R1 では 3924行・6637bf00…、R2 では 3965行・986fa11c…、R2.1 では 3939行・ac0c6f8a…、E1 の1回目の直しでは 3984行・13e43487…）。
+        /// Unity でも通れば、会戦の計算とログの書き方が両方で同じ。E1（赤の守り方、占領の乱れ。報告の後の直しと、その後の2回目〜4回目を含む）を入れた値で取り直した
+        /// （R1 の前は 3929行・67e779d0…、R1 では 3924行・6637bf00…、R2 では 3965行・986fa11c…、R2.1 では 3939行・ac0c6f8a…、E1 の1回目の直しでは 3984行・13e43487…、2回目では 3993行・202050ba…、3回目では 3965行・48b77df1…）。
         /// </summary>
         [Test]
         public void ScenarioALogIsTheSameOnUnityAndDotNet()
@@ -97,8 +97,8 @@ namespace Battalion.Sim.Tests
             var sc = MapScenario.LoadFile(TestUtil.PathOf("maps/scenario_a2.json"));
             string log = ScenarioLogHashTests.RunAndLog(sc, new ScenarioAReportTests.PlannedOrder[0], 1, out int n,
                 s => ScenarioAReportTests.StagedPinAndFlankStart(s, 2), ScenarioAReportTests.StagedPinAndFlankTick);
-            Assert.That(n, Is.EqualTo(3993));
-            Assert.That(ScenarioLogHashTests.Hash(log), Is.EqualTo("202050bab67785f6111e9e45dc8c9c3c13b32121b182e54d02fde6ce73870963"));
+            Assert.That(n, Is.EqualTo(3965));
+            Assert.That(ScenarioLogHashTests.Hash(log), Is.EqualTo("4d13d92b9b489043907902ec77493de86fd6dc6e2ffd515a461ffae9a27d0b0c"));
         }
     }
 }

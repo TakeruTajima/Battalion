@@ -113,7 +113,18 @@ namespace Battalion.View
                         : $"赤 奪回の攻撃（集結 {v.D("assembled"):0}個）", true);
                     break;
                 case "defense_assault_stop":
-                    Add(t, $"{unit} 逆襲をやめる（{v["target"].String} が引き金の円の外へ）", false);
+                {
+                    string r = v.Has("reason") ? v["reason"].String : "left_trigger";
+                    string what = v.Has("kind") && v["kind"].String == "retake" ? "奪回の突撃" : "逆襲";
+                    string why = r == "stalled" ? "進めない" : r == "spent" ? "余力なし" : $"{v["target"].String} が引き金の円の外へ";
+                    Add(t, $"{unit} {what}をやめる（{why}）", false);
+                    break;
+                }
+                case "defense_last_hold":
+                    Add(t, $"{unit} 最後の守り手として守る地点に残る", false);
+                    break;
+                case "defense_role_lost":
+                    Add(t, $"{unit} 壊走で守りの役目を外れる", false);
                     break;
                 case "retake_retarget":
                     Add(t, $"{unit} 奪回の目標を {v["target"].String} へ移す", false);

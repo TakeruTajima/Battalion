@@ -168,7 +168,7 @@ namespace Battalion.Sim.Tests
             foreach (int stage in new[] { 1, 2 })
             {
                 var sc = MapScenario.LoadFile(TestUtil.PathOf($"maps/scenario_a{stage}.json"));
-                foreach (var (name, plan) in ScenarioAReportTests.PlansWithPinAndFlank(stage))
+                foreach (var (name, plan) in ScenarioAReportTests.PlansWithPinAndFlank(stage, legacyEnvelopment: true))
                     foreach (ulong seed in new ulong[] { 1, 2 })
                     {
                         string text = RunAndLog(sc, plan, seed, out int n, p: p);
@@ -202,7 +202,7 @@ namespace Battalion.Sim.Tests
             foreach (int stage in new[] { 1, 2 })
             {
                 var sc = MapScenario.LoadFile(TestUtil.PathOf($"maps/scenario_a{stage}.json"));
-                foreach (var (name, plan) in ScenarioAReportTests.PlansWithPinAndFlank(stage))
+                foreach (var (name, plan) in ScenarioAReportTests.PlansWithPinAndFlank(stage, legacyEnvelopment: true))
                     foreach (ulong seed in new ulong[] { 1, 2 })
                     {
                         string text = StripCourierLines(RunAndLog(sc, plan, seed, out _, p: p), out int n);
@@ -242,7 +242,7 @@ namespace Battalion.Sim.Tests
             foreach (int stage in new[] { 1, 2 })
             {
                 var sc = MapScenario.LoadFile(TestUtil.PathOf($"maps/scenario_a{stage}.json"));
-                foreach (var (name, plan) in ScenarioAReportTests.PlansWithPinAndFlank(stage))
+                foreach (var (name, plan) in ScenarioAReportTests.PlansWithPinAndFlank(stage, legacyEnvelopment: true))
                     foreach (ulong seed in new ulong[] { 1, 2 })
                     {
                         string h = RunAndHash(sc, plan, seed, out int n);
