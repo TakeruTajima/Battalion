@@ -416,6 +416,7 @@ namespace Battalion.View
             switch (x.Kind)
             {
                 case ModifierKind.MovingOpen: return "<color=#ff8060>開けた所を移動中</color>";
+                case ModifierKind.TurningOpen: return "<color=#ff8060>旋回中（動いている扱い）</color>";
                 case ModifierKind.Trench: return "塹壕";
                 case ModifierKind.TrenchOffArc: return "<color=#ff8060>塹壕（正面の弧の外で効いていない）</color>";
                 case ModifierKind.Entrench: return "陣地構築の途中";
@@ -428,6 +429,7 @@ namespace Battalion.View
                 case ModifierKind.FireDisarray: return "隊形の乱れ";
                 case ModifierKind.FireSuppressed: return "制圧下";
                 case ModifierKind.FireMoving: return "移動中";
+                case ModifierKind.FireTurning: return "<color=#ff8060>旋回中（動いている扱い）</color>";
                 case ModifierKind.FireOccupation: return "<color=#ffb060>占領の乱れ</color>";
                 case ModifierKind.MoveTerrain: return TerrainName(x.Terrain);
                 case ModifierKind.MovePinned: return "拘束";

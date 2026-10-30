@@ -35,6 +35,16 @@ namespace Battalion.Sim.Tests
             p.Suppression.ThresholdStationaryPerMin = double.PositiveInfinity;
             p.Defense.Enabled = false;
             p.Occupation.Enabled = false;
+            WithoutR3(p);
+            return p;
+        }
+
+        /// <summary>R3 の規則を止める：接敵中も旋回の速さは movement.turn_deg_per_sec、旋回中の動いている扱いなし。</summary>
+        public static SimParams WithoutR3(SimParams p)
+        {
+            p.Movement.TurnDegPerSecEngaged = p.Movement.TurnDegPerSec;
+            p.Movement.TurningCountsAsMoving = false;
+            p.Movement.LineFormedStillSec = 0;
             return p;
         }
 

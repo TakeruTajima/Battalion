@@ -20,8 +20,9 @@ namespace Battalion.Sim
             foreach (var c in _companies)
             {
                 c.PassOverlap = false;
-                // 接敵の判定は動き方にだけ使うので、経路に沿って動く中隊だけ判定する（視線の計算を減らす）
-                c.InContact = c.OnBoard && c.UnderCommand && c.CurrentOrder.Moves && !c.Arrived && c.Path != null && EnemyInContact(c);
+                // 接敵の判定は動き方と旋回の速さ（R3）に使う。壊走・再集結中は回らないので判定しない
+                c.Engaged = c.OnBoard && c.UnderCommand && EnemyInContact(c);
+                c.InContact = c.Engaged && c.CurrentOrder.Moves && !c.Arrived && c.Path != null;
             }
             foreach (var c in _companies)
             {

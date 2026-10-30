@@ -62,6 +62,8 @@ namespace Battalion.Sim
             var c = new Company(_companies.Count, name, side, training, personality,
                 strength ?? _p.Movement.CompanyStrength, morale ?? _p.Morale.Initial,
                 position, facingDeg * Angles.DegToRad);
+            // 会戦の始めに置かれた中隊は、置かれた所で線を張り終えている（R3）
+            c.StillSec = _p.Movement.LineFormedStillSec;
             _companies.Add(c);
             return c;
         }
@@ -168,13 +170,15 @@ namespace Battalion.Sim
         void Move(double t, double tickStart)
         {
             double dt = _p.TickSec;
-            double maxTurn = _p.Movement.TurnDegPerSec * Angles.DegToRad * dt;
+            double freeTurn = _p.Movement.TurnDegPerSec * Angles.DegToRad * dt;
+            double engagedTurn = _p.Movement.TurnDegPerSecEngaged * Angles.DegToRad * dt;
             // 接敵と隊列の超越は、全中隊が動く前の位置でまとめて判定する（処理の順番で結果が変わらないように。P1e）
             UpdateContactAndPassing();
 
             foreach (var c in _companies)
             {
                 c.MovedThisTick = false;
+                c.TurningAsMoving = false;
                 c.MoveStyle = MoveStyle.None;
                 c.BlockedByEnemy = false;
                 if (!c.OnBoard) continue;
@@ -187,6 +191,10 @@ namespace Battalion.Sim
                 if (c.State == CompanyState.Rallying) continue;
 
                 var before = c.Position;
+                // 線を張った中隊が接敵中に正面を変えるときは、正面の幅から決まる遅い速さ（R3）。線を張る前は速い
+                bool lineFormed = c.StillSec >= _p.Movement.LineFormedStillSec - 1e-9;
+                double maxTurn = c.Engaged && lineFormed ? engagedTurn : freeTurn;
+                _turnedFromDeg = 0;
                 // 制圧下で動こうとしている中隊は、伏せて止まる（R1。解けたら同じ段のまま動きを続ける）
                 if (PinnedDown(c)) LieDown(c, maxTurn);
                 else MoveUnderCommand(c, t, tickStart, dt, maxTurn);
@@ -195,7 +203,14 @@ namespace Battalion.Sim
                 c.BlockedByEnemy = ClampAgainstEnemies(c, before) && c.Position.X == before.X && c.Position.Y == before.Y
                                    && c.CurrentOrder.Moves && !c.Arrived;
                 c.MovedThisTick = c.Position.X != before.X || c.Position.Y != before.Y;
+                // 接敵中にその場で 20° を超えて向きを変えている間は、R1 の動いている扱い（R3）
+                c.TurningAsMoving = _p.Movement.TurningCountsAsMoving && c.Engaged && lineFormed && !c.MovedThisTick &&
+                                    _turnedFromDeg > _p.Movement.TurningSlowDeg + 1e-9;
             }
+
+            // 線を張っているかは、自分の動きで止まっている長さで決める（押し離しの前に数える。R3）
+            foreach (var c in _companies)
+                c.StillSec = c.OnBoard && !c.MovedThisTick ? c.StillSec + dt : 0;
 
             KeepFriendlySpacing();
             UpdateEntrenchment(t);
@@ -245,9 +260,13 @@ namespace Battalion.Sim
             }
         }
 
-        static double TurnToward(double facing, double target, double maxTurn)
+        /// <summary>この刻みに、向きを変え始めた時点での向きと目標の向きの差（度）の最大（R3 の旋回中の判定）。</summary>
+        double _turnedFromDeg;
+
+        double TurnToward(double facing, double target, double maxTurn)
         {
             double diff = Angles.Wrap(target - facing);
+            if (Math.Abs(diff) > 1e-9) _turnedFromDeg = Math.Max(_turnedFromDeg, Math.Abs(diff) * Angles.RadToDeg);
             if (Math.Abs(diff) <= maxTurn) return Angles.Wrap(target);
             return Angles.Wrap(facing + Math.Sign(diff) * maxTurn);
         }

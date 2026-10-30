@@ -294,6 +294,15 @@ namespace Battalion.Sim
             /// <summary>接敵していないとき、向きと進む方角の差が <see cref="TurningSlowDeg"/> を超える間（旋回中）の速さの倍率。</summary>
             public double TurningSpeedMult;
             public double TurningSlowDeg;
+            /// <summary>接敵中（400m 以内に視線の通る指揮下の敵）の旋回の速さ（毎秒の度。R3）。</summary>
+            public double TurnDegPerSecEngaged;
+            /// <summary>接敵中に、その場で <see cref="TurningSlowDeg"/> を超えて向きを変えている間を、R1 の「動いている」扱いにするか（R3）。</summary>
+            public bool TurningCountsAsMoving;
+            /// <summary>
+            /// 線を張っている（自分の動きで位置が変わらない状態がこの秒数以上続いている）中隊だけに、遅い旋回と旋回中の動いている扱いを
+            /// 掛ける（R3 の報告の後に決めたこと）。
+            /// </summary>
+            public double LineFormedStillSec;
         }
 
         /// <summary>
@@ -513,6 +522,9 @@ namespace Battalion.Sim
             p.Movement.SidewaysSpeedMult = mv.D("sideways_speed_mult");
             p.Movement.TurningSpeedMult = mv.D("turning_speed_mult");
             p.Movement.TurningSlowDeg = mv.D("turning_slow_deg");
+            p.Movement.TurnDegPerSecEngaged = mv.D("turn_deg_per_sec_engaged");
+            p.Movement.TurningCountsAsMoving = mv["turning_counts_as_moving"].Bool;
+            p.Movement.LineFormedStillSec = mv.D("line_formed_still_sec");
 
             var te = root["terrain"];
             ReadCharTable(te["move_mult"], p.Terrain.Move);

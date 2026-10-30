@@ -99,7 +99,9 @@ namespace Battalion.Sim.Tests
             Run(sim, 2, a, e);
             Assert.That(a.TargetId, Is.EqualTo(e.Id));
             Assert.That(a.AutoFacing, Is.Null, "自律の向きを解く");
-            Run(sim, 60, a, e);
+            // 接敵中は毎秒 movement.turn_deg_per_sec_engaged（R3。90° に約 131秒）で回る。回っている途中で自律行動の物陰へ寄る
+            // 動き（向きを変えずに動く）が約1分挟まるので、長めに待つ
+            Run(sim, 300, a, e);
             Assert.That(Deg(a.Facing), Is.EqualTo(0).Within(1e-6), "命令の向きに戻る");
         }
     }

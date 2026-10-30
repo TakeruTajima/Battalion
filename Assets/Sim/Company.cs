@@ -86,6 +86,12 @@ namespace Battalion.Sim
         // ---- P1e：動くときの向きと隊列の超越
         /// <summary>接敵中か（400m 以内に視線の通る指揮下の敵がいる）。毎刻み、移動の前に、経路に沿って動く中隊だけ判定する。</summary>
         public bool InContact;
+        /// <summary>接敵中（R3。止まっている中隊も含めて判定する。旋回の速さに使う）。</summary>
+        public bool Engaged;
+        /// <summary>直前の刻みに、接敵中にその場で movement.turning_slow_deg を超えて向きを変えていた（R3。R1 の動いている扱い）。</summary>
+        public bool TurningAsMoving;
+        /// <summary>自分の動き（押し離しを除く）で位置が変わっていない秒数（R3。線を張っているかの判定に使う）。</summary>
+        public double StillSec;
         /// <summary>その刻みの動き方（表示用）。</summary>
         public MoveStyle MoveStyle;
         /// <summary>超越中の、止まっている味方の ID（押し離しをしない相手）。毎刻み、移動の前に判定する。</summary>

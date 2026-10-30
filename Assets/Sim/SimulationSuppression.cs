@@ -14,10 +14,12 @@ namespace Battalion.Sim
         /// </summary>
         public bool MovingPosture(Company c) => (c.CurrentOrder.Moves && !c.Arrived) || c.AutoMove != AutoMove.None;
 
-        /// <summary>制圧のしきい値（毎分）。動いている間は性格の倍率を掛ける。</summary>
+        /// <summary>
+        /// 制圧のしきい値（毎分）。動いている間は性格の倍率を掛ける。接敵中にその場で向きを変えている間（R3）も動いている時の値。
+        /// </summary>
         public double SuppressionThreshold(Company c)
         {
-            if (!MovingPosture(c)) return S.ThresholdStationaryPerMin;
+            if (!MovingPosture(c) && !c.TurningAsMoving) return S.ThresholdStationaryPerMin;
             double mult = S.MovingThresholdPersonalityMult.TryGetValue(c.Personality, out var m) ? m : 1.0;
             return S.ThresholdMovingPerMin * mult;
         }

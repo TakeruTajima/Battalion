@@ -847,7 +847,8 @@ namespace Battalion.Sim
                 double target = InFortificationArc(c.Facing, c, from) ? _p.MapRules.EntrenchDamageMult : off;
                 if (f > target) f += (target - f) * Math.Min(1.0, c.EntrenchProgress / _p.MapRules.EntrenchSec);
             }
-            if (c.MovedThisTick && IsOpenGround(ch)) f *= _p.Terrain.MovingOpenDamageMult;
+            // 移動中、または接敵中にその場で向きを変えている間（R3）
+            if ((c.MovedThisTick || c.TurningAsMoving) && IsOpenGround(ch)) f *= _p.Terrain.MovingOpenDamageMult;
             // 浅い掩体（P2c）。向きは掘り始めたときの中隊の向き（R2）
             f *= ScrapeMult(c, ch, InFortificationArc(c.ScrapeFacing, c, from));
             return f;

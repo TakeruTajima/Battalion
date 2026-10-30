@@ -7,8 +7,12 @@ namespace Battalion.Sim
     {
         // 被弾
         MovingOpen, Trench, TrenchOffArc, Entrench, EntrenchOffArc, Scrape, ScrapeOffArc, Terrain,
+        // 旋回中（動いている扱い。R3）の開けた所の被弾
+        TurningOpen,
         // 撃つ力
         FireShaken, FireNonFrontTarget, FireDisarray, FireSuppressed, FireMoving, FireOccupation,
+        // 旋回中（動いている扱い。R3）の撃つ力
+        FireTurning,
         // 移動
         MoveTerrain, MovePinned, MovePassThrough, MoveSideways, MoveBackward, MoveTurning,
     }
@@ -51,6 +55,7 @@ namespace Battalion.Sim
             // 小銃の制圧下（R1。砲撃による制圧は P3 で fire.suppressed_mult）、動きながら撃つ（R1 の規則3）
             if (u.Suppressed) Mul(ModifierKind.FireSuppressed, _p.Suppression.FireMult);
             if (u.MovedThisTick) Mul(ModifierKind.FireMoving, _p.Fire.MovingFireMult);
+            else if (u.TurningAsMoving) Mul(ModifierKind.FireTurning, _p.Fire.MovingFireMult);
             // 占領の乱れ（C12。隊形の乱れとは別に持ち、重なれば掛け合わせる）
             if (_p.Occupation.Enabled && t < u.OccupationDisarrayUntil - 1e-9) Mul(ModifierKind.FireOccupation, _p.Occupation.DisarrayFireMult);
             return f;
@@ -104,10 +109,10 @@ namespace Battalion.Sim
                 into.Add(new ModifierFactor(inArc ? ModifierKind.Entrench : ModifierKind.EntrenchOffArc, g / f));
                 f = g;
             }
-            if (c.MovedThisTick && IsOpenGround(ch) && _p.Terrain.MovingOpenDamageMult != 1.0)
+            if ((c.MovedThisTick || c.TurningAsMoving) && IsOpenGround(ch) && _p.Terrain.MovingOpenDamageMult != 1.0)
             {
                 f *= _p.Terrain.MovingOpenDamageMult;
-                into.Add(new ModifierFactor(ModifierKind.MovingOpen, _p.Terrain.MovingOpenDamageMult));
+                into.Add(new ModifierFactor(c.MovedThisTick ? ModifierKind.MovingOpen : ModifierKind.TurningOpen, _p.Terrain.MovingOpenDamageMult));
             }
             // 浅い掩体：掘ってあれば、正面の弧の外で効いていないとき（1.0）も載せる
             bool scrapeArc = InFortificationArc(c.ScrapeFacing, c, from);
@@ -120,7 +125,7 @@ namespace Battalion.Sim
 
         /// <summary>開けた所を移動中で、被弾 ×terrain.moving_open_damage_mult が掛かっているか（R2.1。駒の印）。</summary>
         public bool ExposedWhileMoving(Company c) =>
-            c.OnBoard && c.MovedThisTick && IsOpenGround(_map.TerrainAt(c.Position)) && _p.Terrain.MovingOpenDamageMult != 1.0;
+            c.OnBoard && (c.MovedThisTick || c.TurningAsMoving) && IsOpenGround(_map.TerrainAt(c.Position)) && _p.Terrain.MovingOpenDamageMult != 1.0;
 
         /// <summary>
         /// 直前の刻みの移動の速さの倍率を要素に分ける（表示用。<see cref="FollowPath"/> と同じ要素）。動いていなければ要素なしで 1.0。

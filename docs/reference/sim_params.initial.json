@@ -111,7 +111,12 @@
     "pass_through_speed_mult": 0.5,
     "sideways_speed_mult": 0.5,
     "turning_speed_mult": 0.7,
-    "turning_slow_deg": 20
+    "turning_slow_deg": 20,
+    "_note_r3": "R3：接敵中（400m 以内に視線の通る指揮下の敵）の旋回は毎秒 turn_deg_per_sec_engaged（端の兵が歩いて回る速さ。1.2m/s ÷ 半幅 100m）。接敵中にその場で turning_slow_deg を超えて向きを変えている間は、turning_counts_as_moving なら R1 の動いている扱い（被弾・撃つ力・制圧のしきい値）",
+    "turn_deg_per_sec_engaged": 0.69,
+    "turning_counts_as_moving": true,
+    "_note_r3_line": "R3 の報告の後：遅い旋回と旋回中の動いている扱いは、線を張っている中隊（自分の動き。押し離しを除く。で位置が変わらない状態が line_formed_still_sec 以上続いている）だけに掛ける。線を張る前（動いている、止まって間もない）は接敵中でも turn_deg_per_sec で回る",
+    "line_formed_still_sec": 60
   },
   "terrain": {
     "_note": "文字ごとの移動倍率・被弾倍率・視線を遮る重み。塹壕の被弾倍率は止まっている中隊にだけ効く。W は通れない",
