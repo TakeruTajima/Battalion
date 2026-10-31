@@ -22,6 +22,7 @@ namespace Battalion.View
         Rect RightRect => new Rect(Screen.width - RightW, TopH, RightW, Screen.height - TopH - BottomH);
         Rect BottomRect => new Rect(0, Screen.height - BottomH, Screen.width, BottomH);
         Rect EndRect => new Rect(Screen.width / 2f - 230, Screen.height / 2f - 190, 460, 380);
+        Rect BriefingRect => new Rect(Screen.width / 2f - 240, Screen.height / 2f - 110, 480, 220);
 
         /// <summary>地図を見る領域（パネルの間）。GUI の座標（左上が原点）。</summary>
         Rect MapArea() => new Rect(LeftW, TopH, Screen.width - LeftW - RightW, Screen.height - TopH - BottomH);
@@ -31,6 +32,7 @@ namespace Battalion.View
             var m = new Vector2(Input.mousePosition.x, Screen.height - Input.mousePosition.y);
             if (_phase == Phase.SelectStage) return true;
             if (TopRect.Contains(m) || LeftRect.Contains(m) || RightRect.Contains(m) || BottomRect.Contains(m)) return true;
+            if (_showBriefing && _phase == Phase.Running && BriefingRect.Contains(m)) return true;
             return _phase == Phase.Ended && !_hideEnd && EndRect.Contains(m);
         }
 
@@ -84,6 +86,7 @@ namespace Battalion.View
             DrawPanel(BottomRect);
             DrawLog();
             if (_phase == Phase.Ended && !_hideEnd) DrawEndWindow();
+            else if (_showBriefing) DrawBriefing();
         }
 
         void DrawPanel(Rect r) => Fill(r, new Color(0.11f, 0.12f, 0.14f, 0.92f));
@@ -100,16 +103,20 @@ namespace Battalion.View
 
         void DrawStageSelect()
         {
-            var r = new Rect(Screen.width / 2f - 260, Screen.height / 2f - 170, 520, 340);
+            var r = new Rect(Screen.width / 2f - 260, Screen.height / 2f - 230, 520, 460);
             Fill(r, new Color(0.11f, 0.12f, 0.14f, 0.96f));
             GUILayout.BeginArea(new Rect(r.x + 20, r.y + 16, r.width - 40, r.height - 32));
+            GUILayout.Label("教程", _title);
+            GUILayout.Space(8);
+            if (GUILayout.Button("教程1：側面を突く（塹壕の1個中隊を、拘束して脇から撃つ）", _button, GUILayout.Height(40))) StartBattle(11);
+            GUILayout.Space(14);
             GUILayout.Label("シナリオA：リーデル村の奪取", _title);
-            GUILayout.Space(12);
+            GUILayout.Space(8);
             if (GUILayout.Button("ステージ1：頂上の塹壕（地形を読めば死角を通って肉薄できる）", _button, GUILayout.Height(40))) StartBattle(1);
             GUILayout.Space(6);
             if (GUILayout.Button("ステージ2：相互支援の陣地（死角がなく、機動が要る）", _button, GUILayout.Height(40))) StartBattle(2);
             GUILayout.Space(12);
-            GUILayout.Label("任務：90分の時点でリーデル村を確保していること。", _label);
+            GUILayout.Label("シナリオAの任務：90分の時点でリーデル村を確保していること。", _label);
             GUILayout.Label("始まると一時停止しています。スペースで開始。", _label);
             if (_loadError != null)
             {
@@ -128,7 +135,7 @@ namespace Battalion.View
             // 1段目：シナリオ、時刻と残り、一時停止と倍速、自動一時停止
             GUILayout.BeginArea(new Rect(8, 3, Screen.width - 16, 26));
             GUILayout.BeginHorizontal();
-            GUILayout.Label($"<b>シナリオA ステージ{_scenario.Stage}</b>", _bold, GUILayout.Width(140));
+            GUILayout.Label($"<b>{ShortTitle(_scenario)}</b>", _bold, GUILayout.Width(140));
             double left = Math.Max(0, _scenario.TimeLimitMin * 60 - _sim.Time);
             GUILayout.Label($"<b>{EventFeed.FormatTime(_sim.Time)}</b>　残り {(int)left / 60:00}:{(int)left % 60:00}", _bold, GUILayout.Width(190));
 
@@ -540,9 +547,27 @@ namespace Battalion.View
             var r = EndRect;
             Fill(r, new Color(0.08f, 0.09f, 0.1f, 0.96f));
             GUILayout.BeginArea(new Rect(r.x + 16, r.y + 12, r.width - 32, r.height - 24));
-            GUILayout.Label(_result.BlueWins ? "勝利：リーデル村を確保" : "敗北：村を確保できなかった", _title);
+            bool trench = _scenario.Objective == ObjectiveKind.TrenchClear;
+            if (trench) GUILayout.Label(_result.BlueWins ? "勝利：塹壕から敵を追い出した" : "敗北：塹壕から敵を追い出せなかった", _title);
+            else GUILayout.Label(_result.BlueWins ? "勝利：リーデル村を確保" : "敗北：村を確保できなかった", _title);
             GUILayout.Label($"{_result.Reason}（{EventFeed.FormatTime(_result.EndSec)}）", _label);
             GUILayout.Space(6);
+            if (trench)
+            {
+                // 戦闘詳報（教程）：崩した時刻・確保した時刻・青の損害
+                string At(double? sec) => sec.HasValue ? EventFeed.FormatTime(sec.Value) : "—";
+                var b = _result.Blue;
+                GUILayout.Label($"塹壕の敵（{string.Join("・", _scenario.TrenchUnits)}）を崩した時刻：{At(_result.BrokenSec)}　塹壕を確保した時刻：{At(_result.SecuredSec)}", _label);
+                GUILayout.Label($"青の損害：{b.Lost}/{b.Initial}名（{b.Lost * 100.0 / Math.Max(1, b.Initial):0}%）", _label);
+                GUILayout.Space(8);
+                SideLine("青（自軍）", _result.Blue);
+                SideLine("赤（敵）", _result.Red);
+                GUILayout.Space(8);
+                GUILayout.Label("確保：塹壕のマスに指揮下の青がいて、指揮下の赤がいない。崩しただけで確保しなければ、再集結した赤が戻りうる", _small);
+                GUILayout.Label("崩れた中隊：会戦中に一度でも壊走した数（再集結して戻った中隊を含む）", _small);
+                EndButtons();
+                return;
+            }
             // 作戦目標ごとの達成（V1。勝ち負けを1つにしない）
             var ob = _result.Objectives;
             string Mark(bool ok) => ok ? "<color=#7fb2ff><b>達成</b></color>" : "<color=#ff9a6a><b>未達成</b></color>";
@@ -554,11 +579,41 @@ namespace Battalion.View
             SideLine("赤（敵）", _result.Red);
             GUILayout.Space(8);
             GUILayout.Label("崩れた中隊：会戦中に一度でも壊走した数（再集結して戻った中隊を含む）", _small);
+            EndButtons();
+        }
+
+        void EndButtons()
+        {
             GUILayout.FlexibleSpace();
             GUILayout.BeginHorizontal();
             if (GUILayout.Button("地図を見る（閉じる）", _button, GUILayout.Height(30))) _hideEnd = true;
             if (GUILayout.Button("もう一度（ステージ選択へ）", _button, GUILayout.Height(30))) BackToSelect();
             GUILayout.EndHorizontal();
+            GUILayout.EndArea();
+        }
+
+        /// <summary>上部バーの短い題：地図ファイルの題の「：」より前（「教程1」「シナリオA ステージ1」）。</summary>
+        static string ShortTitle(MapScenario sc)
+        {
+            int k = sc.Title.IndexOf('：');
+            return k > 0 ? sc.Title.Substring(0, k) : sc.Title;
+        }
+
+        // ---------------------------------------------------------------- 任務の文（開始時）
+
+        void DrawBriefing()
+        {
+            var r = BriefingRect;
+            Fill(r, new Color(0.08f, 0.09f, 0.1f, 0.96f));
+            GUILayout.BeginArea(new Rect(r.x + 16, r.y + 12, r.width - 32, r.height - 24));
+            GUILayout.Label(_scenario.Title, _title);
+            GUILayout.Space(6);
+            var wrap = new GUIStyle(_label) { wordWrap = true };
+            GUILayout.Label("任務：" + _scenario.Briefing, wrap);
+            GUILayout.Space(6);
+            GUILayout.Label("始まると一時停止しています。スペースで開始。", _small);
+            GUILayout.FlexibleSpace();
+            if (GUILayout.Button("閉じる", _button, GUILayout.Height(28))) _showBriefing = false;
             GUILayout.EndArea();
         }
 

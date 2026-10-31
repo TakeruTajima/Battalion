@@ -36,10 +36,15 @@ namespace Battalion.View
         double[] _prevFacing;
 
         BattleResult _result;
+        TrenchClearTimes _trenchTimes;
+        /// <summary>開始時の任務の文を出しているか（閉じるか、時間が進むと消える）。</summary>
+        bool _showBriefing;
 
         sealed class BattleResult
         {
             public bool BlueWins;
+            /// <summary>trench_clear：塹壕の赤を崩した時刻・確保した時刻（秒）。</summary>
+            public double? BrokenSec, SecuredSec;
             /// <summary>作戦目標の達成（V1）。</summary>
             public ObjectiveResult Objectives;
             public double EndSec;
@@ -77,12 +82,15 @@ namespace Battalion.View
 
         void StartBattle(int stage) => StartBattle(stage, (ulong)(DateTime.Now.Ticks & 0x7fffffff));
 
+        /// <summary>ステージの番号の地図ファイル：1・2 はシナリオA、11 からは教程（11 が教程1。地図ファイルの stage と同じ番号）。</summary>
+        static string MapFileOf(int stage) => stage >= 11 ? $"maps/tutorial_{stage - 10}.json" : $"maps/scenario_a{stage}.json";
+
         void StartBattle(int stage, ulong seed)
         {
             try
             {
                 _params = SimParams.LoadFile(StreamingPath("sim_params.json"));
-                _scenario = MapScenario.LoadFile(StreamingPath($"maps/scenario_a{stage}.json"));
+                _scenario = MapScenario.LoadFile(StreamingPath(MapFileOf(stage)));
             }
             catch (Exception e)
             {
@@ -98,6 +106,8 @@ namespace Battalion.View
             _seed = seed;
             _feed = new EventFeed();
             _sim = _scenario.Build(_params, _seed, _feed);
+            _trenchTimes = new TrenchClearTimes(_scenario);
+            _showBriefing = _scenario.Briefing != null;
             _clock = new SimClock(_params.TickSec) { Paused = true };
             _maxSightRange = MapRenderer.MaxSightRange(_sim.Map, _params.Sight);
 
@@ -190,7 +200,7 @@ namespace Battalion.View
 
         // ---------------------------------------------------------------- 会戦の終わり
 
-        /// <summary>90分で止めて判定する。それより前に止めるのは、赤か青が全て盤上から消えたときだけ。</summary>
+        /// <summary>制限時間で止めて判定する。それより前に止めるのは、赤か青が全て盤上から消えたときだけ。</summary>
         bool CheckEnd()
         {
             bool redOn = _sim.Companies.Any(c => c.Side == Side.Red && c.OnBoard);
@@ -201,6 +211,8 @@ namespace Battalion.View
             _result = new BattleResult
             {
                 BlueWins = _scenario.BlueWins(_sim),
+                BrokenSec = _trenchTimes.BrokenSec,
+                SecuredSec = _trenchTimes.SecuredSec,
                 Objectives = _scenario.EvaluateObjectives(_sim),
                 EndSec = _sim.Time,
                 Reason = timeUp ? $"{_scenario.TimeLimitMin:0}分が経過" : (!redOn ? "赤が全て盤上から消えた" : "青が全て盤上から消えた"),
@@ -236,12 +248,15 @@ namespace Battalion.View
         void FitCamera()
         {
             var area = MapArea();
-            float unitsPerPixel = Mathf.Max(3000f / area.width, 2000f / area.height) * 1.05f;
+            var map = _sim.Map;
+            float w = (float)(map.MaxX - map.OriginX), h = (float)(map.MaxY - map.OriginY);
+            float cx = (float)(map.OriginX + map.MaxX) / 2, cy = (float)(map.OriginY + map.MaxY) / 2;
+            float unitsPerPixel = Mathf.Max(w / area.width, h / area.height) * 1.05f;
             _cam.orthographicSize = unitsPerPixel * Screen.height / 2;
             // 画面上の地図の領域の中心が、地図の中心に来るようにずらす
             float dxPx = area.center.x - Screen.width / 2f;
             float dyPx = (Screen.height - area.center.y) - Screen.height / 2f;
-            _cam.transform.position = new Vector3(1500 - dxPx * unitsPerPixel, 1000 - dyPx * unitsPerPixel, -10);
+            _cam.transform.position = new Vector3(cx - dxPx * unitsPerPixel, cy - dyPx * unitsPerPixel, -10);
         }
 
         void HandleCamera()

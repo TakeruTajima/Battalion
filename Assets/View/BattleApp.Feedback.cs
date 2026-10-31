@@ -96,15 +96,18 @@ namespace Battalion.View
             var requests = new List<string>();
             ProcessInbox(requests);
 
+            _trenchTimes.Observe(_sim);
+            if (_sim.Time > 0) _showBriefing = false;
             _objective = ObjectiveStatus.Compute(_sim, _scenario);
             var vs = _objective.State;
             if (vs != _villageState)
             {
                 _villageState = vs;
-                reasons.Add("村：" + ObjectiveStatus.Name(vs));
+                string label = ObjectiveStatus.Label(_scenario) + "：" + ObjectiveStatus.Name(vs);
+                reasons.Add(label);
                 _floats.Add(new FloatText
                 {
-                    World = MapScenario.VillageCenter, Text = "村：" + ObjectiveStatus.Name(vs), Color = VillageColor(vs),
+                    World = _scenario.ObjectivePoint(_sim.Map), Text = label, Color = VillageColor(vs),
                     Start = now, Duration = BigTextSec, Big = true,
                 });
             }

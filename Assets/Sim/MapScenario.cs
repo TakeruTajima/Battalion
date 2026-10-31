@@ -4,8 +4,17 @@ using System.IO;
 
 namespace Battalion.Sim
 {
+    /// <summary>作戦目標の種類（地図ファイルの objective.type。なければ村の奪取）。</summary>
+    public enum ObjectiveKind
+    {
+        /// <summary>村の奪取（シナリオA）。</summary>
+        Village,
+        /// <summary>塹壕から敵を追い出して確保する（教程1。trench_clear）。</summary>
+        TrenchClear,
+    }
+
     /// <summary>
-    /// 地図ファイル（maps/scenario_*.json）のシナリオ：地図、初期配置、守りの計画（E1）、村のマス、制限時間。
+    /// 地図ファイル（maps/*.json）のシナリオ：地図、初期配置、守りの計画（E1）、作戦目標（村・塹壕）、本部、任務の文、制限時間。
     /// 中隊の性格と練度は地図ファイルにないので、仕様の兵力の表から持たせる
     /// （第1 慎重・通常、第2 冷静・通常、第3 猪突・古参、第4 機敏・通常。敵は全て通常）。
     /// </summary>
@@ -19,7 +28,16 @@ namespace Battalion.Sim
         }
 
         public string Name;
+        /// <summary>題（地図ファイルの title）。</summary>
+        public string Title;
+        /// <summary>開始時に出す任務の文（地図ファイルの briefing。なければ null）。</summary>
+        public string Briefing;
         public int Stage;
+        public ObjectiveKind Objective = ObjectiveKind.Village;
+        /// <summary>大隊本部の位置（地図ファイルの headquarters。なければシナリオA の位置）。</summary>
+        public Vec2 BlueHq = BlueHeadquarters, RedHq = RedHeadquarters;
+        /// <summary>地図の塹壕のマス（trench_clear の判定に使う）。</summary>
+        public readonly HashSet<(int i, int j)> TrenchCells = new HashSet<(int i, int j)>();
         public JsonValue Source;
         public readonly List<Deploy> Units = new List<Deploy>();
         public readonly HashSet<(int i, int j)> VillageCells = new HashSet<(int i, int j)>();
@@ -28,22 +46,22 @@ namespace Battalion.Sim
         /// <summary>守りの計画（E1。地図ファイルの defense_plan）。</summary>
         public DefensePlan Defense;
 
-        /// <summary>予備の中隊と引き金の円（defense.enabled が false のときの、今までの予備隊の台本に使う）。</summary>
+        /// <summary>予備の中隊と引き金の円（defense.enabled が false のときの、今までの予備隊の台本に使う）。予備がなければ null。</summary>
         public string ReserveUnit;
         public Vec2 ReserveTriggerCenter;
         public double ReserveTriggerRadiusM;
 
         /// <summary>
-        /// 塹壕に配置した赤の中隊（V1。青の第二目標「塹壕の敵の排除」の対象）。地図ファイルにないので、ステージごとにここで持つ：
-        /// ステージ1 は稜線の塹壕の R1、ステージ2 は前の塹壕の R1・R2（R3 は村の予備隊）。
+        /// 塹壕に配置した赤の中隊（V1。青の第二目標「塹壕の敵の排除」の対象）。trench_clear の地図は objective.trench_units。
+        /// シナリオA の地図にはないので、ステージごとにここで持つ：ステージ1 は稜線の塹壕の R1、ステージ2 は前の塹壕の R1・R2（R3 は村の予備隊）。
         /// </summary>
         public readonly List<string> TrenchUnits = new List<string>();
 
         public static string[] TrenchUnitsOf(int stage) => stage == 1 ? new[] { "R1" } : stage == 2 ? new[] { "R1", "R2" } : new string[0];
 
-        /// <summary>勝ちの判定に使う村の中心（概算シミュレーションと同じ）。</summary>
+        /// <summary>勝ちの判定に使う村の中心（シナリオA。概算シミュレーションと同じ）。</summary>
         public static readonly Vec2 VillageCenter = new Vec2(1975, 1000);
-        /// <summary>大隊本部の位置（P2a。両ステージ共通、試作では動かない）。</summary>
+        /// <summary>シナリオA の大隊本部の位置（P2a。両ステージ共通、試作では動かない）。</summary>
         public static readonly Vec2 BlueHeadquarters = new Vec2(100, 800);
         public static readonly Vec2 RedHeadquarters = new Vec2(2700, 1000);
         public const double VillageHoldRadiusM = 250.0;
@@ -55,17 +73,26 @@ namespace Battalion.Sim
             var s = new MapScenario
             {
                 Name = d["name"].String,
+                Title = d.Has("title") ? d["title"].String : d["name"].String,
+                Briefing = d.Has("briefing") ? d["briefing"].String : null,
                 Stage = (int)d.D("stage"),
                 Source = d,
                 TimeLimitMin = d.D("time_limit_min"),
             };
+            if (d.Has("headquarters"))
+            {
+                s.BlueHq = Point(d["headquarters"]["blue"]);
+                s.RedHq = Point(d["headquarters"]["red"]);
+            }
             foreach (var side in new[] { Side.Blue, Side.Red })
             {
                 foreach (var u in d["deploy"][Names.Of(side)].Array)
                     s.Units.Add(new Deploy { Id = u["id"].String, Side = side, X = u.D("x"), Y = u.D("y"), FacingDeg = u.D("facing") });
             }
-            foreach (var c in d["objects"]["village"]["cells"].Array)
-                s.VillageCells.Add(((int)c.Array[0].Number, (int)c.Array[1].Number));
+            if (d["objects"].Has("village"))
+                foreach (var c in d["objects"]["village"]["cells"].Array)
+                    s.VillageCells.Add(((int)c.Array[0].Number, (int)c.Array[1].Number));
+            ReadTrenchCells(d, s.TrenchCells);
             s.Defense = ReadDefensePlan(d["defense_plan"]);
             foreach (var kv in s.Defense.Units)
             {
@@ -74,9 +101,61 @@ namespace Battalion.Sim
                 s.ReserveTriggerCenter = kv.Value.TriggerCenter;
                 s.ReserveTriggerRadiusM = kv.Value.TriggerRadiusM;
             }
-            if (s.ReserveUnit == null) throw new FormatException("defense_plan に予備（reserve）の中隊がない");
-            s.TrenchUnits.AddRange(TrenchUnitsOf(s.Stage));
+            if (d.Has("objective"))
+            {
+                var ob = d["objective"];
+                switch (ob["type"].String)
+                {
+                    case "trench_clear":
+                        s.Objective = ObjectiveKind.TrenchClear;
+                        foreach (var u in ob["trench_units"].Array) s.TrenchUnits.Add(u.String);
+                        break;
+                    case "village":
+                        break;
+                    default:
+                        throw new FormatException($"objective の種類が不明: {ob["type"].String}");
+                }
+            }
+            if (s.Objective == ObjectiveKind.Village)
+            {
+                if (s.VillageCells.Count == 0) throw new FormatException("村の奪取の地図に村（objects.village）がない");
+                s.TrenchUnits.AddRange(TrenchUnitsOf(s.Stage));
+            }
             return s;
+        }
+
+        /// <summary>地図の文字の並びから、塹壕のマスを集める（行は北から、マスの添字は南西が原点）。</summary>
+        static void ReadTrenchCells(JsonValue d, HashSet<(int i, int j)> into)
+        {
+            var rows = d["terrain"].Array;
+            int h = rows.Count;
+            for (int r = 0; r < h; r++)
+            {
+                string row = rows[r].String;
+                for (int i = 0; i < row.Length; i++)
+                    if (row[i] == TerrainMap.Trench) into.Add((i, h - 1 - r));
+            }
+        }
+
+        /// <summary>作戦目標の地点（表示の旗の位置）：村の中心、または塹壕のマスの中心の平均。</summary>
+        public Vec2 ObjectivePoint(TerrainMap map)
+        {
+            if (Objective == ObjectiveKind.Village) return VillageCenter;
+            double x = 0, y = 0;
+            foreach (var (i, j) in TrenchCells)
+            {
+                var c = map.CellCenter(i, j);
+                x += c.X;
+                y += c.Y;
+            }
+            return TrenchCells.Count == 0 ? new Vec2(0, 0) : new Vec2(x / TrenchCells.Count, y / TrenchCells.Count);
+        }
+
+        /// <summary>中心が塹壕のマスにあるか（trench_clear）。</summary>
+        public bool InTrench(Simulation sim, Company c)
+        {
+            sim.Map.CellOf(c.Position, out int i, out int j);
+            return TrenchCells.Contains((i, j));
         }
 
         static Vec2 Point(JsonValue v) => new Vec2(v.Array[0].Number, v.Array[1].Number);
@@ -170,8 +249,8 @@ namespace Battalion.Sim
         public Simulation Build(SimParams p, ulong seed, IEventSink log = null)
         {
             var sim = new Simulation(p, seed, TerrainMap.FromJson(Source, p.Terrain), log);
-            sim.SetHeadquarters(Side.Blue, BlueHeadquarters);
-            sim.SetHeadquarters(Side.Red, RedHeadquarters);
+            sim.SetHeadquarters(Side.Blue, BlueHq);
+            sim.SetHeadquarters(Side.Red, RedHq);
             foreach (var u in Units)
                 sim.AddCompany(u.Id, u.Side, TrainingOf(u.Id), PersonalityOf(u.Id), new Vec2(u.X, u.Y), u.FacingDeg);
 
@@ -186,7 +265,7 @@ namespace Battalion.Sim
 
             // 守りの計画（E1）。defense.enabled が false なら、今までの予備隊の台本（伝令あり、一度だけ）
             if (p.Defense.Enabled) sim.SetDefensePlan(Defense);
-            else sim.AddScript(new ReserveScript(ReserveUnit, ReserveTriggerCenter, ReserveTriggerRadiusM));
+            else if (ReserveUnit != null) sim.AddScript(new ReserveScript(ReserveUnit, ReserveTriggerCenter, ReserveTriggerRadiusM));
             return sim;
         }
 
@@ -241,11 +320,13 @@ namespace Battalion.Sim
         }
 
         /// <summary>
-        /// 青（攻撃側）の勝ち：村のマスに指揮下の青の中隊がいて、村の中心から 250m 以内に指揮下の赤の中隊がいない。
-        /// または赤が全て盤上から消え、指揮下の青が残っている。
+        /// 青（攻撃側）の勝ち。村の奪取：村のマスに指揮下の青の中隊がいて、村の中心から 250m 以内に指揮下の赤の中隊がいない。
+        /// trench_clear：塹壕のマスに中心がある指揮下の赤の中隊がなく、指揮下の青の中隊が1個以上残っている。
+        /// どちらも、赤が全て盤上から消え、指揮下の青が残っていれば勝ち。
         /// </summary>
         public bool BlueWins(Simulation sim)
         {
+            if (Objective == ObjectiveKind.TrenchClear) return TrenchClearWins(sim);
             bool blueInVillage = false, redNearVillage = false, redOnBoard = false, blueUnderCommand = false;
             foreach (var c in sim.Companies)
             {
@@ -264,21 +345,50 @@ namespace Battalion.Sim
             return (blueInVillage && !redNearVillage) || (!redOnBoard && blueUnderCommand);
         }
 
-        /// <summary>
-        /// 作戦目標の達成（V1）：青の第一目標は村の奪取（<see cref="BlueWins"/>）、第二目標は塹壕の敵の排除
-        /// （塹壕に配置した赤の中隊が全て、指揮下にないか盤上にいない）。赤の目標（村の死守）は第一目標の裏。
-        /// 会戦の終わり（90分の時点）に呼ぶ。
-        /// </summary>
-        public ObjectiveResult EvaluateObjectives(Simulation sim)
+        bool TrenchClearWins(Simulation sim)
         {
-            bool trenchCleared = true;
+            bool redInTrench = false, blueUnderCommand = false;
+            foreach (var c in sim.Companies)
+            {
+                if (c.Side == Side.Blue && c.UnderCommand) blueUnderCommand = true;
+                if (c.Side == Side.Red && c.UnderCommand && InTrench(sim, c)) redInTrench = true;
+            }
+            return blueUnderCommand && !redInTrench;
+        }
+
+        /// <summary>trench_clear：塹壕に配置した赤の中隊が全て、指揮下にないか盤上にいない（崩した）。</summary>
+        public bool TrenchUnitsBroken(Simulation sim)
+        {
             foreach (var name in TrenchUnits)
             {
                 var c = sim.Find(name);
-                if (c != null && c.OnBoard && c.UnderCommand) trenchCleared = false;
+                if (c != null && c.OnBoard && c.UnderCommand) return false;
             }
-            return new ObjectiveResult(BlueWins(sim), trenchCleared);
+            return true;
         }
+
+        /// <summary>
+        /// trench_clear：塹壕を確保している（塹壕のマスに中心がある指揮下の青の中隊がいて、指揮下の赤の中隊がいない）。
+        /// 勝ちの判定には使わない（戦闘詳報の「確保した時刻」）。
+        /// </summary>
+        public bool TrenchSecured(Simulation sim)
+        {
+            bool blue = false, red = false;
+            foreach (var c in sim.Companies)
+            {
+                if (!c.UnderCommand || !InTrench(sim, c)) continue;
+                if (c.Side == Side.Blue) blue = true;
+                else red = true;
+            }
+            return blue && !red;
+        }
+
+        /// <summary>
+        /// 作戦目標の達成（V1）：青の第一目標は村の奪取・塹壕の確保（<see cref="BlueWins"/>）、第二目標は塹壕の敵の排除
+        /// （塹壕に配置した赤の中隊が全て、指揮下にないか盤上にいない）。赤の目標（村の死守）は第一目標の裏。
+        /// 会戦の終わり（90分の時点）に呼ぶ。
+        /// </summary>
+        public ObjectiveResult EvaluateObjectives(Simulation sim) => new ObjectiveResult(BlueWins(sim), TrenchUnitsBroken(sim));
     }
 
     /// <summary>
@@ -329,6 +439,27 @@ namespace Battalion.Sim
             // 赤の本部から伝令で届く（P2a。判断枠は数えない）
             sim.SendScriptOrder(Order.Attack(r3.Id, target.Id, AttackAspect.Flank));
             sim.LogScriptEvent(tickStart + sim.Params.TickSec, "reserve_counterattack", r3, target);
+        }
+    }
+}
+
+namespace Battalion.Sim
+{
+    /// <summary>
+    /// trench_clear の時刻の記録（戦闘詳報と教程の通し実行）：塹壕の赤を崩した時刻（<see cref="MapScenario.TrenchUnitsBroken"/> に
+    /// 初めてなった刻み）と、確保した時刻（<see cref="MapScenario.TrenchSecured"/> に初めてなった刻み）。毎刻みの後に呼ぶ。読むだけ。
+    /// </summary>
+    public sealed class TrenchClearTimes
+    {
+        readonly MapScenario _sc;
+        public double? BrokenSec, SecuredSec;
+
+        public TrenchClearTimes(MapScenario sc) => _sc = sc;
+
+        public void Observe(Simulation sim)
+        {
+            if (!BrokenSec.HasValue && _sc.TrenchUnitsBroken(sim)) BrokenSec = sim.Time;
+            if (!SecuredSec.HasValue && _sc.TrenchSecured(sim)) SecuredSec = sim.Time;
         }
     }
 }

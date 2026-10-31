@@ -2,7 +2,7 @@ using Battalion.Sim;
 
 namespace Battalion.View
 {
-    /// <summary>村の目標の状態。</summary>
+    /// <summary>村の目標の状態（trench_clear では塹壕。250m の円の代わりに塹壕のマス）。</summary>
     public enum VillageState
     {
         /// <summary>空き：村に青がおらず、250m 以内に赤もいない。</summary>
@@ -42,6 +42,14 @@ namespace Battalion.View
             foreach (var c in sim.Companies)
             {
                 if (!c.UnderCommand) continue;
+                if (sc.Objective == ObjectiveKind.TrenchClear)
+                {
+                    // 塹壕：中心が塹壕のマスにある指揮下の中隊
+                    if (!sc.InTrench(sim, c)) continue;
+                    if (c.Side == Side.Blue) blueIn = true;
+                    else redNear = true;
+                    continue;
+                }
                 if (c.Side == Side.Blue)
                 {
                     sim.Map.CellOf(c.Position, out int i, out int j);
@@ -54,6 +62,9 @@ namespace Battalion.View
             }
             return new ObjectiveStatus(blueIn, redNear, sc.BlueWins(sim));
         }
+
+        /// <summary>目標の呼び名（村／塹壕）。</summary>
+        public static string Label(MapScenario sc) => sc.Objective == ObjectiveKind.TrenchClear ? "塹壕" : "村";
 
         public static string Name(VillageState s)
         {

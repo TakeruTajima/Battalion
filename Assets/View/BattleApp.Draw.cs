@@ -106,9 +106,11 @@ namespace Battalion.View
 
         void DrawVillage(float px)
         {
-            var center = V(MapScenario.VillageCenter);
+            var center = V(_scenario.ObjectivePoint(_sim.Map));
             var st = _objective.State;
-            _shapes.Circle(center, (float)MapScenario.VillageHoldRadiusM, 1.5f * px, new Color32(255, 255, 255, 70), 96);
+            // 村の奪取だけ、赤がいてはいけない 250m の円を描く（塹壕はマスそのもの）
+            if (_scenario.Objective == ObjectiveKind.Village)
+                _shapes.Circle(center, (float)MapScenario.VillageHoldRadiusM, 1.5f * px, new Color32(255, 255, 255, 70), 96);
 
             // 旗竿と旗（画面で一定の大きさ）
             float h = 34 * px, fw = 22 * px, fh = 14 * px;
@@ -141,7 +143,7 @@ namespace Battalion.View
             }
             var q = new[] { a, b, c, top };
             Outline(q, 1.5f * px, new Color32(30, 30, 30, 255));
-            var label = "村：" + ObjectiveStatus.Name(st);
+            var label = ObjectiveStatus.Label(_scenario) + "：" + ObjectiveStatus.Name(st);
             var at = center + new Vector2(0, -6 * px);
             _texts.Draw(label, at + new Vector2(1.5f * px, -1.5f * px), 15, px, new Color(0, 0, 0, 0.85f), TextAnchor.UpperCenter);
             _texts.Draw(label, at, 15, px, Color.Lerp(VillageColor(st), Color.white, 0.35f), TextAnchor.UpperCenter);
