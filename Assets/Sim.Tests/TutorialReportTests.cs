@@ -38,13 +38,13 @@ namespace Battalion.Sim.Tests
         public const string PinBothFlanks = "拘束＋両脇";
 
         // R1 は (975, 800)、R2 は (975, 600) で、ともに西向き。北の脇は +90°、南の脇は -90°
-        static Func<Simulation, Company, Order> Adv(double x, double y) => (s, c) => Order.Advance(c.Id, new Vec2(x, y), 0);
+        public static Func<Simulation, Company, Order> Adv(double x, double y) => (s, c) => Order.Advance(c.Id, new Vec2(x, y), 0);
         static Func<Simulation, Company, Order> Pin(PinRange r) => (s, c) => Order.Pin(c.Id, s.Find("R1").Id, r);
         static Func<Simulation, Company, Order> AttackFrom(string target, double bearingDeg) =>
             (s, c) => Order.AttackFrom(c.Id, s.Find(target).Id, bearingDeg * Angles.DegToRad, AttackOnBreak.Secure);
 
         /// <summary>命令書：第1段に条件なし、第2段・第3段は「完了したら」。</summary>
-        static TutorialOrder Sheet(double at, string u, params Func<Simulation, Company, Order>[] stages) =>
+        public static TutorialOrder Sheet(double at, string u, params Func<Simulation, Company, Order>[] stages) =>
             new TutorialOrder(at, u, (s, c) => new OrderSheet(stages.Select((make, k) =>
                 new Stage(make(s, c), k == 0 ? StageTrigger.None : StageTrigger.Complete))));
 
@@ -88,17 +88,37 @@ namespace Battalion.Sim.Tests
             public double EndMin, BlueLoss, RedLoss;
             public double? BrokenMin, SecuredMin;
             public readonly HashSet<string> Routed = new HashSet<string>();
+            /// <summary>詰める中隊が地峡に入ってから着くまで（崩した・塹壕に入った・指揮下でなくなったまで）の秒数と、その間に守り手が制圧されていた秒数（見ないときは null）。</summary>
+            public double? ApproachSec, SuppressedSec;
+        }
+
+        /// <summary>詰める中隊（<see cref="Unit"/>）が地峡（<see cref="InApproach"/>）にいる間、守り手（<see cref="Defender"/>）が制圧されていた秒数を数える。</summary>
+        public sealed class ApproachWatch
+        {
+            public string Unit, Defender;
+            public Func<Vec2, bool> InApproach;
         }
 
         /// <summary>作戦を1回回す。<paramref name="timeLimitMin"/> が null なら地図ファイルの制限時間。</summary>
-        public static RunResult RunOne(MapScenario sc, TutorialOrder[] plan, ulong seed, SimParams p = null, double? timeLimitMin = null)
+        /// 青の緑の信号弾を、<paramref name="greenWhen"/> を初めて満たした刻みに上げる（命令書の段の条件。プレイヤーが見て合図する）。
+        /// null なら、塹壕の守り手を初めて崩した刻み（「崩れたら」）。
+        public static RunResult RunOne(MapScenario sc, TutorialOrder[] plan, ulong seed, SimParams p = null, double? timeLimitMin = null,
+            ApproachWatch watch = null, Func<Simulation, TrenchClearTimes, bool> greenWhen = null)
         {
-            var sim = sc.Build(p ?? TestUtil.Params, seed);
+            greenWhen = greenWhen ?? ((s, tt) => tt.BrokenSec.HasValue);
+            p = p ?? TestUtil.Params;
+            var sim = sc.Build(p, seed);
             var times = new TrenchClearTimes(sc);
             var result = new RunResult();
             var orders = plan.OrderBy(o => o.AtSec).ToList();
             int next = 0;
             double endSec = (timeLimitMin ?? sc.TimeLimitMin) * 60;
+            bool watching = watch != null;
+            if (watching)
+            {
+                result.ApproachSec = 0;
+                result.SuppressedSec = 0;
+            }
             while (sim.Time < endSec - 1e-9)
             {
                 // 判断枠がなければ、空くまで毎刻み出し直す
@@ -111,6 +131,18 @@ namespace Battalion.Sim.Tests
                 }
                 sim.Step();
                 times.Observe(sim);
+                if (greenWhen(sim, times)) sim.FireFlare(Side.Blue, FlareColor.Green);
+                if (watching)
+                {
+                    var u = sim.Find(watch.Unit);
+                    var d = sim.Find(watch.Defender);
+                    if (times.BrokenSec.HasValue || !u.UnderCommand || !d.UnderCommand || sc.InTrench(sim, u)) watching = false;
+                    else if (watch.InApproach(u.Position))
+                    {
+                        result.ApproachSec += p.TickSec;
+                        if (d.Suppressed) result.SuppressedSec += p.TickSec;
+                    }
+                }
                 foreach (var c in sim.Companies)
                     if (c.State == CompanyState.Routed || c.State == CompanyState.Surrendered) result.Routed.Add(c.Name);
                 bool redLeft = sim.Companies.Any(c => c.Side == Side.Red && c.OnBoard);
@@ -139,6 +171,7 @@ namespace Battalion.Sim.Tests
             public int Broken, Secured;
             public double? BrokenMedianMin, SecuredMedianMin, WinSecuredMedianMin;
             public readonly Dictionary<string, int> RoutedCount = new Dictionary<string, int>();
+            public List<RunResult> Runs;
         }
 
         public static PlanSummary Summarize(string name, List<RunResult> rs)
@@ -151,6 +184,7 @@ namespace Battalion.Sim.Tests
             var s = new PlanSummary
             {
                 Name = name,
+                Runs = rs,
                 WinRate = rs.Count(r => r.Win) / (double)rs.Count,
                 BlueLoss = rs.Average(r => r.BlueLoss),
                 RedLoss = rs.Average(r => r.RedLoss),
@@ -166,14 +200,19 @@ namespace Battalion.Sim.Tests
             return s;
         }
 
-        public static List<PlanSummary> RunAll(SimParams p = null, double? timeLimitMin = null)
+        public static List<PlanSummary> RunAll(SimParams p = null, double? timeLimitMin = null) =>
+            RunAll(T1Tests.TutorialPath, Plans(), p, timeLimitMin);
+
+        /// <summary>地図の全ての作戦を各 <see cref="Runs"/> 回（シード1〜20）回す。</summary>
+        public static List<PlanSummary> RunAll(string mapPath, List<(string name, TutorialOrder[] orders)> plans, SimParams p = null,
+            double? timeLimitMin = null, ApproachWatch watch = null, Func<string, Func<Simulation, TrenchClearTimes, bool>> greenWhenOf = null)
         {
-            var sc = MapScenario.LoadFile(TestUtil.PathOf(T1Tests.TutorialPath));
+            var sc = MapScenario.LoadFile(TestUtil.PathOf(mapPath));
             var all = new List<PlanSummary>();
-            foreach (var (name, orders) in Plans())
+            foreach (var (name, orders) in plans)
             {
                 var rs = new List<RunResult>();
-                for (ulong seed = 1; seed <= Runs; seed++) rs.Add(RunOne(sc, orders, seed, p, timeLimitMin));
+                for (ulong seed = 1; seed <= Runs; seed++) rs.Add(RunOne(sc, orders, seed, p, timeLimitMin, watch, greenWhenOf?.Invoke(name)));
                 all.Add(Summarize(name, rs));
             }
             return all;
