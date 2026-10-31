@@ -151,8 +151,8 @@ namespace Battalion.Sim.Tests
             var s7 = Summarize(Scenarios.S7_assault_front(), p);
             var s8 = Summarize(Scenarios.S8_suppress_then_assault(), p);
             var s9 = Summarize(Scenarios.S9_cross_field_of_fire(), p);
-            TestContext.WriteLine($"S7 30分以内に崩れる {s7.Broken30Rate:0.00}・45分 {s7.BrokenRate:0.00}・損害 {s7.LossMean:0.000}／" +
-                                  $"S8 崩れる {s8.BrokenRate:0.00}・損害 {s8.LossMean:0.000}／S9 損害 {s9.LossMean:0.000}・伏せる {s9.PinnedRate:0.00}");
+            TestContext.WriteLine($"S7 30分以内に崩れる {s7.Broken30Rate:0.00}・45分 {s7.BrokenRate:0.00}（中央値 {Min(s7.BrokenMedianMin)}）・損害 {s7.LossMean:0.000}／" +
+                                  $"S8 崩れる {s8.BrokenRate:0.00}（中央値 {Min(s8.BrokenMedianMin)}）・損害 {s8.LossMean:0.000}／S9 損害 {s9.LossMean:0.000}・伏せる {s9.PinnedRate:0.00}");
             return Unmet(s7, s8, s9);
         }
     }

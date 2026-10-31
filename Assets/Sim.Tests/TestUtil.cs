@@ -36,6 +36,14 @@ namespace Battalion.Sim.Tests
             p.Defense.Enabled = false;
             p.Occupation.Enabled = false;
             WithoutR3(p);
+            WithoutR4(p);
+            return p;
+        }
+
+        /// <summary>R4 の規則を止める：接近戦でも向きのある陣地の守りが効く（close_combat.fortification_mult 0）。</summary>
+        public static SimParams WithoutR4(SimParams p)
+        {
+            p.CloseCombat.FortificationMult = 0;
             return p;
         }
 

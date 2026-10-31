@@ -98,7 +98,8 @@
     "radius_m": 50,
     "range_mult": 2.0,
     "morale_mult": 1.5,
-    "_note": "互いの矩形の隙間が radius_m 以内（接近戦）なら、距離倍率を range_mult にし fire.range_close_mult(1.3) を置き換える（重ねない）。士気の減りに morale_mult。150m の 1.3 と射程 400m は中心どうしの距離"
+    "fortification_mult": 0.6,
+    "_note": "互いの矩形の隙間が radius_m 以内（接近戦）なら、距離倍率を range_mult にし fire.range_close_mult(1.3) を置き換える（重ねない）。士気の減りに morale_mult。150m の 1.3 と射程 400m は中心どうしの距離。R4：接近戦の相手から撃たれるとき、向きのある陣地（塹壕・陣地構築・浅い掩体）の被弾倍率を fortification_mult より強く効かせない（1.0＝守りなし。0.6 は R4 の検証で選んだ値。村・森はそのまま）"
   },
   "movement": {
     "speed_mps": 1.2,

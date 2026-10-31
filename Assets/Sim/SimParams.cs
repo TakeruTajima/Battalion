@@ -274,6 +274,11 @@ namespace Battalion.Sim
             /// <summary>50m 以内の距離倍率。fire.range_close_mult（150m 以内の 1.3）を置き換える。重ねない。</summary>
             public double RangeMult;
             public double MoraleMult;
+            /// <summary>
+            /// 接近戦の相手から撃たれるときの、向きのある陣地（塹壕・陣地構築・浅い掩体）の被弾倍率（R4）。陣地の守りはこれより強く効かない
+            /// （正面の弧の中の守りを置き換える。弧の外で効いていない守りは今のまま）。1.0 で守りなし。0 で R4 なし。
+            /// </summary>
+            public double FortificationMult;
         }
 
         public sealed class MovementParams
@@ -509,6 +514,7 @@ namespace Battalion.Sim
             p.CloseCombat.RadiusM = cc.D("radius_m");
             p.CloseCombat.RangeMult = cc.D("range_mult");
             p.CloseCombat.MoraleMult = cc.D("morale_mult");
+            p.CloseCombat.FortificationMult = cc.D("fortification_mult");
 
             var mv = root["movement"];
             p.Movement.SpeedMps = mv.D("speed_mps");

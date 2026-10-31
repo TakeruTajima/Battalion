@@ -7,6 +7,8 @@ namespace Battalion.Sim
     {
         // 被弾
         MovingOpen, Trench, TrenchOffArc, Entrench, EntrenchOffArc, Scrape, ScrapeOffArc, Terrain,
+        // 接近戦で陣地の守りなし（R4。塹壕・陣地構築・浅い掩体を close_combat.fortification_mult に置き換えた）
+        CloseCombatFortification,
         // 旋回中（動いている扱い。R3）の開けた所の被弾
         TurningOpen,
         // 撃つ力
@@ -75,8 +77,10 @@ namespace Battalion.Sim
         /// 被弾倍率を要素に分ける（表示用）。要素を掛けた値は <see cref="TerrainDamageMult"/> と同じ（浮動小数点の誤差を除く）。
         /// 陣地構築の途中と浅い掩体は、進捗に応じた値を1つの要素にする。
         /// </summary>
-        public double DamageFactors(Company c, Vec2? from, List<ModifierFactor> into)
+        /// 接近戦の相手から撃たれているとき（<paramref name="closeCombat"/>）、正面の弧の中の陣地は「接近戦で陣地の守りなし」の要素になる（R4）。
+        public double DamageFactors(Company c, Vec2? from, List<ModifierFactor> into, bool closeCombat = false)
         {
+            double cm = _p.CloseCombat.FortificationMult;
             char ch = _map.TerrainAt(c.Position);
             double off = _p.Terrain.FortificationOffArcMult;
             double f;
@@ -86,7 +90,9 @@ namespace Battalion.Sim
                 else if (InFortificationArc(_map.FortificationFacingAt(c.Position), c, from))
                 {
                     f = _map.DamageMult(TerrainMap.Trench);
-                    into.Add(new ModifierFactor(ModifierKind.Trench, f));
+                    bool lost = closeCombat && cm > f;
+                    if (lost) f = cm;
+                    into.Add(new ModifierFactor(lost ? ModifierKind.CloseCombatFortification : ModifierKind.Trench, f));
                 }
                 else
                 {
@@ -104,9 +110,10 @@ namespace Battalion.Sim
             {
                 // 正面の弧の外で効いていないとき（1.0）も、陣地構築の途中であることを示すため載せる
                 bool inArc = InFortificationArc(c.Facing, c, from);
-                double target = inArc ? _p.MapRules.EntrenchDamageMult : off;
+                bool lost = inArc && closeCombat && cm > _p.MapRules.EntrenchDamageMult;
+                double target = CloseFortification(inArc ? _p.MapRules.EntrenchDamageMult : off, closeCombat);
                 double g = f > target ? f + (target - f) * System.Math.Min(1.0, c.EntrenchProgress / _p.MapRules.EntrenchSec) : f;
-                into.Add(new ModifierFactor(inArc ? ModifierKind.Entrench : ModifierKind.EntrenchOffArc, g / f));
+                into.Add(new ModifierFactor(lost ? ModifierKind.CloseCombatFortification : inArc ? ModifierKind.Entrench : ModifierKind.EntrenchOffArc, g / f));
                 f = g;
             }
             if ((c.MovedThisTick || c.TurningAsMoving) && IsOpenGround(ch) && _p.Terrain.MovingOpenDamageMult != 1.0)
@@ -116,9 +123,12 @@ namespace Battalion.Sim
             }
             // 浅い掩体：掘ってあれば、正面の弧の外で効いていないとき（1.0）も載せる
             bool scrapeArc = InFortificationArc(c.ScrapeFacing, c, from);
-            double s = ScrapeMult(c, ch, scrapeArc);
+            double s = ScrapeMult(c, ch, scrapeArc, closeCombat);
             if (ScrapeMult(c, ch, true) != 1.0)
-                into.Add(new ModifierFactor(scrapeArc ? ModifierKind.Scrape : ModifierKind.ScrapeOffArc, s));
+            {
+                bool lost = scrapeArc && closeCombat && s != ScrapeMult(c, ch, true);
+                into.Add(new ModifierFactor(lost ? ModifierKind.CloseCombatFortification : scrapeArc ? ModifierKind.Scrape : ModifierKind.ScrapeOffArc, s));
+            }
             f *= s;
             return f;
         }

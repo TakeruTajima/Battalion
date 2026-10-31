@@ -832,27 +832,35 @@ namespace Battalion.Sim
         /// 外なら、守りの倍率を terrain.fortification_off_arc_mult に置き換える。<paramref name="from"/> がなければ（自律行動の
         /// 判断など）向きを見ない。村・森などの守りは向きによらない。
         /// </summary>
-        public double TerrainDamageMult(Company c, Vec2? from = null)
+        public double TerrainDamageMult(Company c, Vec2? from = null, bool closeCombat = false)
         {
             char ch = _map.TerrainAt(c.Position);
             double off = _p.Terrain.FortificationOffArcMult;
             double f;
             if (ch == TerrainMap.Trench)
                 f = c.MovedThisTick ? 1.0
-                    : InFortificationArc(_map.FortificationFacingAt(c.Position), c, from) ? _map.DamageMult(TerrainMap.Trench) : off;
+                    : CloseFortification(InFortificationArc(_map.FortificationFacingAt(c.Position), c, from) ? _map.DamageMult(TerrainMap.Trench) : off,
+                        closeCombat);
             else f = _map.DamageMult(ch);
             if (!c.MovedThisTick && c.EntrenchProgress > 0 && ch != TerrainMap.Trench)
             {
                 // 陣地構築の途中の守りは、今の中隊の向きで見る（陣地の向きは完成したときに決まる）。塹壕のマスでは塹壕の向きで見る
-                double target = InFortificationArc(c.Facing, c, from) ? _p.MapRules.EntrenchDamageMult : off;
+                double target = CloseFortification(InFortificationArc(c.Facing, c, from) ? _p.MapRules.EntrenchDamageMult : off, closeCombat);
                 if (f > target) f += (target - f) * Math.Min(1.0, c.EntrenchProgress / _p.MapRules.EntrenchSec);
             }
             // 移動中、または接敵中にその場で向きを変えている間（R3）
             if ((c.MovedThisTick || c.TurningAsMoving) && IsOpenGround(ch)) f *= _p.Terrain.MovingOpenDamageMult;
             // 浅い掩体（P2c）。向きは掘り始めたときの中隊の向き（R2）
-            f *= ScrapeMult(c, ch, InFortificationArc(c.ScrapeFacing, c, from));
+            f *= ScrapeMult(c, ch, InFortificationArc(c.ScrapeFacing, c, from), closeCombat);
             return f;
         }
+
+        /// <summary>
+        /// 向きのある陣地の被弾倍率を、接近戦の相手から撃たれるとき（<paramref name="closeCombat"/>）は close_combat.fortification_mult
+        /// より強く効かせない（R4。胸墻はもう守りにならない）。
+        /// </summary>
+        double CloseFortification(double mult, bool closeCombat) =>
+            closeCombat ? Math.Max(mult, _p.CloseCombat.FortificationMult) : mult;
 
         /// <summary>
         /// 撃ってきた敵の位置 <paramref name="from"/> が、向き <paramref name="facing"/> の陣地の正面の弧（±fire.front_arc_deg）にいるか

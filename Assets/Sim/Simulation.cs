@@ -406,7 +406,7 @@ namespace Battalion.Sim
                 double fQuality = _p.Of(u.Training).FireMult;
                 bool close = s.Close;
                 double fRange = RangeMultiplier(s.Distance, close);
-                double fTerrain = TerrainDamageMult(tg, u.Position);
+                double fTerrain = TerrainDamageMult(tg, u.Position, close);
                 // 陣地の向きの正面の弧の外から撃たれた（E1 の迂回の判定）
                 if (D.Enabled && tg.Role != DefenseRole.None && !InFortificationArc(PositionFacing(tg), tg, u.Position)) tg.LastOffArcFireTime = t;
                 double fAspect = _p.Fire.AspectCasualtyMult[a];

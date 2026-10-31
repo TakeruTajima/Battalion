@@ -333,10 +333,10 @@ namespace Battalion.Sim
         /// 浅い掩体の被弾倍率（1.0 から進捗に応じて 0.6 へ）。掘れる地面で止まっているときだけ。掘り始めたときの向きの正面の弧の
         /// 外から撃たれたとき（<paramref name="inArc"/> が false。R2）は、0.6 の代わりに terrain.fortification_off_arc_mult へ近づく。
         /// </summary>
-        double ScrapeMult(Company c, char ch, bool inArc)
+        double ScrapeMult(Company c, char ch, bool inArc, bool closeCombat = false)
         {
             if (c.MovedThisTick || c.ScrapeProgress <= 0 || !IsScrapeGround(ch)) return 1.0;
-            double target = inArc ? A.ScrapeDamageMult : _p.Terrain.FortificationOffArcMult;
+            double target = CloseFortification(inArc ? A.ScrapeDamageMult : _p.Terrain.FortificationOffArcMult, closeCombat);
             return 1.0 + (target - 1.0) * Math.Min(1.0, c.ScrapeProgress / A.ScrapeDigSec);
         }
 

@@ -406,11 +406,17 @@ namespace Battalion.View
         string ModifiersText(Company c)
         {
             Vec2? from = null;
-            if (c.MainShooterId >= 0 && c.IncomingFirePerMin > 0) from = _sim.Companies[c.MainShooterId].Position;
+            bool close = false;
+            if (c.MainShooterId >= 0 && c.IncomingFirePerMin > 0)
+            {
+                var shooter = _sim.Companies[c.MainShooterId];
+                from = shooter.Position;
+                close = shooter.OnBoard && _sim.InCloseCombat(c, shooter);
+            }
             var dmg = new List<ModifierFactor>();
             var fire = new List<ModifierFactor>();
             var move = new List<ModifierFactor>();
-            double d = _sim.DamageFactors(c, from, dmg);
+            double d = _sim.DamageFactors(c, from, dmg, close);
             double f = _sim.CurrentFireMult(c, fire);
             double m = _sim.MoveFactors(c, move);
             string Line(string name, double total, List<ModifierFactor> fs) =>
@@ -432,6 +438,7 @@ namespace Battalion.View
                 case ModifierKind.EntrenchOffArc: return "<color=#ff8060>陣地構築の途中（正面の弧の外で効いていない）</color>";
                 case ModifierKind.Scrape: return "浅い掩体";
                 case ModifierKind.ScrapeOffArc: return "<color=#ff8060>浅い掩体（正面の弧の外で効いていない）</color>";
+                case ModifierKind.CloseCombatFortification: return "<color=#ff8060>接近戦で陣地の守りなし</color>";
                 case ModifierKind.Terrain: return TerrainName(x.Terrain);
                 case ModifierKind.FireShaken: return "動揺";
                 case ModifierKind.FireNonFrontTarget: return "正面の弧の外の目標";
