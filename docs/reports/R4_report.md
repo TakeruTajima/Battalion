@@ -13,7 +13,7 @@
 | 基準 | 結果 |
 | --- | --- |
 | 速いテストが全て通る | .NET 410件全て通過。Unity（6000.3.11f1、バッチモード、EditMode）はコンパイルのエラー 0、423件中 419件通過、失敗 0、4件飛ばし（飛ばしの中身は前と同じ） |
-| ログの一致を見るテスト | シナリオA のハッシュ（`ScenarioALogIsTheSameOnUnityAndDotNet`）は取り直さずに通る（シナリオA のその会戦では、陣地にいる中隊が接近戦で撃たれる場面がない）。`PassiveRedLogMatchesR21`・`CombatLogMatchesP2c12` は R4 を止めた値（`TestUtil.WithoutR4`）で通る |
+| ログの一致を見るテスト | シナリオA のハッシュ（`ScenarioALogIsTheSameOnUnityAndDotNet`）は取り直さずに通る（シナリオA のその会戦では、陣地にいる中隊が接近戦で撃たれる場面がない）。~~`PassiveRedLogMatchesR21`・`CombatLogMatchesP2c12` は R4 を止めた値（`TestUtil.WithoutR4`）で通る~~ **誤り（下の 8）** |
 | S1〜S19 の期待 | 全て満たす（下の 2） |
 | シナリオA：拘束＋迂回の良い方が両ステージ 0.6 以上 | 満たす（ステージ1 0.95、ステージ2 0.65） |
 | R3 から 0.15 以上動いた作戦の原因 | 1つ（ステージ1 の拘束＋猪突の攻撃（確保）+0.15）。原因は下の 4 |
@@ -153,3 +153,11 @@ Unity 6.3 LTS（6000.3.11f1）で `Assets/Scenes/Battle.unity` を開いて再�
 - [ ] 接近戦で撃たれている塹壕の中隊を選ぶと、「今効いている倍率」の被弾に「接近戦で陣地の守りなし ×0.6」が出る
 - [ ] 離れた所（隙間 50m より遠く）から撃たれているときは「塹壕 ×0.3」のまま
 - [ ] 村・森の中の中隊は、接近戦でも守りの表示が変わらない
+
+## 8. 追記（2026-11-01）：ログの一致を見るテストの取りこぼし
+
+上の 1 の「`PassiveRedLogMatchesR21`・`CombatLogMatchesP2c12` は R4 を止めた値で通る」は、確かめていない記述だった。
+- R4 では、遅いテストの組（`ScenarioLogHashTests`）を回していなかった。
+- `CombatLogMatchesP2c12` が使う `ParamsWithoutR1` には `WithoutR4` を足していたが、`PassiveRedLogMatchesR21` は R4 を止めない値（`WithoutR3(ParamsWithoutE1())`）のままだった。
+- F1 の作業中に確かめたところ、R4 を止めずに回すと 40通りのうち3通り（ステージ1 の総員突撃 シード2、拘束＋猪突の攻撃 シード1・2）が違って落ちる。つまり `proto-r4-close-combat` のこのテストは落ちる。
+- `PassiveRedLogMatchesR21` に `WithoutR4`（と F1 の `WithoutF1`）を足して、2件とも通ることを確かめた。この直しは F1 の作業ツリーにある（F1 の報告の 6）。

@@ -158,11 +158,14 @@ namespace Battalion.Sim.Tests
             "stage2 拘束＋迂回（段階つき） seed2 3962 78f792b445a8acc825793f9f85acdbce4035736cb281468e2ecf9defe5a305af",
         };
 
-        /// <summary>E1 と R3 の規則を止めた値（defense.enabled・occupation.enabled が false、旋回は前の版のまま）のログ全体が、R2.1 と1文字も違わないこと（40通り）。</summary>
+        /// <summary>
+        /// E1・R3・R4・F1 の規則を止めた値（defense.enabled・occupation.enabled が false、旋回は前の版のまま、接近戦でも陣地の守りが効く、
+        /// 隊形なし）のログ全体が、R2.1 と1文字も違わないこと（40通り）。
+        /// </summary>
         [Test]
         public void PassiveRedLogMatchesR21()
         {
-            var p = TestUtil.WithoutR3(TestUtil.ParamsWithoutE1());
+            var p = TestUtil.WithoutF1(TestUtil.WithoutR4(TestUtil.WithoutR3(TestUtil.ParamsWithoutE1())));
             using var progress = RunProgress.Begin("受け身の赤のログの一致", R21Hashes.Length);
             var got = new System.Collections.Generic.List<string>();
             foreach (int stage in new[] { 1, 2 })

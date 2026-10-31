@@ -48,7 +48,8 @@ namespace Battalion.Sim.Tests
         [TestCase(false)]
         public void PinnedDownFriendIsPassedButAMovingOneIsNot(bool pinnedDown)
         {
-            var sim = Flat();
+            // 超越の規則を見る（F1 の縮合で止まると、伏せたのでなく隊形の移り変わりで止まった味方になる）
+            var sim = Flat(TestUtil.WithoutF1(TestUtil.ParamsWith()));
             var f = Add(sim, "F", Side.Blue, 0, 0, 90);
             var g = Add(sim, "G", Side.Blue, 0, -150, 90);
             Give(sim, f, new Vec2(0, 1000));
@@ -72,7 +73,7 @@ namespace Battalion.Sim.Tests
         [TestCase(false)]
         public void RearCompanyGetsPastAPinnedDownFriend(bool friendPinned)
         {
-            var sim = Flat();
+            var sim = Flat(TestUtil.WithoutF1(TestUtil.ParamsWith()));
             var f = Add(sim, "F", Side.Blue, 0, 0, 90);
             var g = Add(sim, "G", Side.Blue, 0, -260, 90);
             Give(sim, f, new Vec2(0, 1000));

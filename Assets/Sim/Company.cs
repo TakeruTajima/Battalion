@@ -219,6 +219,15 @@ namespace Battalion.Sim
         /// <summary>占領の乱れが続く時刻（C12）。</summary>
         public double OccupationDisarrayUntil = double.NegativeInfinity;
 
+        // ---- F1：隊形
+        /// <summary>今の隊形（移り変わる間は初めの形のまま。終わった時に新しい形になる）。</summary>
+        public Formation Formation;
+        /// <summary>移り変わりの途中か（展開中・縮合中）と、始めてからの秒数。</summary>
+        public FormationChange FormationChange;
+        public double FormationChangeSec;
+        /// <summary>縮合する条件が続いている秒数（揺れ止め）。</summary>
+        public double ColumnReadySec;
+
         /// <summary>直前の刻みで狙った目標の ID（-1 はなし）。</summary>
         public int TargetId = -1;
 

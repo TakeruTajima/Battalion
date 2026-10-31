@@ -9,9 +9,10 @@ namespace Battalion.Sim.Tests
     {
         static readonly Vec2 Hq = new Vec2(0, 0);
 
-        static Simulation Flat(IEventSink log = null)
+        static Simulation Flat(IEventSink log = null, SimParams p = null)
         {
-            var sim = new Simulation(TestUtil.Params, 1, TerrainMap.FlatCovering(TestUtil.Params.Terrain, -1500, -1500, 1500, 1500), log);
+            p = p ?? TestUtil.Params;
+            var sim = new Simulation(p, 1, TerrainMap.FlatCovering(p.Terrain, -1500, -1500, 1500, 1500), log);
             sim.SetHeadquarters(Side.Blue, Hq);
             return sim;
         }
@@ -286,7 +287,8 @@ namespace Battalion.Sim.Tests
         [Test]
         public void EstimatedArrivalIsWithinTenPercentOnFlatGround()
         {
-            var sim = Flat();
+            // 到着の見込みは隊形（F1 の縮合・展開・縦隊の速さ）を見ない。見込みの式そのものを、隊形なしで確かめる
+            var sim = Flat(p: TestUtil.WithoutF1(TestUtil.ParamsWith()));
             var a = Add(sim, "A", Side.Blue, 25, 25, 0);
             var sheet = Sheet((Order.Advance(a.Id, new Vec2(625, 425)), StageTrigger.None),
                 (Order.Advance(a.Id, new Vec2(1025, 425)), StageTrigger.Complete));

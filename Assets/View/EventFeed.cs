@@ -35,7 +35,7 @@ namespace Battalion.View
         {
             FlankHit, RearHit, Encircled, Routed, Surrendered, RallyStart, RallyComplete, Counterattack, Entrenched, LeftBattle,
             TargetBroken, PursuitEnd, Turn, Disarray, SeekSight, Receipt, ReceiptOverdue, StageAdvance,
-            Independent, Autonomy,
+            Independent, Autonomy, Formation,
         }
 
         /// <summary>駒の上に出す出来事。表示側が読んだら <see cref="Recent"/> を空にする。</summary>
@@ -201,6 +201,27 @@ namespace Battalion.View
                     string text = why == "limit" ? "限界まで追った" : why == "enemy_near" ? "敵が近づいた" : "目標が逃げ切った";
                     Add(t, $"{unit} 追撃をやめて確保（{text}）", false);
                     Happen(t, Kind.PursuitEnd, unit, null);
+                    break;
+                }
+                case "formation":
+                {
+                    // 隊形（F1）：縮合を始めた・展開を始めた（理由）。終わりは駒の進み具合で見えるので出さない
+                    string what = v["event"].String;
+                    string text = null;
+                    if (what == "column_start") text = $"{unit} 縦隊になる";
+                    else if (what == "column_cancel") text = $"{unit} 縦隊になるのをやめる";
+                    else if (what == "deploy_start")
+                    {
+                        string why = v["reason"].String;
+                        text = why == "fired_on" ? $"{unit} 縦隊で撃たれ、展開する"
+                            : why == "enemy" ? $"{unit} 展開（{v["enemy"].String} を発見）"
+                            : why == "near_goal" ? $"{unit} 展開（目的地の手前）"
+                            : $"{unit} 展開（止まる）";
+                    }
+                    if (text == null) break;
+                    if (v["side"].String != "blue") break;
+                    Add(t, text, what == "deploy_start" && v["reason"].String == "fired_on");
+                    Happen(t, Kind.Formation, unit, text.Substring(unit.Length + 1));
                     break;
                 }
                 case "turn_start":

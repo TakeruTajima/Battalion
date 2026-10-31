@@ -312,7 +312,8 @@ namespace Battalion.View
             {
                 if (!c.OnBoard || (side.HasValue && c.Side != side.Value)) continue;
                 Pose(c, out var pos, out double f);
-                if (!UnitGeometry.Contains(pos, f, _params.Movement.FrontageM, _params.Movement.DepthM, p, margin)) continue;
+                HalfSize(c, out double hd, out double hf);
+                if (!UnitGeometry.Contains(pos, f, 2 * hf, 2 * hd, p, margin)) continue;
                 double d = Vec2.Distance(pos, p);
                 if (d < bestD)
                 {

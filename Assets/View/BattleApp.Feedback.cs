@@ -212,6 +212,11 @@ namespace Battalion.View
                     text = h.Other;
                     col = new Color(0.75f, 1f, 0.8f);
                     break;
+                case EventFeed.Kind.Formation:
+                    // 隊形（F1）：縦隊で撃たれたら目立つ色
+                    text = h.Other;
+                    col = h.Other.StartsWith("縦隊で撃たれ") ? new Color(1f, 0.55f, 0.4f) : new Color(0.85f, 0.9f, 1f);
+                    break;
                 case EventFeed.Kind.SeekSight:
                     // 目標が見えないため見える位置を探す（P1g）。自動一時停止の理由には足さない
                     text = "見える位置へ";

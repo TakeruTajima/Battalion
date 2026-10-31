@@ -37,6 +37,14 @@ namespace Battalion.Sim.Tests
             p.Occupation.Enabled = false;
             WithoutR3(p);
             WithoutR4(p);
+            WithoutF1(p);
+            return p;
+        }
+
+        /// <summary>F1 の規則を止める：隊形の判断をしない（全ての中隊が横隊のまま）。</summary>
+        public static SimParams WithoutF1(SimParams p)
+        {
+            p.Formation.Enabled = false;
             return p;
         }
 

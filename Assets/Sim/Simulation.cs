@@ -106,6 +106,7 @@ namespace Battalion.Sim
             UpdateStages(t);
             UpdateAutonomy(t);
             UpdateDefense(t);
+            UpdateFormation(t);
             UpdateDispatches(t);
 
             if (_log.Enabled && Tick % _snapshotEveryTicks == 0)
@@ -193,7 +194,8 @@ namespace Battalion.Sim
                 var before = c.Position;
                 // 線を張った中隊が接敵中に正面を変えるときは、正面の幅から決まる遅い速さ（R3）。線を張る前は速い
                 bool lineFormed = c.StillSec >= _p.Movement.LineFormedStillSec - 1e-9;
-                double maxTurn = c.Engaged && lineFormed ? engagedTurn : freeTurn;
+                // 縦隊はいつもふつうの速さで回る（F1）
+                double maxTurn = c.Engaged && lineFormed && !ColumnShape(c) ? engagedTurn : freeTurn;
                 _turnedFromDeg = 0;
                 // 制圧下で動こうとしている中隊は、伏せて止まる（R1。解けたら同じ段のまま動きを続ける）
                 if (PinnedDown(c)) LieDown(c, maxTurn);
@@ -935,6 +937,9 @@ namespace Battalion.Sim
                 .Add("target", c.TargetId >= 0 ? _companies[c.TargetId].Name : null)
                 .Add("order", Order.Name(c.CurrentOrder.Type))
                 .Add("morale_causes", c.Ledger.ToJson())
+                .AddIf(c.Formation != Formation.Line, "formation", "column")
+                .AddIf(c.FormationChange != FormationChange.None, "formation_change",
+                    c.FormationChange == FormationChange.Deploying ? "deploying" : "forming_column")
                 .ToString());
         }
     }

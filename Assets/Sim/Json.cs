@@ -402,6 +402,9 @@ namespace Battalion.Sim
             return this;
         }
 
+        /// <summary><paramref name="cond"/> のときだけ足す（前の版のログと同じ行を保つため）。</summary>
+        public JsonLineBuilder AddIf(bool cond, string key, string value) => cond ? Add(key, value) : this;
+
         public JsonLineBuilder Add(string key, double value)
         {
             Key(key);

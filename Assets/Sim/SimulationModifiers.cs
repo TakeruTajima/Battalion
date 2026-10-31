@@ -11,6 +11,8 @@ namespace Battalion.Sim
         CloseCombatFortification,
         // 旋回中（動いている扱い。R3）の開けた所の被弾
         TurningOpen,
+        // 隊形（F1）：縦隊（被弾・撃つ力・移動）、展開中・縮合中（被弾は開けた所の動いている扱い、撃つ力）
+        Column, Deploying, FormingColumn, FireColumn, MoveColumn,
         // 撃つ力
         FireShaken, FireNonFrontTarget, FireDisarray, FireSuppressed, FireMoving, FireOccupation,
         // 旋回中（動いている扱い。R3）の撃つ力
@@ -58,6 +60,10 @@ namespace Battalion.Sim
             if (u.Suppressed) Mul(ModifierKind.FireSuppressed, _p.Suppression.FireMult);
             if (u.MovedThisTick) Mul(ModifierKind.FireMoving, _p.Fire.MovingFireMult);
             else if (u.TurningAsMoving) Mul(ModifierKind.FireTurning, _p.Fire.MovingFireMult);
+            // 隊形（F1）：移り変わる間は ×0.3（縦隊の ×0.2 の代わり）、縦隊は先頭だけが撃てる
+            if (ChangingFormation(u))
+                Mul(u.FormationChange == FormationChange.Deploying ? ModifierKind.Deploying : ModifierKind.FormingColumn, F.ChangeFireMult);
+            else if (ColumnShape(u)) Mul(ModifierKind.FireColumn, F.ColumnFireMult);
             // 占領の乱れ（C12。隊形の乱れとは別に持ち、重なれば掛け合わせる）
             if (_p.Occupation.Enabled && t < u.OccupationDisarrayUntil - 1e-9) Mul(ModifierKind.FireOccupation, _p.Occupation.DisarrayFireMult);
             return f;
@@ -116,10 +122,17 @@ namespace Battalion.Sim
                 into.Add(new ModifierFactor(lost ? ModifierKind.CloseCombatFortification : inArc ? ModifierKind.Entrench : ModifierKind.EntrenchOffArc, g / f));
                 f = g;
             }
-            if ((c.MovedThisTick || c.TurningAsMoving) && IsOpenGround(ch) && _p.Terrain.MovingOpenDamageMult != 1.0)
+            if ((c.MovedThisTick || c.TurningAsMoving || ChangingFormation(c)) && IsOpenGround(ch) && _p.Terrain.MovingOpenDamageMult != 1.0)
             {
                 f *= _p.Terrain.MovingOpenDamageMult;
-                into.Add(new ModifierFactor(c.MovedThisTick ? ModifierKind.MovingOpen : ModifierKind.TurningOpen, _p.Terrain.MovingOpenDamageMult));
+                var kind = c.MovedThisTick ? ModifierKind.MovingOpen : c.TurningAsMoving ? ModifierKind.TurningOpen
+                    : c.FormationChange == FormationChange.Deploying ? ModifierKind.Deploying : ModifierKind.FormingColumn;
+                into.Add(new ModifierFactor(kind, _p.Terrain.MovingOpenDamageMult));
+            }
+            if (ColumnShape(c) && F.ColumnDamageMult != 1.0)
+            {
+                f *= F.ColumnDamageMult;
+                into.Add(new ModifierFactor(ModifierKind.Column, F.ColumnDamageMult));
             }
             // 浅い掩体：掘ってあれば、正面の弧の外で効いていないとき（1.0）も載せる
             bool scrapeArc = InFortificationArc(c.ScrapeFacing, c, from);
@@ -135,7 +148,7 @@ namespace Battalion.Sim
 
         /// <summary>開けた所を移動中で、被弾 ×terrain.moving_open_damage_mult が掛かっているか（R2.1。駒の印）。</summary>
         public bool ExposedWhileMoving(Company c) =>
-            c.OnBoard && (c.MovedThisTick || c.TurningAsMoving) && IsOpenGround(_map.TerrainAt(c.Position)) && _p.Terrain.MovingOpenDamageMult != 1.0;
+            c.OnBoard && (c.MovedThisTick || c.TurningAsMoving || ChangingFormation(c)) && IsOpenGround(_map.TerrainAt(c.Position)) && _p.Terrain.MovingOpenDamageMult != 1.0;
 
         /// <summary>
         /// 直前の刻みの移動の速さの倍率を要素に分ける（表示用。<see cref="FollowPath"/> と同じ要素）。動いていなければ要素なしで 1.0。
@@ -153,6 +166,9 @@ namespace Battalion.Sim
             Mul(ModifierKind.MoveTerrain, _map.MoveMult(t), t);
             if (c.Pinned) Mul(ModifierKind.MovePinned, _p.Pinning.MoveMult);
             if (c.PassOverlap) Mul(ModifierKind.MovePassThrough, _p.Movement.PassThroughSpeedMult);
+            if (ChangingFormation(c))
+                Mul(c.FormationChange == FormationChange.Deploying ? ModifierKind.Deploying : ModifierKind.FormingColumn, F.ChangeSpeedMult);
+            else if (ColumnShape(c)) Mul(ModifierKind.MoveColumn, F.ColumnSpeedMult);
             switch (c.MoveStyle)
             {
                 case MoveStyle.Sideways: Mul(ModifierKind.MoveSideways, _p.Movement.SidewaysSpeedMult); break;

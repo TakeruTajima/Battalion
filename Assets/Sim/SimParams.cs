@@ -18,6 +18,7 @@ namespace Battalion.Sim
         public RoutParams Rout = new RoutParams();
         public PinningParams Pinning = new PinningParams();
         public CloseCombatParams CloseCombat = new CloseCombatParams();
+        public FormationParams Formation = new FormationParams();
         public MovementParams Movement = new MovementParams();
         public TerrainParams Terrain = new TerrainParams();
         public SightParams Sight = new SightParams();
@@ -281,6 +282,36 @@ namespace Battalion.Sim
             public double FortificationMult;
         }
 
+        /// <summary>F1：隊形（縦隊と横隊、展開と縮合）。</summary>
+        public sealed class FormationParams
+        {
+            /// <summary>隊形の規則を使うか。JSON にはない（テストで止めるため。止めると全ての中隊が横隊のまま）。</summary>
+            public bool Enabled = true;
+            /// <summary>縦隊の撃つ力の倍率（先頭だけが撃てる）。</summary>
+            public double ColumnFireMult;
+            /// <summary>縦隊の被弾の倍率（密で、撃ち返せない）。</summary>
+            public double ColumnDamageMult;
+            /// <summary>縦隊の速さの倍率。</summary>
+            public double ColumnSpeedMult;
+            /// <summary>展開（縦隊→横隊）と縮合（横隊→縦隊）にかかる秒数。</summary>
+            public double DeploySec;
+            public double FormColumnSec;
+            /// <summary>移り変わる間の撃つ力の倍率。</summary>
+            public double ChangeFireMult;
+            /// <summary>移り変わる間の速さの倍率（進みながら開く・組む。F1 の報告の後に決めたこと 1）。</summary>
+            public double ChangeSpeedMult;
+            /// <summary>縮合する条件：残りの経路の長さの下限（m）と、条件が続く秒数（揺れ止め）。</summary>
+            public double ColumnMinRouteM;
+            public double ColumnQuietSec;
+            /// <summary>展開する条件：移動の命令の目的地（攻撃・拘束なら発起点）までの残りの経路（m）。</summary>
+            public double DeployBeforeDestM;
+            /// <summary>縦隊の矩形（正面の幅・奥行き。向きの方向に長い）。</summary>
+            public double ColumnFrontageM;
+            public double ColumnDepthM;
+            /// <summary>展開する条件：気付いている指揮下の敵までの距離（性格による）。</summary>
+            public readonly Dictionary<Personality, double> DeployDistanceM = new Dictionary<Personality, double>();
+        }
+
         public sealed class MovementParams
         {
             public double SpeedMps;
@@ -515,6 +546,21 @@ namespace Battalion.Sim
             p.CloseCombat.RangeMult = cc.D("range_mult");
             p.CloseCombat.MoraleMult = cc.D("morale_mult");
             p.CloseCombat.FortificationMult = cc.D("fortification_mult");
+
+            var fo = root["formation"];
+            p.Formation.ColumnFireMult = fo.D("column_fire_mult");
+            p.Formation.ColumnDamageMult = fo.D("column_damage_mult");
+            p.Formation.ColumnSpeedMult = fo.D("column_speed_mult");
+            p.Formation.DeploySec = fo.D("deploy_sec");
+            p.Formation.FormColumnSec = fo.D("form_column_sec");
+            p.Formation.ChangeFireMult = fo.D("change_fire_mult");
+            p.Formation.ChangeSpeedMult = fo.D("change_speed_mult");
+            p.Formation.ColumnMinRouteM = fo.D("column_min_route_m");
+            p.Formation.ColumnQuietSec = fo.D("column_quiet_sec");
+            p.Formation.DeployBeforeDestM = fo.D("deploy_before_dest_m");
+            p.Formation.ColumnFrontageM = fo.D("column_frontage_m");
+            p.Formation.ColumnDepthM = fo.D("column_depth_m");
+            ReadPersonalityTable(fo["deploy_distance_m"], p.Formation.DeployDistanceM);
 
             var mv = root["movement"];
             p.Movement.SpeedMps = mv.D("speed_mps");

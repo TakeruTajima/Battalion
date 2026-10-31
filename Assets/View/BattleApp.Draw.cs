@@ -70,11 +70,19 @@ namespace Battalion.View
             for (int k = 0; k < 4; k++) _shapes.Line(q[k], q[(k + 1) % 4], w, col);
         }
 
+        /// <summary>駒の矩形の半分の奥行きと正面（縦隊は細長い。F1）。<paramref name="c"/> が null なら横隊。</summary>
+        void HalfSize(Company c, out double hd, out double hf)
+        {
+            bool column = c != null && Simulation.ColumnShape(c);
+            hd = (column ? _params.Formation.ColumnDepthM : _params.Movement.DepthM) / 2;
+            hf = (column ? _params.Formation.ColumnFrontageM : _params.Movement.FrontageM) / 2;
+        }
+
         /// <summary>駒の矩形の、世界の x・y 方向の半分の広がり（向きで変わる）。印やバーを駒の外に置くのに使う。</summary>
-        void Extent(double facing, out float ex, out float ey)
+        void Extent(double facing, out float ex, out float ey, Company c = null)
         {
             UnitGeometry.Axes(facing, out var f, out var l);
-            double hd = _params.Movement.DepthM / 2, hf = _params.Movement.FrontageM / 2;
+            HalfSize(c, out double hd, out double hf);
             ex = (float)(Math.Abs(f.X) * hd + Math.Abs(l.X) * hf);
             ey = (float)(Math.Abs(f.Y) * hd + Math.Abs(l.Y) * hf);
         }
@@ -200,7 +208,7 @@ namespace Battalion.View
         void DrawUnit(Company c, float px, float now)
         {
             Pose(c, out var pos, out double facing);
-            double hd = _params.Movement.DepthM / 2, hf = _params.Movement.FrontageM / 2;
+            HalfSize(c, out double hd, out double hf);
             Corners(pos, facing, hd, hf, _q);
             var fx = _fx[c.Id];
 
@@ -260,7 +268,7 @@ namespace Battalion.View
                 Outline(_q, 1.5f * px, dark);
             }
 
-            Extent(facing, out float ex, out float ey);
+            Extent(facing, out float ex, out float ey, c);
             float ring = Mathf.Sqrt(ex * ex + ey * ey);
             // 拘束されている（150m 以内から撃たれている）：細い点線の輪
             if (c.UnderCommand && c.Pinned) DottedCircle(V(pos), ring + 10 * px, 1.5f * px, 5 * px, new Color32(255, 255, 255, 180));
@@ -511,7 +519,9 @@ namespace Battalion.View
         void DrawDisarray(Company c, Vec2 pos, double facing, float px)
         {
             if (c.DisarrayUntil < _sim.Time || !c.UnderCommand) return;
-            double hd = _params.Movement.DepthM / 2 + 6 * px, hf = _params.Movement.FrontageM / 2 + 6 * px;
+            HalfSize(c, out double hd, out double hf);
+            hd += 6 * px;
+            hf += 6 * px;
             Corners(pos, facing, hd, hf, _q);
             var col = new Color32(255, 140, 40, 230);
             float amp = 4 * px;
@@ -674,7 +684,7 @@ namespace Battalion.View
             var tgt = _mode == Mode.Attack && _pressing ? _pressTarget : (MouseOverUi() ? null : UnitAt(MouseWorld(), Side.Red));
             if (tgt == null) return;
             Pose(tgt, out var pos, out double facing);
-            double hd = _params.Movement.DepthM / 2, hf = _params.Movement.FrontageM / 2;
+            HalfSize(tgt, out double hd, out double hf);
             Corners(pos, facing, hd + 4 * px, hf + 4 * px, _q);
             Outline(_q, 3 * px, Palette.Hover);
         }

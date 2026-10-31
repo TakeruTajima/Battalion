@@ -101,6 +101,22 @@
     "fortification_mult": 0.6,
     "_note": "互いの矩形の隙間が radius_m 以内（接近戦）なら、距離倍率を range_mult にし fire.range_close_mult(1.3) を置き換える（重ねない）。士気の減りに morale_mult。150m の 1.3 と射程 400m は中心どうしの距離。R4：接近戦の相手から撃たれるとき、向きのある陣地（塹壕・陣地構築・浅い掩体）の被弾倍率を fortification_mult より強く効かせない（1.0＝守りなし。0.6 は R4 の検証で選んだ値。村・森はそのまま）"
   },
+  "formation": {
+    "_note": "F1：隊形。縦隊は正面 column_frontage_m×奥行き column_depth_m（向きの方向に長い）、撃つ力 ×column_fire_mult、被弾 ×column_damage_mult、速さ ×column_speed_mult、旋回はいつも movement.turn_deg_per_sec。展開 deploy_sec・縮合 form_column_sec の間は、速さ ×change_speed_mult で命令の経路を進み続け（着いたら残りはその場で）、撃つ力 ×change_fire_mult、R1 の動いている扱い。縮合は移動の命令で残りの経路が column_min_route_m 以上、気付いている指揮下の敵が1つもいず（距離によらない）、撃たれていない状態が column_quiet_sec 続いたとき。展開は敵が deploy_distance_m（性格）以内・撃たれた・目的地まで deploy_before_dest_m 以内・止まる命令のどれか（F1 の報告の後に決めたこと 1〜4）",
+    "column_fire_mult": 0.2,
+    "column_damage_mult": 1.5,
+    "column_speed_mult": 1.25,
+    "deploy_sec": 120,
+    "form_column_sec": 120,
+    "change_fire_mult": 0.3,
+    "change_speed_mult": 0.5,
+    "column_min_route_m": 800,
+    "column_quiet_sec": 60,
+    "deploy_before_dest_m": 300,
+    "column_frontage_m": 50,
+    "column_depth_m": 200,
+    "deploy_distance_m": { "cautious": 1000, "calm": 800, "agile": 700, "reckless": 500 }
+  },
   "movement": {
     "speed_mps": 1.2,
     "turn_deg_per_sec": 6,

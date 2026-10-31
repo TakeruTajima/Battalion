@@ -16,6 +16,12 @@ namespace Battalion.Sim
     /// </summary>
     public enum MoveStyle { None, Forward, Sideways, Backward, Turning }
 
+    /// <summary>隊形（F1）：横隊（今までの中隊）と縦隊。</summary>
+    public enum Formation { Line, Column }
+
+    /// <summary>隊形の移り変わり（F1）：なし／展開中（縦隊→横隊）／縮合中（横隊→縦隊）。</summary>
+    public enum FormationChange { None, Deploying, FormingColumn }
+
     /// <summary>
     /// 中隊の主状態。拘束（Pinned）は Normal・Shaken に重なるフラグとして <see cref="Company.Pinned"/> に持つ。
     /// Surrendered と LeftBattle は盤上から取り除かれた状態。

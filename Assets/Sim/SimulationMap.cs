@@ -618,6 +618,9 @@ namespace Battalion.Sim
             if (mv <= 0) mv = _map.MoveMult(TerrainMap.Ford); // 通れないマスに押し出された場合の保険
             double speed = _p.Movement.SpeedMps * mv * (c.Pinned ? _p.Pinning.MoveMult : 1.0);
             if (c.PassOverlap) speed *= _p.Movement.PassThroughSpeedMult;
+            // 隊形（F1）：移り変わる間は ×0.5（縦隊の ×1.25 の代わり）、縦隊は ×1.25
+            if (ChangingFormation(c)) speed *= F.ChangeSpeedMult;
+            else if (ColumnShape(c)) speed *= F.ColumnSpeedMult;
             double heading = Math.Atan2(to.Y, to.X);
             // 阻まれている間に向き直った中隊（P1e.2）は、向き直った向きへ回り、その向きのまま動く（接敵中と同じ扱い）
             if (c.FacingOverride.HasValue) c.Facing = TurnToward(c.Facing, c.FacingOverride.Value, maxTurn);
@@ -849,7 +852,9 @@ namespace Battalion.Sim
                 if (f > target) f += (target - f) * Math.Min(1.0, c.EntrenchProgress / _p.MapRules.EntrenchSec);
             }
             // 移動中、または接敵中にその場で向きを変えている間（R3）
-            if ((c.MovedThisTick || c.TurningAsMoving) && IsOpenGround(ch)) f *= _p.Terrain.MovingOpenDamageMult;
+            if ((c.MovedThisTick || c.TurningAsMoving || ChangingFormation(c)) && IsOpenGround(ch)) f *= _p.Terrain.MovingOpenDamageMult;
+            // 縦隊（F1。展開の途中も矩形は縦隊）
+            if (ColumnShape(c)) f *= F.ColumnDamageMult;
             // 浅い掩体（P2c）。向きは掘り始めたときの中隊の向き（R2）
             f *= ScrapeMult(c, ch, InFortificationArc(c.ScrapeFacing, c, from), closeCombat);
             return f;

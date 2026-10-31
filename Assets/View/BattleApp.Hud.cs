@@ -446,6 +446,11 @@ namespace Battalion.View
                 case ModifierKind.FireSuppressed: return "制圧下";
                 case ModifierKind.FireMoving: return "移動中";
                 case ModifierKind.FireTurning: return "<color=#ff8060>旋回中（動いている扱い）</color>";
+                case ModifierKind.Column: return "<color=#ff8060>縦隊</color>";
+                case ModifierKind.FireColumn: return "縦隊（先頭だけが撃てる）";
+                case ModifierKind.MoveColumn: return "縦隊";
+                case ModifierKind.Deploying: return "<color=#ff8060>展開中</color>";
+                case ModifierKind.FormingColumn: return "<color=#ff8060>縮合中</color>";
                 case ModifierKind.FireOccupation: return "<color=#ffb060>占領の乱れ</color>";
                 case ModifierKind.MoveTerrain: return TerrainName(x.Terrain);
                 case ModifierKind.MovePinned: return "拘束";
@@ -538,9 +543,14 @@ namespace Battalion.View
                 Pose(c, out var pos, out double facing);
                 if (!area.Contains(WorldToGui(pos))) continue;
                 // 駒の下の兵力・士気のバー（駒の下端から 10〜20 画素）のさらに下に置く
-                Extent(facing, out _, out float ey);
+                Extent(facing, out _, out float ey, c);
                 var g = WorldToGui(new Vec2(pos.X, pos.Y - ey));
                 string state = c.State == CompanyState.Normal ? "" : StateName(c.State);
+                // 隊形（F1）：縦隊、移り変わりの進み具合
+                string formation = c.FormationChange == FormationChange.Deploying ? $"展開 {_sim.FormationProgress(c) * 100:0}%"
+                    : c.FormationChange == FormationChange.FormingColumn ? $"縮合 {_sim.FormationProgress(c) * 100:0}%"
+                    : Simulation.ColumnShape(c) ? "縦隊" : "";
+                if (formation.Length > 0) state = state.Length > 0 ? state + " " + formation : formation;
                 string text = c.OnBoard ? $"{c.Name} {c.Strength} 士{c.Morale:0} {state}" : $"{c.Name} 降伏";
                 var size = _small.CalcSize(new GUIContent(text));
                 var rect = new Rect(g.x - size.x / 2, g.y + 22, size.x + 4, size.y);

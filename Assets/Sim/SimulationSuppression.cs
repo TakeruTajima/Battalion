@@ -19,7 +19,7 @@ namespace Battalion.Sim
         /// </summary>
         public double SuppressionThreshold(Company c)
         {
-            if (!MovingPosture(c) && !c.TurningAsMoving) return S.ThresholdStationaryPerMin;
+            if (!MovingPosture(c) && !c.TurningAsMoving && !ChangingFormation(c)) return S.ThresholdStationaryPerMin;
             double mult = S.MovingThresholdPersonalityMult.TryGetValue(c.Personality, out var m) ? m : 1.0;
             return S.ThresholdMovingPerMin * mult;
         }

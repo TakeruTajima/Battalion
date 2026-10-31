@@ -25,6 +25,8 @@ namespace Battalion.Sim
             public string Id;
             public Side Side;
             public double X, Y, FacingDeg;
+            /// <summary>会戦の始めの隊形（F1。配置の formation：line／column。書かなければ横隊）。</summary>
+            public Formation Formation;
         }
 
         public string Name;
@@ -87,7 +89,11 @@ namespace Battalion.Sim
             foreach (var side in new[] { Side.Blue, Side.Red })
             {
                 foreach (var u in d["deploy"][Names.Of(side)].Array)
-                    s.Units.Add(new Deploy { Id = u["id"].String, Side = side, X = u.D("x"), Y = u.D("y"), FacingDeg = u.D("facing") });
+                    s.Units.Add(new Deploy
+                    {
+                        Id = u["id"].String, Side = side, X = u.D("x"), Y = u.D("y"), FacingDeg = u.D("facing"),
+                        Formation = ReadFormation(u),
+                    });
             }
             if (d["objects"].Has("village"))
                 foreach (var c in d["objects"]["village"]["cells"].Array)
@@ -229,6 +235,18 @@ namespace Battalion.Sim
             return overlaps;
         }
 
+        /// <summary>配置の formation（line／column。書かなければ横隊）。</summary>
+        static Formation ReadFormation(JsonValue u)
+        {
+            if (!u.TryGet("formation", out var f)) return Formation.Line;
+            switch (f.String)
+            {
+                case "line": return Formation.Line;
+                case "column": return Formation.Column;
+                default: throw new InvalidOperationException($"配置の formation が line／column でない: {f.String}");
+            }
+        }
+
         public static Personality PersonalityOf(string id)
         {
             switch (id)
@@ -252,7 +270,7 @@ namespace Battalion.Sim
             sim.SetHeadquarters(Side.Blue, BlueHq);
             sim.SetHeadquarters(Side.Red, RedHq);
             foreach (var u in Units)
-                sim.AddCompany(u.Id, u.Side, TrainingOf(u.Id), PersonalityOf(u.Id), new Vec2(u.X, u.Y), u.FacingDeg);
+                sim.AddCompany(u.Id, u.Side, TrainingOf(u.Id), PersonalityOf(u.Id), new Vec2(u.X, u.Y), u.FacingDeg).Formation = u.Formation;
 
             AssignTrenchFacings(sim);
             ValidateDefensePlan(Defense, sim);

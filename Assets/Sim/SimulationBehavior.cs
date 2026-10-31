@@ -12,7 +12,7 @@ namespace Battalion.Sim
         // ---------------------------------------------------------------- 矩形
 
         /// <summary>中隊の今の矩形。</summary>
-        public UnitRect RectOf(Company c) => RectAt(c.Position, c.Facing);
+        public UnitRect RectOf(Company c) => RectAt(c.Position, c.Facing, c);
 
         public UnitRect RectAt(Vec2 pos, double facing) => new UnitRect(pos, facing, _p.Movement.FrontageM, _p.Movement.DepthM);
 
@@ -22,7 +22,7 @@ namespace Battalion.Sim
         /// <summary>中隊を <paramref name="pos"/> に置いたときの、敵の矩形との隙間の最小（向きは今のまま）。</summary>
         double EnemyGapAt(Company c, Vec2 pos, double facing)
         {
-            var me = RectAt(pos, facing);
+            var me = RectAt(pos, facing, c);
             double far = B.EnemyMinGapM + 1;
             double best = double.MaxValue;
             foreach (var e in _companies)

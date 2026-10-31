@@ -97,8 +97,8 @@ namespace Battalion.Sim.Tests
             var sc = MapScenario.LoadFile(TestUtil.PathOf("maps/scenario_a2.json"));
             string log = ScenarioLogHashTests.RunAndLog(sc, new ScenarioAReportTests.PlannedOrder[0], 1, out int n,
                 s => ScenarioAReportTests.StagedPinAndFlankStart(s, 2), ScenarioAReportTests.StagedPinAndFlankTick);
-            Assert.That(n, Is.EqualTo(3953));
-            Assert.That(ScenarioLogHashTests.Hash(log), Is.EqualTo("dd1673efac4bf6ea7985d2c14ef48e347c1edb76f3d5bce91d9c42b85442ca3e"));
+            Assert.That(n, Is.EqualTo(3976));
+            Assert.That(ScenarioLogHashTests.Hash(log), Is.EqualTo("78e814d3439c2b53b8a802b0500bd4078b5ef1c829839841a0c5fdd873fafad9"));
         }
     }
 }
