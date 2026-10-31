@@ -107,6 +107,7 @@ namespace Battalion.Sim
             UpdateAutonomy(t);
             UpdateDefense(t);
             UpdateFormation(t);
+            UpdatePieceOrders(t);
             UpdateDispatches(t);
 
             if (_log.Enabled && Tick % _snapshotEveryTicks == 0)

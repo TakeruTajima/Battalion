@@ -280,6 +280,21 @@
     "agile_check_sec": 5,
     "cautious_cover_radius_m": 200
   },
+  "fog": {
+    "_note": "P2d：霧と報告（本部の知っていること。会戦の結果を変えない）。enabled は表示の既定（false は検証用の霧なし）。発見・続報（接敵中 update_sec ごと）・変化（動き出した・止まった・change_move_m 以上動いた・壊走・降伏）を中隊の伝令で送る。位置は見た中隊の練度の training.*.report_error_m の中に一様に散らす。規模は兵力の割合で size_many_ratio 以上が多い、size_half_ratio 以上が半ば、それ未満が少ない（新兵は green_size_error_rate で1段階間違える）。報告は位置が link_radius_m 以内・見た時刻の差が link_window_sec 以内の駒に紐付ける。駒は見た時刻から fade_sec で薄く、unknown_sec で「?」、forget_sec で地図から消える。駒への攻撃・拘束は、駒の位置から piece_target_radius_m 以内の気付いている指揮下の敵を目標にする",
+    "enabled": true,
+    "update_sec": 120,
+    "change_move_m": 200,
+    "size_many_ratio": 0.7,
+    "size_half_ratio": 0.4,
+    "green_size_error_rate": 0.2,
+    "link_radius_m": 300,
+    "link_window_sec": 600,
+    "fade_sec": 300,
+    "unknown_sec": 600,
+    "forget_sec": 1800,
+    "piece_target_radius_m": 300
+  },
   "couriers": {
     "_note": "P2c.2 の中隊の伝令（意見具申）。速さ・喪失・経路は runners の値を使う。heavy_loss_step は初めの兵力に対する割合。retreat_ask_morale は慎重が未満、ほかは以下",
     "prep_sec": 10,

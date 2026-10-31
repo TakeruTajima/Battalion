@@ -77,6 +77,7 @@ namespace Battalion.View
                 return;
             }
             DrawUnitLabels();
+            DrawIntelLabels();
             DrawPanel(TopRect);
             DrawTopBar();
             DrawPanel(LeftRect);
@@ -539,7 +540,7 @@ namespace Battalion.View
             var area = MapArea();
             foreach (var c in _sim.Companies)
             {
-                if (c.State == CompanyState.LeftBattle) continue;
+                if (c.State == CompanyState.LeftBattle || !ShowsActual(c)) continue;
                 Pose(c, out var pos, out double facing);
                 if (!area.Contains(WorldToGui(pos))) continue;
                 // 駒の下の兵力・士気のバー（駒の下端から 10〜20 画素）のさらに下に置く

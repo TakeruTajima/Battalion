@@ -38,6 +38,14 @@ namespace Battalion.Sim.Tests
             WithoutR3(p);
             WithoutR4(p);
             WithoutF1(p);
+            WithoutP2d(p);
+            return p;
+        }
+
+        /// <summary>P2d の報告を止める：敵発見は 600m 以内に初めて入った時だけ（続報・変化なし。P2c.2 のまま）。</summary>
+        public static SimParams WithoutP2d(SimParams p)
+        {
+            p.Fog.Reports = false;
             return p;
         }
 

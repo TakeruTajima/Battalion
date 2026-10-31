@@ -28,6 +28,7 @@ namespace Battalion.Sim
         public OrdersParams Orders = new OrdersParams();
         public AutonomyParams Autonomy = new AutonomyParams();
         public CouriersParams Couriers = new CouriersParams();
+        public FogParams Fog = new FogParams();
         public SuppressionParams Suppression = new SuppressionParams();
         public DefenseParams Defense = new DefenseParams();
         public OccupationParams Occupation = new OccupationParams();
@@ -92,6 +93,31 @@ namespace Battalion.Sim
         }
 
         /// <summary>P2c.2 の中隊の伝令（意見具申。"couriers"）。速さ・喪失・経路は <see cref="RunnersParams"/> を使う。</summary>
+        /// <summary>P2d：霧と報告。本部（プレイヤー）の知っていることの作りで、会戦の結果を変えない。</summary>
+        public sealed class FogParams
+        {
+            /// <summary>霧を使うか（表示の既定。false は検証用の「霧なし」：全ての敵を正確に出す）。</summary>
+            public bool Enabled;
+            /// <summary>P2d の報告（発見の 600m の限りを外す、続報、変化）を送るか。JSON にはない（前の版のログと比べるテストで止める）。</summary>
+            public bool Reports = true;
+            /// <summary>続報の間隔（接敵している間）と、変化の報告の動きの距離。</summary>
+            public double UpdateSec;
+            public double ChangeMoveM;
+            /// <summary>規模の見積もりの境目（兵力の割合）と、新兵が1段階間違える割合。</summary>
+            public double SizeManyRatio;
+            public double SizeHalfRatio;
+            public double GreenSizeErrorRate;
+            /// <summary>報告の駒の紐付け（位置の距離・見た時刻の差）。</summary>
+            public double LinkRadiusM;
+            public double LinkWindowSec;
+            /// <summary>報告の駒の見え方：薄くなる・「?」になる・地図から消える（見た時刻から）。</summary>
+            public double FadeSec;
+            public double UnknownSec;
+            public double ForgetSec;
+            /// <summary>報告の駒への命令で、目標にする敵を探す範囲（駒の位置から）。</summary>
+            public double PieceTargetRadiusM;
+        }
+
         public sealed class CouriersParams
         {
             /// <summary>中隊が伝令を出すまでの準備（秒）。</summary>
@@ -676,6 +702,20 @@ namespace Battalion.Sim
             p.Autonomy.AgilePostLimitM = au.D("agile_post_limit_m");
             p.Autonomy.AgileCheckSec = au.D("agile_check_sec");
             p.Autonomy.CautiousCoverRadiusM = au.D("cautious_cover_radius_m");
+
+            var fg = root["fog"];
+            p.Fog.Enabled = fg["enabled"].Bool;
+            p.Fog.UpdateSec = fg.D("update_sec");
+            p.Fog.ChangeMoveM = fg.D("change_move_m");
+            p.Fog.SizeManyRatio = fg.D("size_many_ratio");
+            p.Fog.SizeHalfRatio = fg.D("size_half_ratio");
+            p.Fog.GreenSizeErrorRate = fg.D("green_size_error_rate");
+            p.Fog.LinkRadiusM = fg.D("link_radius_m");
+            p.Fog.LinkWindowSec = fg.D("link_window_sec");
+            p.Fog.FadeSec = fg.D("fade_sec");
+            p.Fog.UnknownSec = fg.D("unknown_sec");
+            p.Fog.ForgetSec = fg.D("forget_sec");
+            p.Fog.PieceTargetRadiusM = fg.D("piece_target_radius_m");
 
             var co = root["couriers"];
             p.Couriers.PrepSec = co.D("prep_sec");

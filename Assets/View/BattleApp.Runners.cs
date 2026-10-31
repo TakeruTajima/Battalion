@@ -79,7 +79,7 @@ namespace Battalion.View
         /// <summary>本部：軍隊符号の旗（竿と、陣営の色の旗）と「本部」の文字。</summary>
         void DrawHeadquarters(float px)
         {
-            foreach (var side in new[] { Side.Blue, Side.Red })
+            foreach (var side in Fogged ? new[] { Side.Blue } : new[] { Side.Blue, Side.Red })
             {
                 var hq = _sim.HeadquartersOf(side);
                 if (!hq.HasValue) continue;

@@ -188,6 +188,8 @@ namespace Battalion.Sim
 
         void StartOrder(Company c, Order order, double t, double tickStart)
         {
+            // 報告の駒への命令は、駒の近くの気付いている敵を目標にする（P2d）
+            order = ResolvePieceOrder(c, order);
             c.CurrentOrder = order;
             c.Arrived = !order.Moves;
             c.Path = null;

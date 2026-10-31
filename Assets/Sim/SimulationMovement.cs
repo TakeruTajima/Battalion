@@ -170,9 +170,11 @@ namespace Battalion.Sim
             readonly bool _seeking;
             readonly bool _stageCompleted;
             readonly double? _pinStandoff;
+            readonly Order _pieceOrder;
 
             public CompanySnapshot(Company c)
             {
+                _pieceOrder = c.PieceOrder;
                 _order = c.CurrentOrder;
                 _arrived = c.Arrived;
                 _path = c.Path;
@@ -211,6 +213,7 @@ namespace Battalion.Sim
                 c.SeekingSight = _seeking;
                 c.StageCompleted = _stageCompleted;
                 c.PinStandoffM = _pinStandoff;
+                c.PieceOrder = _pieceOrder;
             }
         }
     }

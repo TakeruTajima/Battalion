@@ -34,7 +34,8 @@ namespace Battalion.View
             DrawSelectedPath(px);
             DrawSheetPreviews(px);
             foreach (var c in _sim.Companies)
-                if (c.State != CompanyState.LeftBattle) DrawUnit(c, px, now);
+                if (c.State != CompanyState.LeftBattle && ShowsActual(c)) DrawUnit(c, px, now);
+            DrawIntel(px);
             if (_showEscape) DrawEscapes(px);
             DrawRunners(px);
             DrawRunnerTags(px);
@@ -171,6 +172,8 @@ namespace Battalion.View
             {
                 var s = _sim.Companies[f.Shooter];
                 var t = _sim.Companies[f.Target];
+                // 霧の中では、赤の位置を明かす射撃の線を出さない（P2d）
+                if (!ShowsActual(s) || !ShowsActual(t)) continue;
                 Pose(s, out var sp, out double sf);
                 Pose(t, out var tp, out _);
                 // 射手の正面の縁の中央から出す
@@ -681,6 +684,11 @@ namespace Battalion.View
         void DrawHover(float px)
         {
             if (_mode != Mode.Attack && _mode != Mode.Pin) return;
+            if (Fogged)
+            {
+                DrawHoverPiece(px);
+                return;
+            }
             var tgt = _mode == Mode.Attack && _pressing ? _pressTarget : (MouseOverUi() ? null : UnitAt(MouseWorld(), Side.Red));
             if (tgt == null) return;
             Pose(tgt, out var pos, out double facing);

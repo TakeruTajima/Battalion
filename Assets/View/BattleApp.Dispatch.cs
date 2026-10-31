@@ -43,7 +43,22 @@ namespace Battalion.View
             }
         }
 
-        string Other(Dispatch d) => d.OtherId >= 0 ? _sim.Companies[d.OtherId].Name : "?";
+        /// <summary>相手の中隊の名前。霧の中では、赤の中隊は名前を出さない（本部は赤の中隊の区別を知らない。P2d）。</summary>
+        string Other(Dispatch d)
+        {
+            if (d.OtherId < 0) return "?";
+            var o = _sim.Companies[d.OtherId];
+            return o.Side == Side.Red && Fogged ? "敵" : o.Name;
+        }
+
+        /// <summary>敵の報告の中身（P2d）：規模・動き・様子。</summary>
+        static string ReportText(EnemyReport r)
+        {
+            string size = r.Size == EnemySize.Many ? "多い" : r.Size == EnemySize.Half ? "半ば" : "少ない";
+            string move = r.State == ReportedState.Surrendered ? "降伏した" : r.State == ReportedState.Routed ? "壊走中"
+                : r.Moving ? (r.HeadingRad.HasValue ? $"{Compass(r.HeadingRad.Value * Angles.RadToDeg)}へ動いている" : "動いている") : "止まっている";
+            return $"{size}、{move}";
+        }
 
         /// <summary>具申の文（中隊の名前から）。</summary>
         string DispatchText(Dispatch d)
@@ -54,7 +69,10 @@ namespace Battalion.View
             {
                 case DispatchKind.OrdersDone: return $"{who} 命令を終えた（命令待ち）";
                 case DispatchKind.TargetBroken: return $"{who} 目標崩壊（{Other(d)}）";
-                case DispatchKind.EnemySighted: return $"{who} 敵発見（{Other(d)}）";
+                case DispatchKind.EnemySighted: return d.Report != null ? $"{who} 敵発見（{ReportText(d.Report)}）" : $"{who} 敵発見（{Other(d)}）";
+                case DispatchKind.EnemyUpdate: return $"{who} 敵の続報（{ReportText(d.Report)}）";
+                case DispatchKind.EnemyChanged: return $"{who} 敵の変化（{ReportText(d.Report)}）";
+                case DispatchKind.NoEnemySeen: return $"{who} 敵を見ず（命令を請う）";
                 case DispatchKind.HeavyLoss: return $"{who} 損害大";
                 case DispatchKind.AttackStalled: return $"{who} 攻撃頓挫（動揺で停止）";
                 case DispatchKind.NeighborRouted: return $"{who} 隣の {Other(d)} が崩壊";
@@ -79,7 +97,8 @@ namespace Battalion.View
         }
 
         static string RequestName(DispatchKind k) =>
-            k == DispatchKind.AskOrders ? "命令を請う" : k == DispatchKind.AskPursuit ? "追撃の可否" : k == DispatchKind.AskRetreat ? "後退の許可" : "";
+            k == DispatchKind.AskOrders ? "命令を請う" : k == DispatchKind.AskPursuit ? "追撃の可否" : k == DispatchKind.AskRetreat ? "後退の許可"
+            : k == DispatchKind.NoEnemySeen ? "敵を見ず" : "";
 
         /// <summary>伝令が出た時点の中隊の様子：「兵力 82%・士気 55・動揺・第2段 攻撃」。</summary>
         string StateText(DispatchState s)

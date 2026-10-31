@@ -1013,5 +1013,8 @@
    }
   ]
  },
+ "initial_intel": [
+  { "x": 975, "y": 725, "size": "many", "facing": 180, "note": "R1（会戦の始めの敵情）" }
+ ],
  "time_limit_min": 35
 }

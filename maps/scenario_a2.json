@@ -2700,5 +2700,9 @@
    }
   ]
  },
+ "initial_intel": [
+  { "x": 1725, "y": 1125, "size": "many", "facing": 180, "note": "R1（会戦の始めの敵情）" },
+  { "x": 1725, "y": 875, "size": "many", "facing": 180, "note": "R2（会戦の始めの敵情）" }
+ ],
  "time_limit_min": 90
 }

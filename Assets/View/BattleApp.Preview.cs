@@ -40,11 +40,22 @@ namespace Battalion.View
                 }
                 case Mode.Pin:
                 {
+                    if (Fogged)
+                    {
+                        var piece = PieceAt(m);
+                        return piece == null ? null : Order.PinPiece(c.Id, piece.Id, piece.Position, _pinRange);
+                    }
                     var tgt = UnitAt(m, Side.Red);
                     return tgt == null ? null : Order.Pin(c.Id, tgt.Id, _pinRange);
                 }
                 case Mode.Attack:
                 {
+                    if (Fogged)
+                    {
+                        if (AttackDragging) return Order.AttackPieceFrom(c.Id, _pressPiece.Id, _pressPiece.Position, BearingFromPiece(_pressPiece, m), _onBreak);
+                        var piece = _pressing ? _pressPiece : PieceAt(m);
+                        return piece == null ? null : Order.AttackPiece(c.Id, piece.Id, piece.Position, _attackAspect, _onBreak);
+                    }
                     if (AttackDragging) return Order.AttackFrom(c.Id, _pressTarget.Id, BearingTo(_pressTarget, m), _onBreak);
                     var tgt = _pressing ? _pressTarget : UnitAt(m, Side.Red);
                     return tgt == null ? null : Order.Attack(c.Id, tgt.Id, _attackAspect, _onBreak);

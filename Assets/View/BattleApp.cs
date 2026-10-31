@@ -128,6 +128,7 @@ namespace Battalion.View
             _inboxSeen = 0;
             _dismissed.Clear();
             _approveArmed = null;
+            _fogOn = _params.Fog.Enabled;
             _phase = Phase.Running;
             FitCamera();
         }

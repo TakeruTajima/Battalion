@@ -67,7 +67,8 @@ namespace Battalion.Sim.Tests
         [Test]
         public void LostCourierDeliversNothing()
         {
-            var p = TestUtil.ParamsWith(("\"loss_per_sec\": 0.003", "\"loss_per_sec\": 1.0"));
+            // P2c.2 の具申の規則を見る（P2d の続報・変化の報告は止める）
+            var p = TestUtil.WithoutP2d(TestUtil.ParamsWith(("\"loss_per_sec\": 0.003", "\"loss_per_sec\": 1.0")));
             var log = new StringEventSink();
             var sim = Flat(p, log);
             var a = Add(sim, "A", Side.Blue, 300, 0, 90);
@@ -134,7 +135,8 @@ namespace Battalion.Sim.Tests
         [Test]
         public void EnemySightedOnlyForEnemiesThatComeWithin600mAfterTheStart()
         {
-            var sim = Flat();
+            // P2c.2 の規則（P2d では距離の限りを外し、初めから見えている敵も報告する。P2dTests）
+            var sim = Flat(TestUtil.WithoutP2d(TestUtil.ParamsWith()));
             var a = Add(sim, "A", Side.Blue, 300, 0, 90);
             var near = Add(sim, "N", Side.Red, 300, 550, -90, strength: 10);
             var far = Add(sim, "F", Side.Red, 300, 1200, -90, strength: 10);
@@ -270,7 +272,8 @@ namespace Battalion.Sim.Tests
         [Test]
         public void DeclarationIsSentImmediatelyWithPendingReports()
         {
-            var sim = Flat();
+            // P2c.2 の具申の規則を見る（P2d の発見の報告が先に出ると、60秒のまとめの数えが変わる）
+            var sim = Flat(TestUtil.WithoutP2d(TestUtil.ParamsWith()));
             var b = Add(sim, "B", Side.Blue, 0, -1300, 90, Personality.Reckless);
             var c = Add(sim, "C", Side.Blue, 250, -1300, 90);
             var r1 = Add(sim, "R1", Side.Red, 0, -1000, -90, strength: 60);

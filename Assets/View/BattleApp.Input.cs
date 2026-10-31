@@ -24,6 +24,8 @@ namespace Battalion.View
         Vector2 _pressPx;
         /// <summary>攻撃の命令中にボタンを押した敵の駒（そこから外へドラッグすると方角の指定。P1e の4）。</summary>
         Company _pressTarget;
+        /// <summary>霧の中で攻撃の目標に押した報告の駒（P2d）。</summary>
+        IntelPiece _pressPiece;
         const float DragThresholdPx = 8f;
         /// <summary>攻撃で、敵の駒から外へこれ以上ドラッグしたら地図の方角での指定にする。</summary>
         const float AttackDragPx = 20f;
@@ -96,6 +98,8 @@ namespace Battalion.View
             if (Input.GetKeyDown(KeyCode.F9)) PressFlare(FlareColor.Red);
             if (Input.GetKeyDown(KeyCode.F10)) PressFlare(FlareColor.Green);
             if (Input.GetKeyDown(KeyCode.F11)) PressFlare(FlareColor.White);
+            // 霧なし（検証用。P2d）
+            if (Input.GetKeyDown(KeyCode.F12)) _fogOn = !_fogOn;
         }
 
         void Select(int id)
@@ -194,7 +198,8 @@ namespace Battalion.View
                 _pressing = true;
                 _pressWorld = MouseWorld();
                 _pressPx = Input.mousePosition;
-                _pressTarget = _mode == Mode.Attack ? UnitAt(_pressWorld, Side.Red) : null;
+                _pressTarget = _mode == Mode.Attack && !Fogged ? UnitAt(_pressWorld, Side.Red) : null;
+                _pressPiece = _mode == Mode.Attack && Fogged ? PieceAt(_pressWorld) : null;
             }
             if (Input.GetMouseButtonUp(0) && _pressing)
             {
@@ -217,7 +222,7 @@ namespace Battalion.View
         }
 
         /// <summary>攻撃の方角のドラッグ中か（敵の駒の上で押して、外へ 20px 以上動かした）。</summary>
-        bool AttackDragging => _pressing && _mode == Mode.Attack && _pressTarget != null
+        bool AttackDragging => _pressing && _mode == Mode.Attack && (_pressTarget != null || _pressPiece != null)
                                && ((Vector2)Input.mousePosition - _pressPx).magnitude > AttackDragPx;
 
         /// <summary>目標の中心から見た、カーソルの方角（地図の方角）。</summary>
@@ -231,8 +236,19 @@ namespace Battalion.View
         {
             var c = Selected;
             var tgt = _pressTarget;
+            var piece = _pressPiece;
             bool drag = ((Vector2)Input.mousePosition - _pressPx).magnitude > AttackDragPx;
             _pressTarget = null;
+            _pressPiece = null;
+            // 霧の中は報告の駒への攻撃（P2d）
+            if (CanCommand(c) && piece != null)
+            {
+                if (SendCommand(drag
+                        ? Order.AttackPieceFrom(c.Id, piece.Id, piece.Position, BearingFromPiece(piece, up), _onBreak)
+                        : Order.AttackPiece(c.Id, piece.Id, piece.Position, _attackAspect, _onBreak)))
+                    _mode = Mode.None;
+                return;
+            }
             if (!CanCommand(c) || tgt == null) return;
             if (SendCommand(drag
                     ? Order.AttackFrom(c.Id, tgt.Id, BearingTo(tgt, up), _onBreak)
@@ -271,6 +287,12 @@ namespace Battalion.View
                 }
                 case Mode.Pin:
                 {
+                    if (Fogged)
+                    {
+                        var piece = PieceAt(at);
+                        if (CanCommand(c) && piece != null && SendCommand(Order.PinPiece(c.Id, piece.Id, piece.Position, _pinRange))) _mode = Mode.None;
+                        break;
+                    }
                     var tgt = UnitAt(at, Side.Red);
                     if (!CanCommand(c) || tgt == null) break;
                     if (SendCommand(Order.Pin(c.Id, tgt.Id, _pinRange))) _mode = Mode.None;

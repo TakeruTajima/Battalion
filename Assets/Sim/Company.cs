@@ -219,6 +219,10 @@ namespace Battalion.Sim
         /// <summary>占領の乱れが続く時刻（C12）。</summary>
         public double OccupationDisarrayUntil = double.NegativeInfinity;
 
+        // ---- P2d：報告の駒への命令
+        /// <summary>報告の駒への攻撃・拘束で、目標がまだ決まらずに駒の位置へ前進している間の元の命令（なければ null）。</summary>
+        public Order PieceOrder;
+
         // ---- F1：隊形
         /// <summary>今の隊形（移り変わる間は初めの形のまま。終わった時に新しい形になる）。</summary>
         public Formation Formation;

@@ -11,8 +11,12 @@ namespace Battalion.Sim
     {
         // 報告
         OrdersDone, TargetBroken, EnemySighted, HeavyLoss, AttackStalled, NeighborRouted, EntrenchDone,
+        // 報告（P2d）：見ている敵の続報・変化
+        EnemyUpdate, EnemyChanged,
         // 要請
         AskOrders, AskPursuit, AskRetreat,
+        // 要請（P2d）：報告の駒への命令で、駒の近くに敵を見ず（命令を請う）
+        NoEnemySeen,
         // 宣言
         Declaration,
     }
@@ -58,13 +62,16 @@ namespace Battalion.Sim
         public string DeclarationKind;
         /// <summary>伝令が出た時点の中隊の様子（出るまでは既定値）。</summary>
         public DispatchState SentState;
+        /// <summary>敵の報告の中身（P2d。発見・続報・変化のとき。ほかは null）。</summary>
+        public EnemyReport Report;
         /// <summary>運んだ伝令（出るまでは −1）と、本部に届いた時刻（届くまでは null）。</summary>
         public int CourierId = -1;
         public double? ArrivedTime;
 
         public DispatchCategory Category =>
             Kind == DispatchKind.Declaration ? DispatchCategory.Declaration
-            : Kind == DispatchKind.AskOrders || Kind == DispatchKind.AskPursuit || Kind == DispatchKind.AskRetreat ? DispatchCategory.Request
+            : Kind == DispatchKind.AskOrders || Kind == DispatchKind.AskPursuit || Kind == DispatchKind.AskRetreat
+              || Kind == DispatchKind.NoEnemySeen ? DispatchCategory.Request
             : DispatchCategory.Report;
 
         public static string Name(DispatchKind k)
@@ -81,6 +88,9 @@ namespace Battalion.Sim
                 case DispatchKind.AskOrders: return "ask_orders";
                 case DispatchKind.AskPursuit: return "ask_pursuit";
                 case DispatchKind.AskRetreat: return "ask_retreat";
+                case DispatchKind.EnemyUpdate: return "enemy_update";
+                case DispatchKind.EnemyChanged: return "enemy_changed";
+                case DispatchKind.NoEnemySeen: return "no_enemy_seen";
                 default: return "declaration";
             }
         }
@@ -121,6 +131,8 @@ namespace Battalion.Sim
             public bool PrevShakenHalt;
             public bool RetreatAsked;
             public double? LastArrival;
+            /// <summary>見た敵ごとの覚え（P2d：続報・変化の報告のため）。</summary>
+            public readonly Dictionary<int, SightMemo> Sights = new Dictionary<int, SightMemo>();
         }
 
         readonly List<Courier> _couriers = new List<Courier>();
@@ -161,11 +173,12 @@ namespace Battalion.Sim
         DispatchBook NewBook(Company c)
         {
             var b = new DispatchBook { LossBaseStrength = c.InitialStrength };
-            // 会戦の初めにすでに 600m 以内で気付いている敵は、既知の敵として報告しない
-            foreach (var e in _companies)
-                if (e.OnBoard && e.Side != c.Side && e.UnderCommand
-                    && Vec2.Distance(c.Position, e.Position) <= CP.DiscoverRadiusM && Aware(c, e))
-                    b.Discovered.Add(e.Id);
+            // 会戦の初めにすでに 600m 以内で気付いている敵は、既知の敵として報告しない（P2d では初めの敵情があるので、全て報告する）
+            if (!_p.Fog.Reports)
+                foreach (var e in _companies)
+                    if (e.OnBoard && e.Side != c.Side && e.UnderCommand
+                        && Vec2.Distance(c.Position, e.Position) <= CP.DiscoverRadiusM && Aware(c, e))
+                        b.Discovered.Add(e.Id);
             // 会戦の初めの命令待ちは「命令を終えた」にしない。命令を請うの 5分は会戦の初めから数える
             b.PrevAwaiting = AwaitingOrders(c);
             if (b.PrevAwaiting)
@@ -217,14 +230,16 @@ namespace Battalion.Sim
             }
             b.PrevAwaiting = awaiting;
 
-            // 敵発見：気付いている指揮下の敵が 600m 以内に初めて入った
-            foreach (var e in _companies)
-            {
-                if (!e.OnBoard || e.Side == c.Side || !e.UnderCommand || b.Discovered.Contains(e.Id)) continue;
-                if (Vec2.Distance(c.Position, e.Position) > CP.DiscoverRadiusM || !Aware(c, e)) continue;
-                b.Discovered.Add(e.Id);
-                NoteDispatch(c, DispatchKind.EnemySighted, t, e);
-            }
+            // 敵発見：気付いている指揮下の敵が 600m 以内に初めて入った（P2d では距離の限りを外し、続報・変化も送る）
+            if (_p.Fog.Reports) WatchEnemies(c, b, t);
+            else
+                foreach (var e in _companies)
+                {
+                    if (!e.OnBoard || e.Side == c.Side || !e.UnderCommand || b.Discovered.Contains(e.Id)) continue;
+                    if (Vec2.Distance(c.Position, e.Position) > CP.DiscoverRadiusM || !Aware(c, e)) continue;
+                    b.Discovered.Add(e.Id);
+                    NoteDispatch(c, DispatchKind.EnemySighted, t, e);
+                }
 
             // 損害大：前の「損害大」から、初めの兵力の 20%（慎重は 10%）を新たに失った
             double step = CP.HeavyLossStep[c.Personality] * c.InitialStrength;
@@ -332,6 +347,7 @@ namespace Battalion.Sim
                     {
                         d.ArrivedTime = t;
                         _inbox.Add(d);
+                        if (d.Report != null) ReceiveReport(d.Report);
                     }
                     if (_log.Enabled)
                         _log.Write(Ev(t, "courier_delivered", _companies[r.CompanyId]).Add("courier", r.Id).Add("side", SideName(r.Side))
@@ -362,7 +378,7 @@ namespace Battalion.Sim
         {
             if (d.Category != DispatchCategory.Request) return null;
             var draft = new OrderSheetDraft(d.CompanyId);
-            if (d.Kind == DispatchKind.AskPursuit && d.OtherId >= 0)
+            if (d.Kind == DispatchKind.AskPursuit && d.OtherId >= 0 && d.Report == null)
                 draft.Write(Order.Attack(d.CompanyId, d.OtherId, AttackAspect.None, AttackOnBreak.Pursue), maxStages);
             return draft;
         }

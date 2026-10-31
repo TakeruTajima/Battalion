@@ -42,6 +42,16 @@ namespace Battalion.Sim
         public readonly HashSet<(int i, int j)> TrenchCells = new HashSet<(int i, int j)>();
         public JsonValue Source;
         public readonly List<Deploy> Units = new List<Deploy>();
+
+        /// <summary>会戦の始めの敵情（P2d。地図ファイルの initial_intel：時刻 0 の報告の位置・規模・向き）。書かなければなし。</summary>
+        public sealed class Intel
+        {
+            public Vec2 Position;
+            public EnemySize Size;
+            public double? FacingDeg;
+        }
+
+        public readonly List<Intel> InitialIntel = new List<Intel>();
         public readonly HashSet<(int i, int j)> VillageCells = new HashSet<(int i, int j)>();
         public double TimeLimitMin;
 
@@ -95,6 +105,13 @@ namespace Battalion.Sim
                         Formation = ReadFormation(u),
                     });
             }
+            if (d.TryGet("initial_intel", out var intel))
+                foreach (var u in intel.Array)
+                    s.InitialIntel.Add(new Intel
+                    {
+                        Position = new Vec2(u.D("x"), u.D("y")), Size = ReadSize(u["size"].String),
+                        FacingDeg = u.Has("facing") ? u.D("facing") : (double?)null,
+                    });
             if (d["objects"].Has("village"))
                 foreach (var c in d["objects"]["village"]["cells"].Array)
                     s.VillageCells.Add(((int)c.Array[0].Number, (int)c.Array[1].Number));
@@ -235,6 +252,18 @@ namespace Battalion.Sim
             return overlaps;
         }
 
+        /// <summary>初めの敵情の規模（many／half／few）。</summary>
+        static EnemySize ReadSize(string s)
+        {
+            switch (s)
+            {
+                case "many": return EnemySize.Many;
+                case "half": return EnemySize.Half;
+                case "few": return EnemySize.Few;
+                default: throw new InvalidOperationException($"initial_intel の size が many／half／few でない: {s}");
+            }
+        }
+
         /// <summary>配置の formation（line／column。書かなければ横隊）。</summary>
         static Formation ReadFormation(JsonValue u)
         {
@@ -273,6 +302,8 @@ namespace Battalion.Sim
                 sim.AddCompany(u.Id, u.Side, TrainingOf(u.Id), PersonalityOf(u.Id), new Vec2(u.X, u.Y), u.FacingDeg).Formation = u.Formation;
 
             AssignTrenchFacings(sim);
+            foreach (var i in InitialIntel)
+                sim.AddInitialIntel(i.Position, i.Size, i.FacingDeg.HasValue ? i.FacingDeg.Value * Angles.DegToRad : (double?)null);
             ValidateDefensePlan(Defense, sim);
 
             var cs = sim.Companies;

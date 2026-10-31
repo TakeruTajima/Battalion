@@ -165,7 +165,7 @@ namespace Battalion.Sim.Tests
         [Test]
         public void PassiveRedLogMatchesR21()
         {
-            var p = TestUtil.WithoutF1(TestUtil.WithoutR4(TestUtil.WithoutR3(TestUtil.ParamsWithoutE1())));
+            var p = TestUtil.WithoutP2d(TestUtil.WithoutF1(TestUtil.WithoutR4(TestUtil.WithoutR3(TestUtil.ParamsWithoutE1()))));
             using var progress = RunProgress.Begin("受け身の赤のログの一致", R21Hashes.Length);
             var got = new System.Collections.Generic.List<string>();
             foreach (int stage in new[] { 1, 2 })

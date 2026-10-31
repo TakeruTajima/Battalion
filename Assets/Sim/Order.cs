@@ -39,11 +39,19 @@ namespace Battalion.Sim
         public AttackOnBreak OnBreak { get; }
         /// <summary>拘束の距離。</summary>
         public PinRange PinRange { get; }
+        /// <summary>
+        /// 報告の駒への攻撃・拘束（P2d）：駒の ID と、命令を出した時の駒の位置。目標の中隊（<see cref="TargetId"/>）はまだ決まっていない（−1）。
+        /// 受けた中隊が、駒の位置の近くの気付いている敵を目標にする。駒への命令でなければ −1 と null。
+        /// </summary>
+        public int PieceId { get; }
+        public Vec2? PiecePosition { get; }
 
         Order(OrderType type, int companyId, Vec2? destination, double? facingRad,
             int targetId = -1, AttackAspect aspect = AttackAspect.None, double? bearingRad = null,
-            AttackOnBreak onBreak = AttackOnBreak.Secure, PinRange pinRange = PinRange.Far)
+            AttackOnBreak onBreak = AttackOnBreak.Secure, PinRange pinRange = PinRange.Far, int pieceId = -1, Vec2? piecePosition = null)
         {
+            PieceId = pieceId;
+            PiecePosition = piecePosition;
             Type = type;
             CompanyId = companyId;
             Destination = destination;
@@ -73,6 +81,27 @@ namespace Battalion.Sim
         public static Order AttackFrom(int companyId, int targetId, double bearingRad,
             AttackOnBreak onBreak = AttackOnBreak.Secure) =>
             new Order(OrderType.Attack, companyId, null, null, targetId, AttackAspect.None, bearingRad, onBreak);
+
+        /// <summary>報告の駒への攻撃（範囲での指定。P2d）。</summary>
+        public static Order AttackPiece(int companyId, int pieceId, Vec2 piecePosition, AttackAspect aspect = AttackAspect.None,
+            AttackOnBreak onBreak = AttackOnBreak.Secure) =>
+            new Order(OrderType.Attack, companyId, null, null, -1, aspect, null, onBreak, pieceId: pieceId, piecePosition: piecePosition);
+
+        /// <summary>報告の駒への攻撃（地図の方角での指定。P2d）。</summary>
+        public static Order AttackPieceFrom(int companyId, int pieceId, Vec2 piecePosition, double bearingRad,
+            AttackOnBreak onBreak = AttackOnBreak.Secure) =>
+            new Order(OrderType.Attack, companyId, null, null, -1, AttackAspect.None, bearingRad, onBreak, pieceId: pieceId, piecePosition: piecePosition);
+
+        /// <summary>報告の駒への拘束（P2d）。</summary>
+        public static Order PinPiece(int companyId, int pieceId, Vec2 piecePosition, PinRange range = PinRange.Far) =>
+            new Order(OrderType.Pin, companyId, null, null, -1, pinRange: range, pieceId: pieceId, piecePosition: piecePosition);
+
+        /// <summary>報告の駒への命令か（目標の中隊がまだ決まっていない）。</summary>
+        public bool ToPiece => PiecePosition.HasValue && TargetId < 0;
+
+        /// <summary>報告の駒への命令の目標を決めた命令（種類・範囲・方角・崩れたら・拘束の距離はそのまま）。</summary>
+        public Order WithTarget(int targetId) =>
+            new Order(Type, CompanyId, Destination, FacingRad, targetId, Aspect, BearingRad, OnBreak, PinRange, PieceId, PiecePosition);
 
         /// <summary>拘束（初期は遠い）。</summary>
         public static Order Pin(int companyId, int targetId, PinRange range = PinRange.Far) =>
