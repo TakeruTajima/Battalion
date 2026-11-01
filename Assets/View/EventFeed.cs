@@ -151,19 +151,38 @@ namespace Battalion.View
                     if (v["side"].String == "blue") Add(t, $"{unit} 動揺から回復、止めていた段を再開", false);
                     break;
                 case "rout":
+                {
                     EverRouted.Add(unit);
                     bool enc = v.TryGet("encircled", out var e) && e.Bool;
+                    string melee = v.TryGet("in_melee", out var mv) ? mv.String : null;
                     bool aborted = _sheetAborted.Remove(unit);
-                    if (!enc)
+                    // 降伏するときは「降伏」の行だけを出す（包囲・白兵戦の中の降伏。R6）
+                    if (!enc && melee != "surrender")
                     {
-                        Add(t, aborted ? $"{unit} 壊走（命令書は中断）" : $"{unit} 壊走", true);
+                        string what = melee == "rout" ? "白兵戦で壊走" : "壊走";
+                        Add(t, aborted ? $"{unit} {what}（命令書は中断）" : $"{unit} {what}", true);
                         Happen(t, Kind.Routed, unit, null);
                     }
                     break;
+                }
                 case "surrender":
                     EverRouted.Add(unit);
-                    Add(t, $"{unit} 降伏（包囲されて壊走）", true);
+                    Add(t, v.Has("in_melee") ? $"{unit} 降伏（白兵戦で壊走）" : $"{unit} 降伏（包囲されて壊走）", true);
                     Happen(t, Kind.Surrendered, unit, null);
+                    break;
+                // R6：突入と白兵戦
+                case "melee_entry":
+                {
+                    string place = v["place"].String;
+                    string where = place == "trench" ? "の塹壕" : place == "village" ? "の村" : place == "forest" ? "の森" : "";
+                    Add(t, $"{unit} 突入（{v["defender"].String}{where}）", true);
+                    break;
+                }
+                case "melee_repulsed":
+                    Add(t, $"{unit} 跳ね返される（{v["defender"].String}）", v["side"].String == "blue");
+                    break;
+                case "melee_pushed_back":
+                    Add(t, $"{unit} 押し返される（{v["defender"].String}）", v["side"].String == "blue");
                     break;
                 case "encircled_start":
                     Add(t, $"{unit} 包囲された（退路なし）", true);

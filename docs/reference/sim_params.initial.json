@@ -17,7 +17,8 @@
     "non_front_target_mult": 0.5,
     "shaken_mult": 0.7,
     "suppressed_mult": 0.5,
-    "moving_fire_mult": 0.3
+    "moving_fire_mult": 0.3,
+    "lift_clearance_m": 50
   },
   "morale": {
     "initial": 100,
@@ -366,5 +367,25 @@
     "red_fire_min": 3,
     "red_front_radius_m": 600,
     "red_safety_m": 250
+  },
+  "melee": {
+    "_note": "R6：突入と白兵戦。fire.lift_clearance_m：撃つ中隊の目標の矩形からこの距離以内に指揮下の味方の中隊の矩形が入ったら、その目標を撃たない（撃つ中隊自身が接近戦の距離にいる時は除く。射撃の延伸）。接近戦の距離で、攻撃・前進の命令でその守り手か、その守り手のいる陣地へ向かっている中隊がいる守り手ごとに、check_sec ごとに押す力（攻める側の 兵力×士気／100×倍率 の和）と守る力（兵力×士気／100×倍率。陣地の守り defense_mult）を比べる。倍率：制圧下 ×0.25、動揺 ×0.5、（攻める側）占領の乱れ・展開中・縮合中 ×0.5、守り手から見て側面 ×1.5・背面 ×2.0、練度（撃つ力の練度の倍率）。押す力が勝てば突入（白兵戦、守り手の士気 −entry_shock）。勝たなければ跳ね返し（攻める側の各中隊の士気 −repulse_morale）。白兵戦の間は、その相手との小銃の撃ち合いの代わりに毎分、守り手は兵力の loss_pct_defender％×（押す力／守る力、上限 loss_ratio_cap）と士気 −morale_defender、攻める側は兵力の loss_pct_attacker％と士気 −morale_attacker（陣地の守りは効かない。村だけは損害 ×village_loss_mult）。check_sec ごとに比べ直し、押す力が勝たなくなったら白兵戦は終わり（攻める側の各中隊の士気 −repulse_morale）。白兵戦の中で壊走した守り手は、確率 surrender_prob でその場で降伏する",
+    "check_sec": 30,
+    "defense_mult": {
+      "trench": 2.0,
+      "scrape": 1.3,
+      "village": 2.0,
+      "forest": 1.3,
+      "plain": 1.0
+    },
+    "repulse_morale": 10,
+    "loss_pct_defender": 8,
+    "loss_pct_attacker": 4,
+    "morale_defender": 20,
+    "morale_attacker": 5,
+    "entry_shock": 15,
+    "surrender_prob": 0.3,
+    "loss_ratio_cap": 3,
+    "village_loss_mult": 0.7
   }
 }

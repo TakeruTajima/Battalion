@@ -40,6 +40,15 @@ namespace Battalion.Sim.Tests
             WithoutF1(p);
             WithoutP2d(p);
             WithoutP3(p);
+            WithoutR6(p);
+            return p;
+        }
+
+        /// <summary>R6 の規則を止める：射撃の延伸なし、突入と白兵戦なし（接近戦は小銃の撃ち合いだけ）。</summary>
+        public static SimParams WithoutR6(SimParams p)
+        {
+            p.Fire.LiftEnabled = false;
+            p.Melee.Enabled = false;
             return p;
         }
 

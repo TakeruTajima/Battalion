@@ -518,6 +518,8 @@ namespace Battalion.Sim.Tests
             public double DistAtEnd, Closed, RedRouted, BlueRouted;
             /// <summary>赤が崩れた時刻（砲撃が止んでからの分。崩した会戦だけ）。</summary>
             public readonly List<double> RedRoutAfterMin = new List<double>();
+            /// <summary>接近戦の距離に入ってから赤が崩れるまでの分（R6 の S28。詰めて崩した会戦だけ）。</summary>
+            public readonly List<double> CloseToRoutMin = new List<double>();
         }
 
         /// <summary>
@@ -551,6 +553,7 @@ namespace Battalion.Sim.Tests
                 {
                     r.RedRouted += 1.0 / Seeds;
                     r.RedRoutAfterMin.Add(run.routAfterSec / 60);
+                    if (run.closeAt.HasValue) r.CloseToRoutMin.Add((run.routAt - run.closeAt.Value) / 60);
                 }
                 if (run.blueRouted) r.BlueRouted += 1.0 / Seeds;
             }
@@ -558,7 +561,8 @@ namespace Battalion.Sim.Tests
         }
 
         /// <summary>1回の S28。<paramref name="fireAt"/> が null なら砲撃なし（時刻を合わせるための下見。射程の手前に着いたら止める）。</summary>
-        static (double lossToClose, double lossToEnd, double distEnd, bool closed, bool redRouted, bool blueRouted, double? atRange, double routAfterSec)
+        static (double lossToClose, double lossToEnd, double distEnd, bool closed, bool redRouted, bool blueRouted, double? atRange, double routAfterSec,
+            double? closeAt, double routAt)
             AssaultOnce(SimParams p, ulong seed, bool during, double? fireAt)
         {
             var sim = Flat(p, seed);
@@ -576,7 +580,7 @@ namespace Battalion.Sim.Tests
             if (fireAt.HasValue) sim.RequestFire(Side.Blue, r.Position, 5, fireAt.Value);
             if (during) sim.Issue(Order.Advance(b.Id, r.Position, 0));
             double end = (fireAt ?? 0) + 300;
-            double? atRange = null, lossToClose = null;
+            double? atRange = null, lossToClose = null, closeAt = null;
             double distEnd = 0;
             bool issued = during, ended = false;
             while (sim.Time < end + 900 - 1e-9 && r.UnderCommand && b.UnderCommand)
@@ -587,7 +591,11 @@ namespace Battalion.Sim.Tests
                     atRange = sim.Time;
                     if (!fireAt.HasValue) break;
                 }
-                if (!lossToClose.HasValue && sim.InCloseCombat(b, r)) lossToClose = P(b);
+                if (!lossToClose.HasValue && sim.InCloseCombat(b, r))
+                {
+                    lossToClose = P(b);
+                    closeAt = sim.Time;
+                }
                 if (!ended && sim.Time >= end - 1e-9)
                 {
                     ended = true;
@@ -596,7 +604,7 @@ namespace Battalion.Sim.Tests
                     issued = true;
                 }
             }
-            return (lossToClose ?? P(b), P(b), distEnd, lossToClose.HasValue, !r.UnderCommand, !b.UnderCommand, atRange, sim.Time - end);
+            return (lossToClose ?? P(b), P(b), distEnd, lossToClose.HasValue, !r.UnderCommand, !b.UnderCommand, atRange, sim.Time - end, closeAt, sim.Time);
         }
 
         [Test]

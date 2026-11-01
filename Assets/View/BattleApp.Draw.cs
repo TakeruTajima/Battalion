@@ -299,11 +299,13 @@ namespace Battalion.View
             DrawDisarray(c, pos, facing, px);
             if (c.UnderCommand) DrawAction(c, pos, facing, fv, lv, hd, hf, ex, ey, px);
             DrawBars(c, pos, ey, px);
-            // 駒の上の印は1つまで：制圧下（R1）の「伏せ」、開けた所を移動中で被弾 ×3.0 の「露」（R2.1）
-            if (c.UnderCommand && (c.Suppressed || _sim.ExposedWhileMoving(c)))
+            // 駒の上の印は1つまで：白兵戦（R6。突入した側は「突入」、守り手は「白兵戦」）、制圧下（R1）の「伏せ」、
+            // 開けた所を移動中で被弾 ×3.0 の「露」（R2.1）
+            bool melee = Simulation.InMelee(c);
+            if (c.UnderCommand && (melee || c.Suppressed || _sim.ExposedWhileMoving(c)))
             {
-                string mark = c.Suppressed ? "伏せ" : "露";
-                var col = c.Suppressed ? new Color(1f, 0.85f, 0.3f) : new Color(1f, 0.5f, 0.35f);
+                string mark = melee ? (c.MeleeDefenderId >= 0 ? "突入" : "白兵戦") : c.Suppressed ? "伏せ" : "露";
+                var col = melee ? new Color(1f, 0.35f, 0.3f) : c.Suppressed ? new Color(1f, 0.85f, 0.3f) : new Color(1f, 0.5f, 0.35f);
                 var at = V(pos) + new Vector2(0, ey + 8 * px);
                 _texts.Draw(mark, at + new Vector2(1.2f * px, -1.2f * px), 13, px, new Color(0, 0, 0, 0.85f));
                 _texts.Draw(mark, at, 13, px, col);

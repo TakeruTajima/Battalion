@@ -30,6 +30,8 @@ namespace Battalion.Sim
         public double X, Y, FacingDeg;
         /// <summary>攻撃の目標（E1。null なら前進）。</summary>
         public string Target;
+        /// <summary>撃ち方やめ（R6 の S30。命令は変えずに、その中隊の射撃を止める）。</summary>
+        public bool CeaseFire;
     }
 
     /// <summary>場面の塹壕（E1）：中心のマスと、向きに直交する左右2マスずつ（5マス）。向きと、初めの持ち主（null なら会戦開始時にいる中隊の側）。</summary>
@@ -125,7 +127,8 @@ namespace Battalion.Sim
             while (next < Orders.Count && Orders[next].AtSec <= sim.Time + 1e-9)
             {
                 var o = Orders[next++];
-                if (o.Target != null) sim.Issue(Order.Attack(sim.Find(o.Unit).Id, sim.Find(o.Target).Id));
+                if (o.CeaseFire) sim.Find(o.Unit).HoldFire = true;
+                else if (o.Target != null) sim.Issue(Order.Attack(sim.Find(o.Unit).Id, sim.Find(o.Target).Id));
                 else sim.Issue(Order.Advance(sim.Find(o.Unit).Id, new Vec2(o.X, o.Y), o.FacingDeg * Angles.DegToRad));
             }
         }
@@ -205,6 +208,18 @@ namespace Battalion.Sim
             sc.Orders.Add(Advance(0, "A", 100, -100, 0));
             sc.Orders.Add(Advance(0, "C", 100, 100, 0));
             sc.Orders.Add(Advance(180, "B", 400, 0, 0));
+            return sc;
+        }
+
+        /// <summary>
+        /// S30 遅れた突撃（R6）：S8 と同じで、前の A・C は B が出る時（3分）に撃ち方をやめる（延伸ではなく、早く止めすぎる）。
+        /// </summary>
+        public static Scenario S30_late_assault()
+        {
+            var sc = S8_suppress_then_assault();
+            sc.Name = "S30_late_assault";
+            sc.Orders.Add(new SceneOrder { AtSec = 180, Unit = "A", CeaseFire = true });
+            sc.Orders.Add(new SceneOrder { AtSec = 180, Unit = "C", CeaseFire = true });
             return sc;
         }
 
@@ -369,6 +384,7 @@ namespace Battalion.Sim
                 case "S17_retake": return S17_retake();
                 case "S18_counter_right_after_capture": return S18_counter_right_after_capture();
                 case "S19_counter_after_consolidation": return S19_counter_after_consolidation();
+                case "S30_late_assault": return S30_late_assault();
                 default: throw new KeyNotFoundException(name);
             }
         }

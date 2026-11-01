@@ -245,6 +245,21 @@ namespace Battalion.Sim
         /// <summary>会戦中に気付いたことのある敵の、最後に見た位置（敵の ID ごと。P2d.1 の1）。</summary>
         public readonly System.Collections.Generic.Dictionary<int, Vec2> LastSeenEnemyAt = new System.Collections.Generic.Dictionary<int, Vec2>();
 
+        // ---- R6：突入と白兵戦
+        /// <summary>守り手として白兵戦の中にいる時、突入した攻める側の中隊の ID（白兵戦でなければ空）。</summary>
+        public readonly System.Collections.Generic.List<int> MeleeAttackers = new System.Collections.Generic.List<int>();
+        /// <summary>攻める側として白兵戦の中にいる時、相手の守り手の ID（−1 はなし）。</summary>
+        public int MeleeDefenderId = -1;
+        /// <summary>守り手の次に比べる時刻（押す力に数える中隊がいなければ NaN）。</summary>
+        public double MeleeNextCheck = double.NaN;
+        /// <summary>直近の比べの押す力と守る力（表示用。比べたことがなければ NaN）と、白兵戦の損害に掛ける押す力／守る力（上限つき）。</summary>
+        public double MeleePush = double.NaN, MeleeDefend = double.NaN;
+        public double MeleeRatio;
+        /// <summary>守り手の白兵戦が最後に終わった時刻（突入の衝撃を、切れ目のすぐ後の入り直しで二度受けないため）。</summary>
+        public double MeleeEndedTime = double.NegativeInfinity;
+        /// <summary>撃ち方やめ（検証の場面 S30 だけで使う。true なら撃たない）。</summary>
+        public bool HoldFire;
+
         /// <summary>直前の刻みで狙った目標の ID（-1 はなし）。</summary>
         public int TargetId = -1;
 

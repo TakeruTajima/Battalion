@@ -33,6 +33,29 @@ namespace Battalion.Sim
         public DefenseParams Defense = new DefenseParams();
         public OccupationParams Occupation = new OccupationParams();
         public ArtilleryParams Artillery = new ArtilleryParams();
+        public MeleeParams Melee = new MeleeParams();
+
+        /// <summary>R6 の突入と白兵戦（"melee"）。</summary>
+        public sealed class MeleeParams
+        {
+            /// <summary>突入と白兵戦を使うか。JSON にはない（前の版のログと比べるテストで止める）。</summary>
+            public bool Enabled = true;
+            /// <summary>押す力と守る力を比べる間隔（秒）。</summary>
+            public double CheckSec;
+            /// <summary>守る力の陣地の倍率：塹壕・陣地構築、浅い掩体、村、森、それ以外（平地など）。</summary>
+            public double DefenseTrench, DefenseScrape, DefenseVillage, DefenseForest, DefensePlain;
+            /// <summary>跳ね返された・押し返された時の、攻める側の各中隊の士気の減り。</summary>
+            public double RepulseMorale;
+            /// <summary>白兵戦の毎分の損害（兵力の％。守り手は押す力／守る力を掛ける。上限 <see cref="LossRatioCap"/>）と士気の減り。</summary>
+            public double LossPctDefender, LossPctAttacker, MoraleDefender, MoraleAttacker;
+            /// <summary>突入した瞬間の守り手の士気の減り。</summary>
+            public double EntryShock;
+            /// <summary>白兵戦の中で壊走した守り手が、その場で降伏する確率。</summary>
+            public double SurrenderProb;
+            public double LossRatioCap;
+            /// <summary>村の白兵戦の損害の倍率。</summary>
+            public double VillageLossMult;
+        }
 
         /// <summary>P3 の砲兵（"artillery"）。野砲中隊の有無と弾数は地図ファイルの artillery。</summary>
         public sealed class ArtilleryParams
@@ -260,6 +283,10 @@ namespace Battalion.Sim
             public double SuppressedMult;
             /// <summary>その刻みに実際に動いた射手の撃つ力の倍率（R1 の規則3。動きながら撃つと当たりにくい）。</summary>
             public double MovingFireMult;
+            /// <summary>射撃の延伸（R6 の1）：目標の矩形からこの距離以内に指揮下の味方の矩形が入ったら、その目標を撃たない。</summary>
+            public double LiftClearanceM;
+            /// <summary>射撃の延伸を使うか。JSON にはない（前の版のログと比べるテストで止める）。</summary>
+            public bool LiftEnabled = true;
         }
 
         public sealed class MoraleParams
@@ -562,6 +589,7 @@ namespace Battalion.Sim
             p.Fire.ShakenMult = f.D("shaken_mult");
             p.Fire.SuppressedMult = f.D("suppressed_mult");
             p.Fire.MovingFireMult = f.D("moving_fire_mult");
+            p.Fire.LiftClearanceM = f.D("lift_clearance_m");
 
             var m = root["morale"];
             p.Morale.Initial = m.D("initial");
@@ -827,6 +855,24 @@ namespace Battalion.Sim
             p.Occupation.Enabled = oc["enabled"].Bool;
             p.Occupation.DisarraySec = oc.D("disarray_sec");
             p.Occupation.DisarrayFireMult = oc.D("disarray_fire_mult");
+
+            var me = root["melee"];
+            p.Melee.CheckSec = me.D("check_sec");
+            var mdm = me["defense_mult"];
+            p.Melee.DefenseTrench = mdm.D("trench");
+            p.Melee.DefenseScrape = mdm.D("scrape");
+            p.Melee.DefenseVillage = mdm.D("village");
+            p.Melee.DefenseForest = mdm.D("forest");
+            p.Melee.DefensePlain = mdm.D("plain");
+            p.Melee.RepulseMorale = me.D("repulse_morale");
+            p.Melee.LossPctDefender = me.D("loss_pct_defender");
+            p.Melee.LossPctAttacker = me.D("loss_pct_attacker");
+            p.Melee.MoraleDefender = me.D("morale_defender");
+            p.Melee.MoraleAttacker = me.D("morale_attacker");
+            p.Melee.EntryShock = me.D("entry_shock");
+            p.Melee.SurrenderProb = me.D("surrender_prob");
+            p.Melee.LossRatioCap = me.D("loss_ratio_cap");
+            p.Melee.VillageLossMult = me.D("village_loss_mult");
 
             return p;
         }

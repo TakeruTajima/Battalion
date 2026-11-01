@@ -100,6 +100,8 @@ namespace Battalion.Sim
         public double Disengage;
         /// <summary>壊走中の味方にすり抜けられた（隊形の乱れ）。P1d。</summary>
         public double Disarray;
+        /// <summary>突入と白兵戦（R6）：突入の衝撃・白兵戦の毎分の減り・跳ね返し・押し返し。</summary>
+        public double Melee;
 
         public void AddAspect(Aspect a, double delta)
         {
@@ -123,7 +125,8 @@ namespace Battalion.Sim
                 .Add("under_fire", UnderFire)
                 .Add("recovery", Recovery)
                 .Add("disengage", Disengage)
-                .Add("disarray", Disarray);
+                .Add("disarray", Disarray)
+                .AddIf(Melee != 0, "melee", Melee);
         }
     }
 }

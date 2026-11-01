@@ -100,6 +100,7 @@ namespace Battalion.Sim
             UpdateOccupation(t);
             var shots = SelectTargets();
             Resolve(shots, t, tickStart);
+            UpdateMelee(t);
             UpdateSuppression(t);
             UpdateFacingReaction(t);
             Transitions(t);
@@ -306,9 +307,9 @@ namespace Battalion.Sim
         /// </summary>
         public Company SelectTarget(Company shooter)
         {
-            if (!shooter.UnderCommand || shooter.Strength <= 0) return null;
+            if (!shooter.UnderCommand || shooter.Strength <= 0 || shooter.HoldFire) return null;
             var forced = OrderTarget(shooter);
-            if (forced != null && CanFireAt(shooter, forced)) return forced;
+            if (forced != null && CanFireAt(shooter, forced) && !HeldFire(shooter, forced)) return forced;
 
             Company bestFront = null, bestAny = null;
             double dFront = double.MaxValue, dAny = double.MaxValue;
@@ -318,12 +319,16 @@ namespace Battalion.Sim
                 double d = Vec2.Distance(shooter.Position, e.Position);
                 if (d > _p.Fire.RangeMaxM) continue;
                 if (!SightForFire(shooter, e)) continue; // 接触中は視線を問わない（P1g）
+                if (HeldFire(shooter, e)) continue;
                 // 走査は ID 昇順なので、厳密に小さいときだけ更新すれば同距離は ID の小さい方が残る
                 if (d < dAny) { dAny = d; bestAny = e; }
                 if (AspectOf(shooter, e.Position) == Aspect.Front && d < dFront) { dFront = d; bestFront = e; }
             }
             return bestFront ?? bestAny;
         }
+
+        /// <summary>撃たない目標（R6）：射撃の延伸か、白兵戦の相手（小銃の撃ち合いの代わりに白兵戦の損害を受ける）。</summary>
+        bool HeldFire(Company shooter, Company e) => MeleeOpponents(shooter, e) || FireLifted(shooter, e);
 
         /// <summary>
         /// 距離倍率 f_range。接近戦（<paramref name="closeCombat"/>）は 2.0、中心どうし 150m 以内は 1.3、400m までは 1.0、
@@ -855,7 +860,9 @@ namespace Battalion.Sim
         void Rout(Company c, double t)
         {
             var prev = c.State;
-            bool surrender = c.Encircled;
+            // 白兵戦の中で壊走した守り手は、確率 melee.surrender_prob でその場で降伏する（R6）
+            bool inMelee = c.MeleeAttackers.Count > 0;
+            bool surrender = c.Encircled || SurrendersInMelee(c);
             c.State = surrender ? CompanyState.Surrendered : CompanyState.Routed;
             c.Pinned = false;
             c.Disengaging = false;
@@ -886,11 +893,12 @@ namespace Battalion.Sim
                 _log.Write(Ev(t, "rout", c)
                     .Add("morale", c.Morale)
                     .Add("strength", c.Strength)
-                    .Add("encircled", surrender)
+                    .Add("encircled", c.Encircled)
                     .Add("morale_causes", c.Ledger.ToJson())
+                    .AddIf(inMelee, "in_melee", surrender ? "surrender" : "rout")
                     .ToString());
                 if (surrender)
-                    _log.Write(Ev(t, "surrender", c).Add("strength", c.Strength).ToString());
+                    _log.Write(Ev(t, "surrender", c).Add("strength", c.Strength).AddIf(inMelee, "in_melee", "yes").ToString());
             }
 
             // 隣の崩壊の報告（P2c.2。情報だけ）

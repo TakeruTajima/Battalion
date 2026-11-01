@@ -89,7 +89,7 @@ namespace Battalion.Sim.Tests
         /// <summary>
         /// シナリオA の作戦（ステージ2 の段階つき、シード1、90分。中隊の伝令の行を含むログ全体）のハッシュが、.NET で取った値と同じ。
         /// Unity でも通れば、会戦の計算とログの書き方が両方で同じ。E1（赤の守り方、占領の乱れ。報告の後の直しと、その後の2回目〜5回目を含む）と R3（向き直りの速さ。報告の後の「線を張った中隊だけ」を含む）を入れた値で取り直した
-        /// （R1 の前は 3929行・67e779d0…、R1 では 3924行・6637bf00…、R2 では 3965行・986fa11c…、R2.1 では 3939行・ac0c6f8a…、E1 の1回目の直しでは 3984行・13e43487…、2回目では 3993行・202050ba…、3回目では 3965行・48b77df1…、E1 の区切り（proto-e1-defense）では 3965行・4d13d92b…、R3 の初めの版では 3994行・a909c923…、P2d.1 までは 4102行・b0ff05f7…。P3 で両軍に砲兵がついた）。
+        /// （R1 の前は 3929行・67e779d0…、R1 では 3924行・6637bf00…、R2 では 3965行・986fa11c…、R2.1 では 3939行・ac0c6f8a…、E1 の1回目の直しでは 3984行・13e43487…、2回目では 3993行・202050ba…、3回目では 3965行・48b77df1…、E1 の区切り（proto-e1-defense）では 3965行・4d13d92b…、R3 の初めの版では 3994行・a909c923…、P2d.1 までは 4102行・b0ff05f7…、P3 では 4105行・8220b35b…。R6 で射撃の延伸と突入・白兵戦が入った）。
         /// </summary>
         [Test]
         public void ScenarioALogIsTheSameOnUnityAndDotNet()
@@ -97,6 +97,17 @@ namespace Battalion.Sim.Tests
             var sc = MapScenario.LoadFile(TestUtil.PathOf("maps/scenario_a2.json"));
             string log = ScenarioLogHashTests.RunAndLog(sc, new ScenarioAReportTests.PlannedOrder[0], 1, out int n,
                 s => ScenarioAReportTests.StagedPinAndFlankStart(s, 2), ScenarioAReportTests.StagedPinAndFlankTick);
+            Assert.That(n, Is.EqualTo(3801));
+            Assert.That(ScenarioLogHashTests.Hash(log), Is.EqualTo("2a9c8f0e9e43efa6d5f1a563fb56a0994d2f6ec35104e6838bb6e218eccd5a3b"));
+        }
+
+        /// <summary>R6（射撃の延伸・突入と白兵戦）を止めた値では、上の作戦のログ全体が P3 の版（4105行・8220b35b…）と1文字も違わない。</summary>
+        [Test]
+        public void ScenarioALogWithoutR6IsTheSameAsP3()
+        {
+            var sc = MapScenario.LoadFile(TestUtil.PathOf("maps/scenario_a2.json"));
+            string log = ScenarioLogHashTests.RunAndLog(sc, new ScenarioAReportTests.PlannedOrder[0], 1, out int n,
+                s => ScenarioAReportTests.StagedPinAndFlankStart(s, 2), ScenarioAReportTests.StagedPinAndFlankTick, TestUtil.WithoutR6(TestUtil.ParamsWith()));
             Assert.That(n, Is.EqualTo(4105));
             Assert.That(ScenarioLogHashTests.Hash(log), Is.EqualTo("8220b35bc34225f5808076408868a5df5fe470f9b4113ed402103dcad53f06e5"));
         }

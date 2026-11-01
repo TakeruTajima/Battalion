@@ -266,6 +266,8 @@ namespace Battalion.View
                 if (c.DisarrayUntil >= _sim.Time) s += "・<color=#ffa040>隊形の乱れ</color>";
                 string sup = c.RifleSuppressed ? "制圧下" : "砲撃で制圧下";
                 if (c.Suppressed) s += _sim.PinnedDown(c) ? $"・<color=#ffd84d>{sup}（伏せて停止）</color>" : $"・<color=#ffd84d>{sup}</color>";
+                if (c.MeleeDefenderId >= 0) s += $"・<color=#ff6050>突入（{_sim.Get(c.MeleeDefenderId).Name}）</color>";
+                else if (c.MeleeAttackers.Count > 0) s += "・<color=#ff6050>白兵戦</color>";
                 if (c.Pinned) s += "・拘束";
                 if (c.Encircled) s += "・<color=#ff6060>包囲</color>";
                 if (c.Fortified) s += "・籠城";
@@ -336,7 +338,7 @@ namespace Battalion.View
             double deg = c.Facing * Angles.RadToDeg;
             GUILayout.Label($"向き {Compass(deg)}（{deg:0}°）　位置 ({c.Position.X:0}, {c.Position.Y:0})", _small);
             var l = c.Ledger;
-            GUILayout.Label($"士気の要因：正面{l.Front:0} 側面{l.Flank:0} 背面{l.Rear:0} 包囲{l.Encircled:0}\n　隣の壊走{l.NeighborRout:0} 被弾中{l.UnderFire:0} 離脱{l.Disengage:0} 回復+{l.Recovery:0}", _small);
+            GUILayout.Label($"士気の要因：正面{l.Front:0} 側面{l.Flank:0} 背面{l.Rear:0} 包囲{l.Encircled:0}\n　隣の壊走{l.NeighborRout:0} 被弾中{l.UnderFire:0} 離脱{l.Disengage:0} 砲撃{l.Artillery:0} 白兵戦{l.Melee:0} 回復+{l.Recovery:0}", _small);
 
             // 今効いている倍率（R2.1）、受けている火力と伏せるしきい値（R1）、陣地の向き（R2）
             if (c.UnderCommand)
@@ -347,6 +349,10 @@ namespace Battalion.View
                                 $"{(_sim.MovingPosture(c) ? "動いている" : "止まっている")}）" +
                                 (c.Suppressed ? (c.RifleSuppressed ? "　<color=#ffd84d>制圧下</color>" : "　<color=#ffd84d>砲撃で制圧下</color>") : ""), _small);
                 GUILayout.Label(FortificationText(c), _small);
+                // 直近の突入の比べ（R6）：守り手は自分の比べ、攻める側は相手の守り手との比べ
+                if (!double.IsNaN(c.MeleePush))
+                    GUILayout.Label($"直近の突入の比べ：押す力 {c.MeleePush:0}・守る力 {c.MeleeDefend:0}" +
+                                    (c.MeleePush > c.MeleeDefend ? "（押す力が勝つ）" : "（守る力が勝つ）"), _small);
             }
 
             GUILayout.Space(8);

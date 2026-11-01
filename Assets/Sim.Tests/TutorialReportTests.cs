@@ -120,11 +120,11 @@ namespace Battalion.Sim.Tests
         /// 砲撃と接近戦の記録（<see cref="RunResult.FireEndSec"/> など）を取る。
         public static RunResult RunOne(MapScenario sc, TutorialOrder[] plan, ulong seed, SimParams p = null, double? timeLimitMin = null,
             ApproachWatch watch = null, Func<Simulation, TrenchClearTimes, bool> greenWhen = null, Action<Simulation> start = null,
-            BarrageWatch barrage = null)
+            BarrageWatch barrage = null, IEventSink log = null, Action<Simulation> tick = null)
         {
             greenWhen = greenWhen ?? ((s, tt) => tt.BrokenSec.HasValue);
             p = p ?? TestUtil.Params;
-            var sim = sc.Build(p, seed);
+            var sim = sc.Build(p, seed, log);
             start?.Invoke(sim);
             var times = new TrenchClearTimes(sc);
             var result = new RunResult();
@@ -148,6 +148,7 @@ namespace Battalion.Sim.Tests
                     next++;
                 }
                 sim.Step();
+                tick?.Invoke(sim);
                 times.Observe(sim);
                 if (greenWhen(sim, times)) sim.FireFlare(Side.Blue, FlareColor.Green);
                 if (watching)
