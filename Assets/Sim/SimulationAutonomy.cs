@@ -156,7 +156,7 @@ namespace Battalion.Sim
                 c.ScrapeProgress = 0;
                 return;
             }
-            bool hit = c.LastTargetedTime == t;
+            bool hit = c.LastFiredOnTime == t;
             if (hit)
             {
                 if (TerrainDamageMult(c) >= A.CoverOpenMult - 1e-9)
@@ -165,7 +165,7 @@ namespace Battalion.Sim
                 }
                 else c.UnderFireSince = null;
             }
-            else if (c.UnderFireSince.HasValue && t - c.LastTargetedTime >= A.CoverFireGapSec - 1e-9)
+            else if (c.UnderFireSince.HasValue && t - c.LastFiredOnTime >= A.CoverFireGapSec - 1e-9)
             {
                 c.UnderFireSince = null;
             }
@@ -319,6 +319,8 @@ namespace Battalion.Sim
             if (!IsScrapeGround(_map.TerrainAt(c.Position))) return;
             if (t - c.StillSince < A.ScrapeStillSec - 1e-9) return;
             if (c.ScrapeProgress <= 0 && t - c.LastTargetedTime < A.ScrapeQuietSec - 1e-9) return;
+            // 砲撃の円の中（と出てすぐ）も、撃たれているのと同じく掘り始めない（P3）
+            if (c.ScrapeProgress <= 0 && t - c.LastShelledTime < A.ScrapeQuietSec - 1e-9) return;
             // 占領の乱れの間は、守りの用意を始めない（C12）
             if (c.ScrapeProgress <= 0 && InOccupationDisarray(c)) return;
             // 浅い掩体の向きは、掘り始めたときの中隊の向き（R2）

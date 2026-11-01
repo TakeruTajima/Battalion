@@ -222,6 +222,9 @@ namespace Battalion.Sim.Tests
             /// <summary>E1 の出来事：前線の後退の時刻（分）、即座の逆襲・奪回の命令・奪回の攻撃・占領の乱れの回数。</summary>
             public readonly List<double> FallbackMin = new List<double>();
             public int Counterattacks, RetakeOrders, RetakeAttacks, Disarrays;
+            /// <summary>P3：赤の砲撃の要請（阻止射撃・陣地の前）の回数と、撃った弾数（赤・青）。</summary>
+            public int RedBarrier, RedFront;
+            public double RedRounds, BlueRounds;
         }
 
         sealed class RoutCounter : IEventSink
@@ -234,6 +237,9 @@ namespace Battalion.Sim.Tests
             /// <summary>E1 の出来事（前線の後退の時刻（秒）と、逆襲・奪回・占領の乱れの回数）。</summary>
             public readonly List<double> FallbackSec = new List<double>();
             public int Counterattacks, RetakeOrders, RetakeAttacks, Disarrays;
+            /// <summary>P3 の砲撃の出来事。</summary>
+            public int RedBarrier, RedFront;
+            public double RedRounds, BlueRounds;
             public bool Enabled => true;
 
             static readonly string[] AutonomyTypes =
@@ -247,6 +253,19 @@ namespace Battalion.Sim.Tests
                 else if (jsonLine.Contains("\"type\":\"retake_order\"")) RetakeOrders++;
                 else if (jsonLine.Contains("\"type\":\"retake_attack\"")) RetakeAttacks++;
                 else if (jsonLine.Contains("\"type\":\"occupation_disarray\"")) Disarrays++;
+                // P3 の砲撃
+                else if (jsonLine.Contains("\"type\":\"artillery_request\"") && jsonLine.Contains("\"side\":\"red\""))
+                {
+                    if (jsonLine.Contains("\"reason\":\"barrier\"")) RedBarrier++;
+                    else RedFront++;
+                }
+                else if (jsonLine.Contains("\"type\":\"artillery_end\"") || jsonLine.Contains("\"type\":\"artillery_cancel\""))
+                {
+                    var v = JsonValue.Parse(jsonLine);
+                    double n = v.Has("rounds_fired") ? v.D("rounds_fired") : 0;
+                    if (v["side"].String == "red") RedRounds += n;
+                    else BlueRounds += n;
+                }
                 // 自律行動・独断の回数（P2c）
                 foreach (var key in AutonomyTypes)
                 {
@@ -385,6 +404,10 @@ namespace Battalion.Sim.Tests
             // 小出しの版は命令がそのまま攻撃
             result.RetakeAttacks = (ParamsForRuns ?? TestUtil.Params).Defense.RetakeAssemble ? counter.RetakeAttacks : counter.RetakeOrders;
             result.Disarrays = counter.Disarrays;
+            result.RedBarrier = counter.RedBarrier;
+            result.RedFront = counter.RedFront;
+            result.RedRounds = counter.RedRounds;
+            result.BlueRounds = counter.BlueRounds;
             return result;
         }
 
@@ -556,6 +579,156 @@ namespace Battalion.Sim.Tests
             return $"| {stage} | {name} | {rs.Average(r => r.FallbackMin.Count):0.00} | {(times.Count == 0 ? "—" : $"{TestUtil.Median(times):0.0}分")} | " +
                    $"{rs.Average(r => r.Counterattacks):0.00} | {rs.Average(r => r.RetakeOrders):0.00} | {rs.Average(r => r.RetakeAttacks):0.00} | " +
                    $"{(retaken.Count == 0 ? "—" : $"{retaken.Average(r => r.Win ? 0.0 : 1.0):0.00}（{retaken.Count}/{rs.Count}）")} | {rs.Average(r => r.Disarrays):0.00} |";
+        }
+
+        // ---------------------------------------------------------------- P3：砲兵を使う作戦と、赤の砲兵なしの比べ
+
+        public const string PrepAssaultPlanName = "準備砲撃＋総員突撃";
+        public const string ShellPinFlankPlanName = "砲撃＋拘束＋迂回";
+        public const string ShellVillagePlanName = "村への砲撃＋村への前進";
+
+        /// <summary>
+        /// P3 の青の砲兵を使う3作戦（仕様「P3：砲兵（確定）」の通し実行）。どれも会戦前に計画射撃点を登録し、時刻を指定して要請する。
+        /// 1. 準備砲撃＋総員突撃：塹壕の R1 の位置（ステージ2 は北の塹壕）へ 5分。総員突撃の命令は会戦の始めに出し、砲撃は先頭が 150m に
+        ///    着く時刻に止む（P3 の報告の後に決めたこと 5。時刻は <see cref="PrepAssaultRun"/> がシードごとに合わせる。ここでは時刻 10分から）。
+        /// 2. 砲撃＋拘束＋迂回：拘束＋迂回（近い拘束。両ステージの良い方）に、迂回の B1 が発起点に着く頃（ステージ1 30分・ステージ2 20分。
+        ///    下見で測った値）から、拘束していない方の R2 の位置（ステージ1 は村、ステージ2 は南の塹壕）へ 5分。
+        /// 3. 村への砲撃＋村への前進：村への前進（全中隊）に、村の中心へ 3分×2（時刻 15分・25分）。
+        /// </summary>
+        public static List<(string name, PlannedOrder[] orders, Action<Simulation> start)> ArtilleryPlans(int stage)
+        {
+            var total = Plans(stage).First(p => p.name == "総員突撃").orders;
+            var trench = stage == 1 ? new Vec2(1825, 1000) : new Vec2(1725, 1125);
+            var other = stage == 1 ? new Vec2(2025, 1000) : new Vec2(1725, 875);
+            double flankAt = stage == 1 ? 30 * 60 : 20 * 60;
+            var v = MapScenario.VillageCenter;
+            return new List<(string, PlannedOrder[], Action<Simulation>)>
+            {
+                (PrepAssaultPlanName, total, s =>
+                {
+                    s.AddPlannedPoint(Side.Blue, trench);
+                    s.RequestFire(Side.Blue, trench, 5, 10 * 60);
+                }),
+                (ShellPinFlankPlanName, PinAndFlank(stage, true), s =>
+                {
+                    s.AddPlannedPoint(Side.Blue, other);
+                    s.RequestFire(Side.Blue, other, 5, flankAt);
+                }),
+                (ShellVillagePlanName, VillageAdvance(), s =>
+                {
+                    s.AddPlannedPoint(Side.Blue, v);
+                    s.RequestFire(Side.Blue, v, 3, 15 * 60);
+                    s.RequestFire(Side.Blue, v, 3, 25 * 60);
+                }),
+            };
+        }
+
+        /// <summary>準備砲撃＋総員突撃の、合わせた止む時刻の中央値と、先頭が 150m に着かなかった（時刻 10分から撃った）回数。</summary>
+        static readonly Dictionary<string, string> PrepTimes = new Dictionary<string, string>();
+        static readonly Dictionary<string, List<double>> PrepEnds = new Dictionary<string, List<double>>();
+
+        /// <summary>
+        /// 準備砲撃＋総員突撃を1回回す（P3 の報告の後に決めたこと 5）。砲撃が止む時に総員突撃の先頭が塹壕の R1 の位置から 150m に着くよう、
+        /// 同じシードで回して着く時刻を測ってから止む時刻を指定する：まず砲撃なしで測り、その時刻に止むよう撃って測り直し、
+        /// ずれが 30秒を越えれば測り直した時刻でもう一度回す。着かなければ時刻 10分から撃つ。
+        /// </summary>
+        public static RunResult PrepAssaultRun(MapScenario sc, int stage, PlannedOrder[] plan, ulong seed, bool redArtillery)
+        {
+            var trench = stage == 1 ? new Vec2(1825, 1000) : new Vec2(1725, 1125);
+            RunResult Once(double? end, out double? arrive)
+            {
+                double? at = null;
+                Action<Simulation> start = s =>
+                {
+                    if (!redArtillery) s.ClearArtillery(Side.Red);
+                    if (!end.HasValue) return;
+                    s.AddPlannedPoint(Side.Blue, trench);
+                    s.RequestFire(Side.Blue, trench, 5, Math.Max(60, end.Value - 300));
+                };
+                Action<Simulation> tick = s =>
+                {
+                    if (at.HasValue) return;
+                    foreach (var c in s.Companies)
+                        if (c.Side == Side.Blue && c.UnderCommand && Vec2.Distance(c.Position, trench) <= 150) { at = s.Time; break; }
+                };
+                var r = RunOne(sc, plan, seed, start, tick);
+                arrive = at;
+                return r;
+            }
+            Once(null, out var t0);
+            string key = $"ステージ{stage}・{(redArtillery ? "あり" : "なし")}";
+            if (!PrepEnds.ContainsKey(key)) PrepEnds[key] = new List<double>();
+            if (!t0.HasValue)
+            {
+                PrepEnds[key].Add(double.NaN);
+                Note(key);
+                return Once(10 * 60 + 300, out _);
+            }
+            var res = Once(t0, out var t1);
+            double used = t0.Value;
+            if (t1.HasValue && Math.Abs(t1.Value - t0.Value) > 30)
+            {
+                used = t1.Value;
+                res = Once(t1, out _);
+            }
+            PrepEnds[key].Add(used);
+            Note(key);
+            return res;
+        }
+
+        static void Note(string key)
+        {
+            var xs = PrepEnds[key].Where(x => !double.IsNaN(x)).Select(x => x / 60).ToList();
+            int miss = PrepEnds[key].Count(double.IsNaN);
+            PrepTimes[key] = (xs.Count > 0 ? $"止む時刻の中央値 {TestUtil.Median(xs):0.0}分（{TestUtil.Percentile(xs, 0):0.0}〜{TestUtil.Percentile(xs, 100):0.0}）" : "—") +
+                             $"、着かず 10分から {miss}回";
+        }
+
+        /// <summary>
+        /// P3 の通し実行：今の作戦（青は砲兵を使わない。段階つきを含む）と砲兵を使う3作戦を、赤の砲兵あり（地図のとおり）と赤の砲兵なしで
+        /// 各 20回回す。赤の砲撃の回数（阻止射撃・陣地の前）と撃った弾数を並べる。
+        /// </summary>
+        [Test]
+        public void P3ArtilleryRunThrough()
+        {
+            int plans = new[] { 1, 2 }.Sum(st => PlansWithPinAndFlank(st).Count + 1 + ArtilleryPlans(st).Count);
+            using var progress = RunProgress.Begin("P3 の通し実行", 2 * plans * Runs);
+            var sb = new StringBuilder();
+            sb.AppendLine("| ステージ | 作戦 | 勝率（赤の砲兵あり） | 勝率（赤の砲兵なし） | 第一目標 | 第二目標 | 両方 | 村を取った時刻の中央値 | 青の損害率（あり／なし） | 崩れた青（あり） | 崩れた赤（あり） | 赤の阻止射撃（回/会戦） | 赤の陣地の前（回/会戦） | 赤の弾（発/会戦） | 青の弾（発/会戦） |");
+            sb.AppendLine("| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |");
+            foreach (int stage in new[] { 1, 2 })
+            {
+                var sc = MapScenario.LoadFile(TestUtil.PathOf($"maps/scenario_a{stage}.json"));
+                int st = stage;
+                var all = PlansWithPinAndFlank(stage).Select(p => (p.name, p.orders, (Action<Simulation>)null, (Action<Simulation>)null)).ToList();
+                all.Add((StagedPlanName, new PlannedOrder[0], s => StagedPinAndFlankStart(s, st), StagedPinAndFlankTick));
+                foreach (var (name, orders, start) in ArtilleryPlans(stage)) all.Add((name, orders, start, null));
+                foreach (var (name, plan, start, tick) in all)
+                {
+                    List<RunResult> on, off;
+                    if (name == PrepAssaultPlanName)
+                    {
+                        on = Enumerable.Range(1, Runs).Select(s => PrepAssaultRun(sc, stage, plan, (ulong)s, true)).ToList();
+                        off = Enumerable.Range(1, Runs).Select(s => PrepAssaultRun(sc, stage, plan, (ulong)s, false)).ToList();
+                    }
+                    else
+                    {
+                        on = Enumerable.Range(1, Runs).Select(s => RunOne(sc, plan, (ulong)s, start, tick)).ToList();
+                        Action<Simulation> noRed = s => { s.ClearArtillery(Side.Red); start?.Invoke(s); };
+                        off = Enumerable.Range(1, Runs).Select(s => RunOne(sc, plan, (ulong)s, noRed, tick)).ToList();
+                    }
+                    WriteRecords(on, name, "delegate");
+                    sb.AppendLine($"| {stage} | {name} | {on.Average(r => r.Win ? 1.0 : 0.0):0.00} | {off.Average(r => r.Win ? 1.0 : 0.0):0.00} | " +
+                                  ObjectiveCells(on) + $" | {on.Average(r => r.BlueLoss):0.000}／{off.Average(r => r.BlueLoss):0.000} | " +
+                                  $"{on.Average(r => r.BlueBroken):0.00} | {on.Average(r => r.RedBroken):0.00} | " +
+                                  $"{on.Average(r => r.RedBarrier):0.00} | {on.Average(r => r.RedFront):0.00} | {on.Average(r => r.RedRounds):0.0} | {on.Average(r => r.BlueRounds):0.0} |");
+                    TestContext.Progress.WriteLine(sb.ToString().Split('\n').Reverse().Skip(1).First());
+                }
+            }
+            TestContext.WriteLine("P3 の通し実行（任せる版、各 20回）。第一目標・第二目標・両方・村を取った時刻・崩れた中隊は赤の砲兵ありの版");
+            TestContext.WriteLine("準備砲撃の時刻（赤の砲兵あり／なし）：" + string.Join("　", PrepTimes.Select(kv => $"{kv.Key} {kv.Value}")));
+            TestContext.WriteLine(sb.ToString());
+            Assert.Pass();
         }
 
         /// <summary>E1 の比べの表の主な作戦（総員突撃、村への前進、拘束＋迂回の遠い・近い、村へ入る段を足した両翼包囲）。</summary>

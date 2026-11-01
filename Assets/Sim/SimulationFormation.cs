@@ -98,7 +98,7 @@ namespace Battalion.Sim
                     c.ColumnReadySec = 0;
                     continue;
                 }
-                bool shot = c.LastTargetedTime == t;
+                bool shot = c.LastFiredOnTime == t;
 
                 if (c.FormationChange == FormationChange.Deploying)
                 {

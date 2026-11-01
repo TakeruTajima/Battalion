@@ -23,7 +23,7 @@ namespace Battalion.Sim.Tests
         /// <summary>撃つ敵を置かずに、制圧下を保つ（解けるまでの数えを毎刻み戻す）。</summary>
         static void KeepSuppressed(Company c)
         {
-            c.Suppressed = true;
+            c.RifleSuppressed = true;
             c.SuppressOffSec = 0;
         }
 

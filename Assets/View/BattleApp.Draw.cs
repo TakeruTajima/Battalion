@@ -31,6 +31,7 @@ namespace Battalion.View
             if (_showTrigger) DrawTrigger(px);
             DrawBlockedSights(px);
             DrawFireLines(px, now);
+            DrawArtillery(px);
             DrawSelectedPath(px);
             DrawSheetPreviews(px);
             foreach (var c in _sim.Companies)
@@ -191,6 +192,8 @@ namespace Battalion.View
                 float w = Mathf.Clamp(1f + (float)f.ExpectedPerMin * 0.9f, 1f, 8f) * px;
                 _shapes.Line(from, to, w, Palette.WithAlpha(col, (byte)(alpha / 3)));
                 _shapes.DashedLine(from, to, w * 1.3f, TracerDashPx * px, now * TracerSpeedPx * px, col);
+                // 射撃の手応えの短い線と楔は、霧なしでも出す（霧はペンディング、2026-11-01）
+                DrawFogFire(f, px, now);
             }
         }
 

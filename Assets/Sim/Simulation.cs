@@ -106,6 +106,7 @@ namespace Battalion.Sim
             UpdateStages(t);
             UpdateAutonomy(t);
             UpdateDefense(t);
+            UpdateRedArtillery(t);
             UpdateFormation(t);
             UpdatePieceOrders(t);
             UpdateDispatches(t);
@@ -435,8 +436,14 @@ namespace Battalion.Sim
                 hit[tg.Id, a] = true;
                 if (firstShooter[tg.Id, a] < 0) firstShooter[tg.Id, a] = u.Id;
                 targeted[tg.Id] = true;
-                if (s.Distance <= _p.Pinning.RadiusM) pinnedNow[tg.Id] = true;
+                // 拘束は効いている射撃に押さえられて動けないこと。制圧下（伏せている）の射手の射撃は数えない（P3 の報告の後に決めたこと 1）
+                if (s.Distance <= _p.Pinning.RadiusM && !(_p.Pinning.IgnoreSuppressedShooters && u.Suppressed)) pinnedNow[tg.Id] = true;
             }
+
+            // 砲撃（P3）：着弾の円に中心が入った中隊の損害と、損害の分を除く士気の減り
+            var artCas = new int[n];
+            var artMorale = new double[n];
+            ResolveArtillery(t, artCas, artMorale);
 
             // 一括で適用する
             foreach (var c in _companies)
@@ -445,7 +452,7 @@ namespace Battalion.Sim
                 int i = c.Id;
                 c.IncomingFirePerMin = fireAmount[i];
                 c.MainShooterId = mainShooter[i];
-                c.Strength = Math.Max(0, c.Strength - cas[i]);
+                c.Strength = Math.Max(0, c.Strength - cas[i] - artCas[i]);
                 if (targeted[i]) c.LastTargetedTime = t;
 
                 if (c.State == CompanyState.Routed)
@@ -467,6 +474,13 @@ namespace Battalion.Sim
                         c.Ledger.AddAspect((Aspect)a, -d);
                         total += d;
                     }
+                }
+
+                if (artCas[i] > 0 || artMorale[i] > 0)
+                {
+                    double d = ((double)artCas[i] / c.InitialStrength * 100.0 * _p.Morale.PerPctLoss + artMorale[i]) * sens;
+                    c.Ledger.Artillery -= d;
+                    total += d;
                 }
 
                 if (targeted[i])
@@ -526,8 +540,9 @@ namespace Battalion.Sim
 
                 c.Morale = Math.Max(0, c.Morale - total);
 
-                // 回復：壊走しておらず、60秒間狙われていなければ毎分 +1×練度倍率。上限 70
-                if (t - c.LastTargetedTime >= _p.Morale.RecoveryQuietSec && c.Morale < _p.Morale.RecoveryCap)
+                // 回復：壊走しておらず、60秒間狙われていなければ（砲撃の円の中にもいなければ）毎分 +1×練度倍率。上限 70
+                if (t - c.LastTargetedTime >= _p.Morale.RecoveryQuietSec && t - c.LastShelledTime >= _p.Morale.RecoveryQuietSec
+                    && c.Morale < _p.Morale.RecoveryCap)
                 {
                     double r = _p.Morale.RecoveryPerMin * _p.Of(c.Training).RecoveryMult * dtMin;
                     double after = Math.Min(_p.Morale.RecoveryCap, c.Morale + r);

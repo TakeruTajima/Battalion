@@ -256,13 +256,13 @@ namespace Battalion.Sim
             // 後退の許可：動揺していて（慎重は士気 60 未満）、この刻みに撃たれた。状況が変わるまで繰り返さない
             double v = CP.RetreatAskMorale[c.Personality];
             bool low = c.Personality == Personality.Cautious ? c.Morale < v : c.Morale <= v;
-            bool shot = c.LastTargetedTime == t;
+            bool shot = c.LastFiredOnTime == t;
             if (low && shot && !b.RetreatAsked)
             {
                 NoteDispatch(c, DispatchKind.AskRetreat, t);
                 b.RetreatAsked = true;
             }
-            if (!low || t - c.LastTargetedTime >= CP.RetreatAskQuietSec - 1e-9) b.RetreatAsked = false;
+            if (!low || t - c.LastFiredOnTime >= CP.RetreatAskQuietSec - 1e-9) b.RetreatAsked = false;
         }
 
         /// <summary>

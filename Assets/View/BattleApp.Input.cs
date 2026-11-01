@@ -9,7 +9,7 @@ namespace Battalion.View
     // 入力：中隊を選ぶ → 命令を選ぶ → 地図をクリック（ドラッグで到着後の向き）
     public sealed partial class BattleApp
     {
-        enum Mode { None, Advance, Retreat, HoldFacing, Pin, Attack, Entrench, Sight }
+        enum Mode { None, Advance, Retreat, HoldFacing, Pin, Attack, Entrench, Sight, Artillery, PlannedPoint }
 
         Mode _mode = Mode.None;
         int _selected = -1;
@@ -46,6 +46,7 @@ namespace Battalion.View
             _sightFrom = null;
             _sightTo = null;
             if (_mapView != null) _mapView.ClearOverlay();
+            ResetArtilleryInput();
         }
 
         Company Selected => _selected >= 0 && _selected < _sim.Companies.Count ? _sim.Companies[_selected] : null;
@@ -77,6 +78,9 @@ namespace Battalion.View
             if (Input.GetKeyDown(KeyCode.R)) BeginOrder(OrderType.Pin);
             if (Input.GetKeyDown(KeyCode.T)) BeginOrder(OrderType.Attack);
             if (Input.GetKeyDown(KeyCode.Y)) BeginOrder(OrderType.Entrench);
+            // P3：砲撃の要請（G）と、会戦前の計画射撃点の登録（H）
+            if (Input.GetKeyDown(KeyCode.G)) BeginArtillery();
+            if (Input.GetKeyDown(KeyCode.H)) BeginPlannedPoints();
 
             if (_mode == Mode.Attack)
             {
@@ -119,6 +123,7 @@ namespace Battalion.View
             _mode = Mode.None;
             _pressing = false;
             _pressTarget = null;
+            ResetArtilleryInput();
         }
 
         /// <summary>
@@ -261,6 +266,10 @@ namespace Battalion.View
             var c = Selected;
             switch (_mode)
             {
+                case Mode.Artillery:
+                case Mode.PlannedPoint:
+                    ArtilleryClick(at);
+                    break;
                 case Mode.None:
                 {
                     var hit = UnitAt(at, null);
@@ -369,6 +378,10 @@ namespace Battalion.View
                     return $"攻撃（{AspectName(_attackAspect)}・{brk}）：敵の駒から外へドラッグで攻める方角、クリックなら範囲で指定" +
                            "（0・F・S・B で範囲、C で確保／追撃可）";
                 }
+                case Mode.Artillery:
+                    return _artyPoint.HasValue ? "砲撃：長さと始める時刻を選び、［要請］を2回押す（Esc でやめる）" : "砲撃：地点をクリック（赤い円は要請できない。Esc でやめる）";
+                case Mode.PlannedPoint:
+                    return "計画射撃点：地図をクリックで置く、点の近くをクリックで消す（H か Esc で終わる）";
                 case Mode.Sight:
                     return "視線確認：地点か中隊の駒をクリック（緑＝見える、赤＝稜線・遮蔽で見えない）。Shift＋クリックか、2点の間のドラッグで断面図。L か Esc で終わる";
                 default: return null;

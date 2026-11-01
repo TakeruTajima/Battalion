@@ -184,8 +184,19 @@ namespace Battalion.Sim
         public double IncomingFirePerMin;
         /// <summary>その刻みに、火力の量が一番多かった射手の ID（−1 はなし。伏せるときに向く相手）。</summary>
         public int MainShooterId = -1;
-        /// <summary>制圧下（撃たれて頭を下げている）か。</summary>
-        public bool Suppressed;
+        /// <summary>小銃の制圧下（撃たれて頭を下げている。R1 のしきい値と揺れ止め）か。</summary>
+        public bool RifleSuppressed;
+        /// <summary>砲撃の制圧下（着弾の円の中にいる間と、出てから suppression.release_sec の間。P3）か。</summary>
+        public bool ArtySuppressed;
+        /// <summary>制圧下か（小銃・砲撃のどちらか。効き目は同じ：伏せる・撃つ力 ×suppression.fire_mult・動けない）。</summary>
+        public bool Suppressed => RifleSuppressed || ArtySuppressed;
+        /// <summary>最後に着弾の円の中にいた刻みの終了時刻（P3。砲撃の制圧が解ける時刻と、士気の回復の判定に使う）。</summary>
+        public double LastShelledTime = double.NegativeInfinity;
+        /// <summary>
+        /// 最後に撃たれた刻みの時刻：小銃に狙われたか、砲撃の円の中にいた（P3 の報告の後に決めたこと 6。縦隊の展開・意見具申・
+        /// 自律の判断で使う。士気の「撃たれている」は小銃だけ）。
+        /// </summary>
+        public double LastFiredOnTime => System.Math.Max(LastTargetedTime, LastShelledTime);
         /// <summary>制圧の始まり・終わりの条件が続いている秒数（揺れ止め）。</summary>
         public double SuppressOnSec;
         public double SuppressOffSec;

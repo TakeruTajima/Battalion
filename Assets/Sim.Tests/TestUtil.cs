@@ -39,6 +39,15 @@ namespace Battalion.Sim.Tests
             WithoutR4(p);
             WithoutF1(p);
             WithoutP2d(p);
+            WithoutP3(p);
+            return p;
+        }
+
+        /// <summary>P3 の砲兵を止める：地図の artillery を読み飛ばす（どちらの側にも砲兵なし）。制圧下の射手も拘束に数える（報告の後に決めたこと 1 の前）。</summary>
+        public static SimParams WithoutP3(SimParams p)
+        {
+            p.Artillery.Enabled = false;
+            p.Pinning.IgnoreSuppressedShooters = false;
             return p;
         }
 

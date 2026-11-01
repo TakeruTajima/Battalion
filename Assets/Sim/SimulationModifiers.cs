@@ -15,6 +15,8 @@ namespace Battalion.Sim
         Column, Deploying, FormingColumn, FireColumn, MoveColumn,
         // 撃つ力
         FireShaken, FireNonFrontTarget, FireDisarray, FireSuppressed, FireMoving, FireOccupation,
+        // 砲撃の制圧（P3。効き目は小銃の制圧と同じ）
+        FireArtySuppressed,
         // 旋回中（動いている扱い。R3）の撃つ力
         FireTurning,
         // 移動
@@ -57,7 +59,7 @@ namespace Battalion.Sim
             // 隊形の乱れ（壊走中の味方にすり抜けられた。P1d の6）
             if (u.DisarrayUntil >= t) Mul(ModifierKind.FireDisarray, _p.Behavior.DisarrayFireMult);
             // 小銃の制圧下（R1。砲撃による制圧は P3 で fire.suppressed_mult）、動きながら撃つ（R1 の規則3）
-            if (u.Suppressed) Mul(ModifierKind.FireSuppressed, _p.Suppression.FireMult);
+            if (u.Suppressed) Mul(u.RifleSuppressed ? ModifierKind.FireSuppressed : ModifierKind.FireArtySuppressed, _p.Suppression.FireMult);
             if (u.MovedThisTick) Mul(ModifierKind.FireMoving, _p.Fire.MovingFireMult);
             else if (u.TurningAsMoving) Mul(ModifierKind.FireTurning, _p.Fire.MovingFireMult);
             // 隊形（F1）：移り変わる間は ×0.3（縦隊の ×0.2 の代わり）、縦隊は先頭だけが撃てる

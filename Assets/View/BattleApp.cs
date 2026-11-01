@@ -106,6 +106,7 @@ namespace Battalion.View
             _seed = seed;
             _feed = new EventFeed();
             _feed.Fogged = () => Fogged;
+            _feed.ArtyPlace = (side, p) => ArtyPlace(side, p);
             foreach (var u in _scenario.Units)
                 if (u.Side == Side.Red) _feed.RedUnits.Add(u.Id);
             _sim = _scenario.Build(_params, _seed, _feed);

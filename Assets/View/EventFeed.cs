@@ -75,6 +75,8 @@ namespace Battalion.View
         public readonly HashSet<string> RedUnits = new HashSet<string>();
         /// <summary>この行の出来事を出さない（霧の中の赤の中隊の出来事）。</summary>
         bool _mute;
+        /// <summary>砲撃の地点の呼び名（P3。「計画射撃点1」「R1 の付近」「B2 の位置」）。表示側が渡す。</summary>
+        public Func<Side, Vec2, string> ArtyPlace = (side, p) => $"({p.X:0}, {p.Y:0})";
 
         public void Write(string jsonLine)
         {
@@ -192,6 +194,42 @@ namespace Battalion.View
                 case "reserve_counterattack":
                     Add(t, $"{unit}（予備）が {v["target"].String} の側面へ逆襲", true);
                     Happen(t, Kind.Counterattack, unit, v["target"].String);
+                    break;
+                // P3：砲兵。青の要請の進みと、赤の着弾（着弾は誰にでも見える。赤の要請・準備は見えない）
+                case "artillery_request":
+                {
+                    if (v["side"].String != "blue") break;
+                    var p = new Vec2(v.D("x"), v.D("y"));
+                    double at = v.D("impact_at");
+                    Add(t, $"砲撃 要請（{ArtyPlace(Side.Blue, p)}、{v.D("minutes"):0}分。初弾 {FormatTime(at)}）", false);
+                    break;
+                }
+                case "artillery_start":
+                {
+                    var p = new Vec2(v.D("x"), v.D("y"));
+                    if (v["side"].String == "blue") Add(t, $"砲撃 開始（誤差 {v.D("error_m"):0}m）", false);
+                    else Add(t, $"赤の砲撃（{ArtyPlace(Side.Red, p)}）", true);
+                    break;
+                }
+                case "artillery_corrected":
+                    if (v["side"].String == "blue") Add(t, "砲撃 観測で修正（誤差 30m）", false);
+                    break;
+                case "artillery_end":
+                    if (v["side"].String == "blue")
+                        Add(t, v["reason"].String == "no_rounds" ? "砲撃 弾が尽きた" : $"砲撃 終わり（残り {Math.Ceiling(v.D("rounds_left") - 1e-9):0}発）", false);
+                    else Add(t, "赤の砲撃 止む", false);
+                    break;
+                case "artillery_cancel":
+                    if (v["side"].String == "blue") Add(t, $"砲撃 取りやめ（残り {Math.Ceiling(v.D("rounds_left") - 1e-9):0}発）", false);
+                    break;
+                case "artillery_extend":
+                    if (v["side"].String == "blue") Add(t, $"砲撃 1分伸ばす（{v.D("minutes"):0}分）", false);
+                    break;
+                case "arty_suppressed":
+                    if (v["side"].String == "blue") Add(t, $"{unit} 砲撃を受けて伏せる", true);
+                    break;
+                case "crater":
+                    TerrainChanged = true;
                     break;
                 case "entrench_complete":
                     TerrainChanged = true;

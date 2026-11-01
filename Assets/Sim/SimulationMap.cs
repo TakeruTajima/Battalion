@@ -837,7 +837,8 @@ namespace Battalion.Sim
         /// 外なら、守りの倍率を terrain.fortification_off_arc_mult に置き換える。<paramref name="from"/> がなければ（自律行動の
         /// 判断など）向きを見ない。村・森などの守りは向きによらない。
         /// </summary>
-        public double TerrainDamageMult(Company c, Vec2? from = null, bool closeCombat = false)
+        /// <paramref name="artillery"/>（P3 の砲撃）なら、開けた所を動く倍率を掛けない。
+        public double TerrainDamageMult(Company c, Vec2? from = null, bool closeCombat = false, bool artillery = false)
         {
             char ch = _map.TerrainAt(c.Position);
             double off = _p.Terrain.FortificationOffArcMult;
@@ -854,7 +855,7 @@ namespace Battalion.Sim
                 if (f > target) f += (target - f) * Math.Min(1.0, c.EntrenchProgress / _p.MapRules.EntrenchSec);
             }
             // 移動中、または接敵中にその場で向きを変えている間（R3）
-            if ((c.MovedThisTick || c.TurningAsMoving || ChangingFormation(c)) && IsOpenGround(ch)) f *= _p.Terrain.MovingOpenDamageMult;
+            if (!artillery && (c.MovedThisTick || c.TurningAsMoving || ChangingFormation(c)) && IsOpenGround(ch)) f *= _p.Terrain.MovingOpenDamageMult;
             // 縦隊（F1。展開の途中も矩形は縦隊）
             if (ColumnShape(c)) f *= F.ColumnDamageMult;
             // 浅い掩体（P2c）。向きは掘り始めたときの中隊の向き（R2）

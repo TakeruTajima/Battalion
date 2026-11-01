@@ -25,6 +25,8 @@ namespace Battalion.Sim
         public Vec2 ObjectiveCenter;
         public Vec2 Assembly;
         public readonly Dictionary<string, DefenseUnitPlan> Units = new Dictionary<string, DefenseUnitPlan>();
+        /// <summary>赤の計画射撃点（P3。地図ファイルの artillery_points。3箇所まで）。</summary>
+        public readonly List<Vec2> ArtilleryPoints = new List<Vec2>();
     }
 
     /// <summary>予備の状態（E1 の規則2）。</summary>
@@ -64,6 +66,8 @@ namespace Battalion.Sim
             _defenseSide = side;
             foreach (var c in _companies)
                 if (c.Side == side && plan.Units.TryGetValue(c.Name, out var u)) c.Role = u.Role;
+            // 計画射撃点（P3）：その側に砲兵があれば載せる
+            foreach (var p in plan.ArtilleryPoints) AddPlannedPoint(side, p);
         }
 
         DefenseUnitPlan PlanOf(Company c) => _defense != null && _defense.Units.TryGetValue(c.Name, out var u) ? u : null;

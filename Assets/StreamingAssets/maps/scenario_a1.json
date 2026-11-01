@@ -6,6 +6,8 @@
   "note": "E1 の守りの計画（予備隊の台本を置き換えた）。向きは 0＝東、180＝西。defense.enabled が false のときは、予備の引き金で今までの台本を使う",
   "objective_center": [1975, 1000],
   "assembly": [2450, 1000],
+  "artillery_points": [[1450, 1000], [1975, 1350], [1975, 650]],
+  "artillery_points_note": "P3 の赤の計画射撃点：頂上の塹壕の前の斜面（R1 から 375m。誤射を避ける 250m の外）・村の北・村の南",
   "units": {
    "R1": {"role": "garrison"},
    "R2": {"role": "garrison"},
@@ -2704,5 +2706,10 @@
   { "x": 1825, "y": 1000, "size": "many", "facing": 180, "note": "R1（会戦の始めの敵情）" },
   { "x": 2025, "y": 1000, "size": "many", "facing": 180, "note": "R2（会戦の始めの敵情）" }
  ],
+ "artillery": {
+  "note": "P3 の砲兵：側ごとの野砲中隊（4門。地図の外、射程は地図全域）と弾数（補給なし）。書かなければその側に砲兵なし",
+  "blue": { "batteries": 1, "rounds": 160 },
+  "red": { "batteries": 1, "rounds": 160 }
+ },
  "time_limit_min": 90
 }

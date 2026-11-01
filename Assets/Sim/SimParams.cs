@@ -32,6 +32,40 @@ namespace Battalion.Sim
         public SuppressionParams Suppression = new SuppressionParams();
         public DefenseParams Defense = new DefenseParams();
         public OccupationParams Occupation = new OccupationParams();
+        public ArtilleryParams Artillery = new ArtilleryParams();
+
+        /// <summary>P3 の砲兵（"artillery"）。野砲中隊の有無と弾数は地図ファイルの artillery。</summary>
+        public sealed class ArtilleryParams
+        {
+            /// <summary>砲兵を使うか。JSON にはない（前の版のログと比べるテストで止める。false なら地図の artillery を読み飛ばす）。</summary>
+            public bool Enabled = true;
+            public double RoundsPerMin;
+            /// <summary>着弾の円の半径（中心が入った中隊が効果を受ける）。</summary>
+            public double RadiusM;
+            /// <summary>平地で毎分失う兵力の割合（％）と、損害の分に加えて毎分失う士気（どちらも被弾の倍率を掛ける）。</summary>
+            public double LossPctPerMin;
+            public double MoraleExtraPerMin;
+            /// <summary>要請できる地点：気付いている指揮下の敵からこの距離以内。計画射撃点は何箇所まで。</summary>
+            public double RequestRadiusM;
+            public int PlannedPointsMax;
+            /// <summary>電話・準備（計画射撃点の準備）の秒数。</summary>
+            public double PhoneSec;
+            public double PrepSec;
+            public double PrepPlannedSec;
+            /// <summary>着弾の中心の誤差（初弾・観測の修正の後）と、修正までの秒数（射撃を始めてから）。</summary>
+            public double ErrorInitialM;
+            public double ErrorObservedM;
+            public double ObserveAfterSec;
+            /// <summary>同じマスにこの秒数（累計）着弾したら砲撃痕。</summary>
+            public double CraterAfterSec;
+            /// <summary>選べる射撃の長さ（分）。</summary>
+            public readonly List<int> DurationsMin = new List<int>();
+            /// <summary>赤の本部の砲撃の判断の間隔、1回の射撃の長さ（分）、陣地の前の距離、誤射を避ける距離。</summary>
+            public double RedEvalSec;
+            public double RedFireMin;
+            public double RedFrontRadiusM;
+            public double RedSafetyM;
+        }
 
         /// <summary>E1 の赤の守り方（"defense"）：前線の後退・即座の逆襲・奪回。</summary>
         public sealed class DefenseParams
@@ -293,6 +327,11 @@ namespace Battalion.Sim
             public double MoveMult;
             public double DisengageMoraleHit;
             public double DisengageCasualtyMult;
+            /// <summary>
+            /// 制圧下（伏せている）の射手の射撃は拘束に数えない（P3 の報告の後に決めたこと 1）。JSON にはない（前の版のログと比べる
+            /// テストで止める）。
+            /// </summary>
+            public bool IgnoreSuppressedShooters = true;
         }
 
         public sealed class CloseCombatParams
@@ -743,6 +782,26 @@ namespace Battalion.Sim
             p.Suppression.ReleaseSec = su.D("release_sec");
             p.Suppression.FireMult = su.D("fire_mult");
             ReadPersonalityTable(su["moving_threshold_personality_mult"], p.Suppression.MovingThresholdPersonalityMult);
+
+            var ar = root["artillery"];
+            p.Artillery.RoundsPerMin = ar.D("rounds_per_min");
+            p.Artillery.RadiusM = ar.D("radius_m");
+            p.Artillery.LossPctPerMin = ar.D("loss_pct_per_min");
+            p.Artillery.MoraleExtraPerMin = ar.D("morale_extra_per_min");
+            p.Artillery.RequestRadiusM = ar.D("request_radius_m");
+            p.Artillery.PlannedPointsMax = (int)ar.D("planned_points_max");
+            p.Artillery.PhoneSec = ar.D("phone_sec");
+            p.Artillery.PrepSec = ar.D("prep_sec");
+            p.Artillery.PrepPlannedSec = ar.D("prep_planned_sec");
+            p.Artillery.ErrorInitialM = ar.D("error_initial_m");
+            p.Artillery.ErrorObservedM = ar.D("error_observed_m");
+            p.Artillery.ObserveAfterSec = ar.D("observe_after_sec");
+            p.Artillery.CraterAfterSec = ar.D("crater_after_sec");
+            foreach (var dm in ar["durations_min"].Array) p.Artillery.DurationsMin.Add((int)dm.Number);
+            p.Artillery.RedEvalSec = ar.D("red_eval_sec");
+            p.Artillery.RedFireMin = ar.D("red_fire_min");
+            p.Artillery.RedFrontRadiusM = ar.D("red_front_radius_m");
+            p.Artillery.RedSafetyM = ar.D("red_safety_m");
 
             var de = root["defense"];
             p.Defense.Enabled = de["enabled"].Bool;

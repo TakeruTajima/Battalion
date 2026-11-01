@@ -33,6 +33,7 @@ namespace Battalion.View
             if (_phase == Phase.SelectStage) return true;
             if (TopRect.Contains(m) || LeftRect.Contains(m) || RightRect.Contains(m) || BottomRect.Contains(m)) return true;
             if (_showBriefing && _phase == Phase.Running && BriefingRect.Contains(m)) return true;
+            if (ArtilleryWindowShown && ArtilleryRect.Contains(m)) return true;
             return _phase == Phase.Ended && !_hideEnd && EndRect.Contains(m);
         }
 
@@ -78,6 +79,7 @@ namespace Battalion.View
             }
             DrawUnitLabels();
             DrawIntelLabels();
+            DrawArtilleryLabels();
             DrawPanel(TopRect);
             DrawTopBar();
             DrawPanel(LeftRect);
@@ -86,6 +88,7 @@ namespace Battalion.View
             DrawRightPanel();
             DrawPanel(BottomRect);
             DrawLog();
+            DrawArtilleryWindow();
             if (_phase == Phase.Ended && !_hideEnd) DrawEndWindow();
             else if (_showBriefing) DrawBriefing();
         }
@@ -185,6 +188,8 @@ namespace Battalion.View
                 ps.normal.textColor = new Color(1f, 0.85f, 0.2f);
                 GUILayout.Label("一時停止：" + _pauseReason, ps);
             }
+            GUILayout.Space(10);
+            DrawArtilleryBar();
             GUILayout.FlexibleSpace();
             string exp = _exposureMode == 0 ? "なし" : (_exposureMode == 1 ? "青から見た赤の射界" : "赤から見た青の射界");
             var ce = CursorElevation();
@@ -257,7 +262,8 @@ namespace Battalion.View
                 if (c.TurnWaitStart.HasValue) s += "・向き直り待ち";
                 else if (c.FacingOverride.HasValue && Math.Abs(Angles.Wrap(c.FacingOverride.Value - c.Facing)) > 1e-6) s += "・向き直り中";
                 if (c.DisarrayUntil >= _sim.Time) s += "・<color=#ffa040>隊形の乱れ</color>";
-                if (c.Suppressed) s += _sim.PinnedDown(c) ? "・<color=#ffd84d>制圧下（伏せて停止）</color>" : "・<color=#ffd84d>制圧下</color>";
+                string sup = c.RifleSuppressed ? "制圧下" : "砲撃で制圧下";
+                if (c.Suppressed) s += _sim.PinnedDown(c) ? $"・<color=#ffd84d>{sup}（伏せて停止）</color>" : $"・<color=#ffd84d>{sup}</color>";
                 if (c.Pinned) s += "・拘束";
                 if (c.Encircled) s += "・<color=#ff6060>包囲</color>";
                 if (c.Fortified) s += "・籠城";
@@ -337,7 +343,7 @@ namespace Battalion.View
                 GUILayout.Label(ModifiersText(c), _small);
                 GUILayout.Label($"受けている火力 {c.IncomingFirePerMin:0.0}/分（伏せるしきい値 {_sim.SuppressionThreshold(c):0.0}・" +
                                 $"{(_sim.MovingPosture(c) ? "動いている" : "止まっている")}）" +
-                                (c.Suppressed ? "　<color=#ffd84d>制圧下</color>" : ""), _small);
+                                (c.Suppressed ? (c.RifleSuppressed ? "　<color=#ffd84d>制圧下</color>" : "　<color=#ffd84d>砲撃で制圧下</color>") : ""), _small);
                 GUILayout.Label(FortificationText(c), _small);
             }
 
@@ -445,6 +451,7 @@ namespace Battalion.View
                 case ModifierKind.FireNonFrontTarget: return "正面の弧の外の目標";
                 case ModifierKind.FireDisarray: return "隊形の乱れ";
                 case ModifierKind.FireSuppressed: return "制圧下";
+                case ModifierKind.FireArtySuppressed: return "<color=#ffd84d>砲撃（制圧）</color>";
                 case ModifierKind.FireMoving: return "移動中";
                 case ModifierKind.FireTurning: return "<color=#ff8060>旋回中（動いている扱い）</color>";
                 case ModifierKind.Column: return "<color=#ff8060>縦隊</color>";

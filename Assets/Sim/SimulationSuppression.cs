@@ -36,21 +36,23 @@ namespace Battalion.Sim
             {
                 if (!c.OnBoard || !c.UnderCommand)
                 {
-                    c.Suppressed = false;
+                    c.RifleSuppressed = false;
+                    c.ArtySuppressed = false;
                     c.SuppressOnSec = 0;
                     c.SuppressOffSec = 0;
                     continue;
                 }
+                UpdateArtySuppression(c, t);
                 double th = SuppressionThreshold(c);
                 double v = c.IncomingFirePerMin;
-                if (!c.Suppressed)
+                if (!c.RifleSuppressed)
                 {
                     if (v >= th)
                     {
                         c.SuppressOnSec += dt;
                         if (c.SuppressOnSec >= S.OnsetSec - 1e-9)
                         {
-                            c.Suppressed = true;
+                            c.RifleSuppressed = true;
                             c.SuppressOffSec = 0;
                             if (_log.Enabled)
                                 _log.Write(Ev(t, "suppressed", c).Add("side", SideName(c.Side)).Add("fire", Math.Round(v, 3))
@@ -66,7 +68,7 @@ namespace Battalion.Sim
                         c.SuppressOffSec += dt;
                         if (c.SuppressOffSec >= S.ReleaseSec - 1e-9)
                         {
-                            c.Suppressed = false;
+                            c.RifleSuppressed = false;
                             c.SuppressOnSec = 0;
                             if (_log.Enabled)
                                 _log.Write(Ev(t, "suppression_end", c).Add("side", SideName(c.Side)).Add("fire", Math.Round(v, 3))

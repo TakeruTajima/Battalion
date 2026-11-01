@@ -58,6 +58,9 @@ namespace Battalion.Sim
         /// <summary>守りの計画（E1。地図ファイルの defense_plan）。</summary>
         public DefensePlan Defense;
 
+        /// <summary>野砲中隊の弾数（P3。地図ファイルの artillery。側ごと。書かなければその側に砲兵なし）。</summary>
+        public readonly Dictionary<Side, int> ArtilleryRounds = new Dictionary<Side, int>();
+
         /// <summary>予備の中隊と引き金の円（defense.enabled が false のときの、今までの予備隊の台本に使う）。予備がなければ null。</summary>
         public string ReserveUnit;
         public Vec2 ReserveTriggerCenter;
@@ -117,6 +120,9 @@ namespace Battalion.Sim
                     s.VillageCells.Add(((int)c.Array[0].Number, (int)c.Array[1].Number));
             ReadTrenchCells(d, s.TrenchCells);
             s.Defense = ReadDefensePlan(d["defense_plan"]);
+            if (d.TryGet("artillery", out var art))
+                foreach (var side in new[] { Side.Blue, Side.Red })
+                    if (art.TryGet(Names.Of(side), out var a) && a.D("batteries") > 0) s.ArtilleryRounds[side] = (int)a.D("rounds");
             foreach (var kv in s.Defense.Units)
             {
                 if (kv.Value.Role != DefenseRole.Reserve) continue;
@@ -187,6 +193,8 @@ namespace Battalion.Sim
         public static DefensePlan ReadDefensePlan(JsonValue d)
         {
             var plan = new DefensePlan { ObjectiveCenter = Point(d["objective_center"]), Assembly = Point(d["assembly"]) };
+            if (d.TryGet("artillery_points", out var ap))
+                foreach (var p in ap.Array) plan.ArtilleryPoints.Add(Point(p));
             foreach (var kv in d["units"].Object)
             {
                 var u = kv.Value;
@@ -300,6 +308,8 @@ namespace Battalion.Sim
             sim.SetHeadquarters(Side.Red, RedHq);
             foreach (var u in Units)
                 sim.AddCompany(u.Id, u.Side, TrainingOf(u.Id), PersonalityOf(u.Id), new Vec2(u.X, u.Y), u.FacingDeg).Formation = u.Formation;
+            // 砲兵（P3）。守りの計画の計画射撃点より先に置く
+            foreach (var kv in ArtilleryRounds) sim.SetArtillery(kv.Key, kv.Value);
 
             AssignTrenchFacings(sim);
             foreach (var i in InitialIntel)
