@@ -104,7 +104,7 @@ namespace Battalion.Sim.Tests
             }
             Assert.That(start, Is.Not.Null);
             // 練度の遅れの後に動き始め、60秒続いたら始める
-            Assert.That(start.Value, Is.GreaterThanOrEqualTo(p.Formation.ColumnQuietSec - 1e-9));
+            Assert.That(start.Value, Is.GreaterThanOrEqualTo(p.Formation.ColumnStartQuietSec - 1e-9), "まだ敵を見ていなければ 60秒");
             Assert.That(formed.Value - start.Value, Is.EqualTo(p.Formation.FormColumnSec).Within(p.TickSec + 1e-9));
 
             var sim2 = Flat();
@@ -114,6 +114,38 @@ namespace Battalion.Sim.Tests
             Assert.That(b.Arrived, Is.True);
             Assert.That(b.Formation, Is.EqualTo(Formation.Line));
             Assert.That(b.FormationChange, Is.EqualTo(FormationChange.None), "短い前進では縮合しない");
+        }
+
+        /// <summary>
+        /// 前線の近くで縦隊に戻らない（P2d.1 の1）：一度敵を見た中隊は、その敵を最後に見た位置から 1500m 以上離れ、静かな状態が 300秒
+        /// 続いた時だけ縮合する。
+        /// </summary>
+        [Test]
+        public void SeenEnemiesKeepTheCompanyInLineNearTheFront()
+        {
+            var p = TestUtil.Params;
+            var sim = Flat();
+            var c = Add(sim, "A", Side.Blue, -1300, 0, 0);
+            var e = Add(sim, "E", Side.Red, -1300, 700, -90);
+            sim.Step();
+            Assert.That(c.LastSeenEnemyAt.ContainsKey(e.Id), Is.True, "見た敵の位置を覚える");
+            // 敵が消えた（離脱）後、東へ長く前進する
+            e.State = CompanyState.LeftBattle;
+            Advance(sim, c, 1400, 0);
+            double? start = null;
+            for (int k = 0; k < 2 * 2400 && !start.HasValue; k++)
+            {
+                sim.Step();
+                if (c.FormationChange == FormationChange.FormingColumn) start = sim.Time;
+                if (!start.HasValue)
+                    Assert.That(Vec2.Distance(c.Position, new Vec2(-1300, 700)) >= p.Formation.ColumnClearM - 1 || c.ColumnReadySec < 1e-9, Is.True,
+                        "見た位置から 1500m 以内では縮合の数えを始めない");
+            }
+            Assert.That(start, Is.Not.Null);
+            // 1500m 離れる所（約 1360m 進む）に着いてから 300秒
+            double clearAt = Math.Sqrt(p.Formation.ColumnClearM * p.Formation.ColumnClearM - 700 * 700);
+            Assert.That(c.Position.X - (-1300), Is.GreaterThan(clearAt), "1500m 離れてから縮合を始める");
+            Assert.That(c.ColumnReadySec, Is.EqualTo(0));
         }
 
         /// <summary>縦隊は、目的地まで 300m 以内に来たら展開する（進みながら 90秒）。展開を終えたら横隊で、線を張っている扱い。</summary>

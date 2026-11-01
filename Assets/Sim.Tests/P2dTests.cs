@@ -195,6 +195,25 @@ namespace Battalion.Sim.Tests
             Assert.That(s2.Intel[0].Position, Is.EqualTo(new Vec2(0, 0)).Or.EqualTo(new Vec2(100, 0)));
         }
 
+        /// <summary>届いた報告は紐付いた駒の ID を持ち、駒の名は 敵A・敵B・…・敵Z・敵AA（P2d.1：出来事の欄に駒の名で出す）。</summary>
+        [Test]
+        public void ReportsKnowTheirPieceAndPiecesHaveNames()
+        {
+            var sim = Flat();
+            var r0 = Rep(0, 0, 0);
+            var r1 = Rep(100, 0, 10);
+            var r2 = Rep(900, 0, 10);
+            sim.ReceiveReport(r0);
+            sim.ReceiveReport(r1);
+            sim.ReceiveReport(r2);
+            Assert.That(new[] { r0.PieceId, r1.PieceId, r2.PieceId }, Is.EqualTo(new[] { 0, 0, 1 }));
+            Assert.That(sim.Intel[1].Name, Is.EqualTo("敵B"));
+            Assert.That(IntelPiece.NameOf(0), Is.EqualTo("敵A"));
+            Assert.That(IntelPiece.NameOf(25), Is.EqualTo("敵Z"));
+            Assert.That(IntelPiece.NameOf(26), Is.EqualTo("敵AA"));
+            Assert.That(IntelPiece.NameOf(27), Is.EqualTo("敵AB"));
+        }
+
         /// <summary>見た時刻から 5分で薄く、10分で「?」、30分で地図から消える。</summary>
         [Test]
         public void PieceFadesThenBecomesUnknownThenIsForgotten()

@@ -231,6 +231,8 @@ namespace Battalion.Sim
         public double FormationChangeSec;
         /// <summary>縮合する条件が続いている秒数（揺れ止め）。</summary>
         public double ColumnReadySec;
+        /// <summary>会戦中に気付いたことのある敵の、最後に見た位置（敵の ID ごと。P2d.1 の1）。</summary>
+        public readonly System.Collections.Generic.Dictionary<int, Vec2> LastSeenEnemyAt = new System.Collections.Generic.Dictionary<int, Vec2>();
 
         /// <summary>直前の刻みで狙った目標の ID（-1 はなし）。</summary>
         public int TargetId = -1;

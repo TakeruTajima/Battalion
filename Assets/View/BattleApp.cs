@@ -105,6 +105,9 @@ namespace Battalion.View
 
             _seed = seed;
             _feed = new EventFeed();
+            _feed.Fogged = () => Fogged;
+            foreach (var u in _scenario.Units)
+                if (u.Side == Side.Red) _feed.RedUnits.Add(u.Id);
             _sim = _scenario.Build(_params, _seed, _feed);
             _trenchTimes = new TrenchClearTimes(_scenario);
             _showBriefing = _scenario.Briefing != null;

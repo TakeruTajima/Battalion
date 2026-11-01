@@ -28,6 +28,8 @@ namespace Battalion.Sim
         public ReportedState State;
         /// <summary>実際の敵（検証と戦闘詳報の重ね表示のためだけ。本部の推定には使わない）。</summary>
         public int TrueEnemyId;
+        /// <summary>本部に届いて紐付いた駒の ID（届くまでは −1。P2d.1：出来事の欄に駒の名で出す）。</summary>
+        public int PieceId = -1;
     }
 
     /// <summary>報告の駒（本部の推定。P2d）。届いた報告を位置と時刻で紐付けて作る。実際の敵とずれることがある。</summary>
@@ -46,6 +48,20 @@ namespace Battalion.Sim
         public double? FacingRad;
         /// <summary>紐付けた報告（時刻順）。</summary>
         public readonly List<EnemyReport> Reports = new List<EnemyReport>();
+
+        /// <summary>駒の名（P2d.1）：作った順に 敵A・敵B・…・敵Z・敵AA・…。</summary>
+        public string Name => NameOf(Id);
+
+        public static string NameOf(int id)
+        {
+            string s = "";
+            for (int n = id; ; n = n / 26 - 1)
+            {
+                s = (char)('A' + n % 26) + s;
+                if (n < 26) break;
+            }
+            return "敵" + s;
+        }
     }
 
     // P2d：霧と報告（仕様「P2d：霧と報告（確定）」）。会戦の結果を変えない：報告の誤差・規模の間違いは戦闘と別の乱数の系列から引き、
@@ -233,6 +249,7 @@ namespace Battalion.Sim
                 return;
             }
             best.Reports.Add(r);
+            r.PieceId = best.Id;
             // 古い報告が後から届いたときは、駒の位置と様子を戻さない
             if (r.SeenTime < best.SeenTime) return;
             Apply(best, r);
@@ -242,6 +259,7 @@ namespace Battalion.Sim
         {
             var p = new IntelPiece { Id = _intel.Count };
             p.Reports.Add(r);
+            r.PieceId = p.Id;
             Apply(p, r);
             _intel.Add(p);
             return p;

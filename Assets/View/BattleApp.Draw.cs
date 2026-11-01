@@ -172,8 +172,12 @@ namespace Battalion.View
             {
                 var s = _sim.Companies[f.Shooter];
                 var t = _sim.Companies[f.Target];
-                // 霧の中では、赤の位置を明かす射撃の線を出さない（P2d）
-                if (!ShowsActual(s) || !ShowsActual(t)) continue;
+                // 霧の中では、赤の位置を明かす射撃の線を出さず、青のまわりの短い印にする（P2d.1 の3）
+                if (!ShowsActual(s) || !ShowsActual(t))
+                {
+                    DrawFogFire(f, px, now);
+                    continue;
+                }
                 Pose(s, out var sp, out double sf);
                 Pose(t, out var tp, out _);
                 // 射手の正面の縁の中央から出す

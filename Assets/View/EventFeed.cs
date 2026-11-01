@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using Battalion.Sim;
 
@@ -68,6 +69,13 @@ namespace Battalion.View
 
         public bool Enabled => true;
 
+        /// <summary>霧の中か（P2d.1：赤の中隊の出来事を直接出さない。赤の中隊の ID も出さない）。表示側が渡す。</summary>
+        public Func<bool> Fogged = () => false;
+        /// <summary>赤の中隊の名前（霧の中で隠す・「敵」に置き換える）。表示側が渡す。</summary>
+        public readonly HashSet<string> RedUnits = new HashSet<string>();
+        /// <summary>この行の出来事を出さない（霧の中の赤の中隊の出来事）。</summary>
+        bool _mute;
+
         public void Write(string jsonLine)
         {
             // 毎10秒の unit_snapshot は読み飛ばす（数が多く、ログには出さない）
@@ -76,6 +84,8 @@ namespace Battalion.View
             double t = v.D("t");
             string type = v["type"].String;
             string unit = v.TryGet("unit", out var u) ? u.String : "";
+            // 霧の中では、赤の中隊の出来事と赤の本部の出来事は出さない（本部に届いた報告として、駒の名で出す。P2d.1 の2）
+            _mute = Fogged() && (RedUnits.Contains(unit) || type == "retake_order" || type == "retake_attack");
             switch (type)
             {
                 case "first_flank_hit":
@@ -312,8 +322,26 @@ namespace Battalion.View
 
         static string StateJa(string s) => s == "shaken" ? "動揺中" : s == "routed" ? "壊走中" : s == "normal" ? "正常" : s;
 
-        void Add(double t, string text, bool important) => Entries.Add(new Entry(t, text, important));
-        void Happen(double t, Kind k, string unit, string other) => Recent.Add(new Happening(t, k, unit, other));
+        void Add(double t, string text, bool important)
+        {
+            if (_mute) return;
+            if (Fogged()) text = HideRedNames(text);
+            Entries.Add(new Entry(t, text, important));
+        }
+
+        void Happen(double t, Kind k, string unit, string other)
+        {
+            if (_mute) return;
+            Recent.Add(new Happening(t, k, unit, Fogged() && other != null ? HideRedNames(other) : other));
+        }
+
+        /// <summary>文の中の赤の中隊の名前（R1 など）を「敵」に置き換える（霧の中。青の出来事が赤の ID を明かさないように）。</summary>
+        string HideRedNames(string text)
+        {
+            foreach (var n in RedUnits)
+                text = System.Text.RegularExpressions.Regex.Replace(text, $"(?<![A-Za-z0-9]){System.Text.RegularExpressions.Regex.Escape(n)}(?![0-9])", "敵");
+            return text;
+        }
 
         public static string FormatTime(double sec)
         {

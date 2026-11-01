@@ -329,6 +329,10 @@ namespace Battalion.Sim
             /// <summary>縮合する条件：残りの経路の長さの下限（m）と、条件が続く秒数（揺れ止め）。</summary>
             public double ColumnMinRouteM;
             public double ColumnQuietSec;
+            /// <summary>会戦中にまだ敵を見ていない中隊の、縮合の条件が続く秒数（会戦の始めの行軍。P2d.1 の1）。</summary>
+            public double ColumnStartQuietSec;
+            /// <summary>縮合する条件：気付いたことのある敵の、最後に見た位置の全てからの距離の下限（m。P2d.1 の1）。</summary>
+            public double ColumnClearM;
             /// <summary>展開する条件：移動の命令の目的地（攻撃・拘束なら発起点）までの残りの経路（m）。</summary>
             public double DeployBeforeDestM;
             /// <summary>縦隊の矩形（正面の幅・奥行き。向きの方向に長い）。</summary>
@@ -583,6 +587,8 @@ namespace Battalion.Sim
             p.Formation.ChangeSpeedMult = fo.D("change_speed_mult");
             p.Formation.ColumnMinRouteM = fo.D("column_min_route_m");
             p.Formation.ColumnQuietSec = fo.D("column_quiet_sec");
+            p.Formation.ColumnStartQuietSec = fo.D("column_start_quiet_sec");
+            p.Formation.ColumnClearM = fo.D("column_clear_m");
             p.Formation.DeployBeforeDestM = fo.D("deploy_before_dest_m");
             p.Formation.ColumnFrontageM = fo.D("column_frontage_m");
             p.Formation.ColumnDepthM = fo.D("column_depth_m");

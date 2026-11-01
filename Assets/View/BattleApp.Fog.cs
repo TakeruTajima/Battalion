@@ -80,11 +80,54 @@ namespace Battalion.View
                 double min = Math.Max(0, (_sim.Time - i.SeenTime) / 60);
                 string size = i.Size == EnemySize.Many ? "多い" : i.Size == EnemySize.Half ? "半ば" : "少ない";
                 string state = i.State == ReportedState.Routed ? " 壊走中" : i.State == ReportedState.Surrendered ? " 降伏" : "";
-                string text = look == PieceLook.Unknown || look == PieceLook.Forgotten ? $"? 敵 {min:0}分前" : $"敵 {size}{state} {min:0}分前";
+                string text = look == PieceLook.Unknown || look == PieceLook.Forgotten ? $"? {i.Name} {min:0}分前" : $"{i.Name} {size}{state} {min:0}分前";
                 var size2 = _small.CalcSize(new GUIContent(text));
                 var rect = new Rect(g.x - size2.x / 2, g.y - size2.y / 2, size2.x + 4, size2.y);
                 Fill(rect, new Color(0.25f, 0, 0, look == PieceLook.Fresh ? 0.6f : 0.35f));
                 GUI.Label(rect, text, _small);
+            }
+        }
+
+        /// <summary>射撃の手応えの線の長さ（霧の中。目標の位置そのものは出さない。P2d.1 の3）。</summary>
+        const double FireStubM = 150;
+
+        /// <summary>
+        /// 霧の中の射撃の手応え（P2d.1 の3）：青が撃っていれば、青の駒から目標の方角へ短い線（150m）。青が撃たれていれば、青の駒の縁に、
+        /// 撃ってくる方角の印（正面・側面・背面で色を変える）。赤どうしは出さない。
+        /// </summary>
+        void DrawFogFire(Simulation.FireRecord f, float px, float now)
+        {
+            var s = _sim.Companies[f.Shooter];
+            var t = _sim.Companies[f.Target];
+            if (s.Side == Side.Blue && t.Side == Side.Red)
+            {
+                Pose(s, out var sp, out double sf);
+                Pose(t, out var tp, out _);
+                var d = tp - sp;
+                if (d.Length < 1e-9) return;
+                var u = d * (1 / d.Length);
+                HalfSize(s, out double hd, out _);
+                var from = V(sp + u * hd);
+                var to = V(sp + u * (hd + FireStubM));
+                var col = Palette.WithAlpha(new Color32(255, 230, 120, 255), 220);
+                float w = Mathf.Clamp(1f + (float)f.ExpectedPerMin * 0.9f, 1f, 6f) * px;
+                _shapes.DashedLine(from, to, w, TracerDashPx * px, now * TracerSpeedPx * px, col);
+            }
+            else if (s.Side == Side.Red && t.Side == Side.Blue)
+            {
+                Pose(t, out var tp, out double tf);
+                Pose(s, out var sp, out _);
+                var d = sp - tp;
+                if (d.Length < 1e-9) return;
+                var u = d * (1 / d.Length);
+                HalfSize(t, out double hd, out double hf);
+                // 駒の縁（向きの矩形の外接円より少し内側）から外へ短い楔
+                double r = Math.Max(hd, hf) * 0.6 + 10;
+                var lv = new Vec2(-u.Y, u.X);
+                var a = V(tp + u * r + lv * 18);
+                var b = V(tp + u * r - lv * 18);
+                var tip = V(tp + u * (r + 45));
+                _shapes.Triangle(a, b, tip, Palette.WithAlpha(AspectColor32(f.Aspect), 230));
             }
         }
 

@@ -49,6 +49,14 @@ namespace Battalion.Sim
             return best;
         }
 
+        /// <summary>会戦中に気付いたことのある敵の、最後に見た位置の全てから column_clear_m 以上離れているか。</summary>
+        bool FarFromSeenEnemies(Company c)
+        {
+            foreach (var p in c.LastSeenEnemyAt.Values)
+                if (Vec2.Distance(c.Position, p) < F.ColumnClearM - 1e-9) return false;
+            return true;
+        }
+
         /// <summary>残りの経路の長さ（今の位置から経路の終わりまで）。経路がなければ 0。</summary>
         static double RemainingPathLength(Company c)
         {
@@ -73,6 +81,13 @@ namespace Battalion.Sim
         {
             if (!F.Enabled) return;
             double dt = _p.TickSec;
+            // 気付いている敵の位置を覚える（縮合の条件：前線の近くで縦隊に戻らない。P2d.1 の1）
+            foreach (var c in _companies)
+            {
+                if (!c.OnBoard || !c.UnderCommand) continue;
+                foreach (var e in _companies)
+                    if (e.OnBoard && e.Side != c.Side && Aware(c, e)) c.LastSeenEnemyAt[e.Id] = e.Position;
+            }
             foreach (var c in _companies)
             {
                 if (!c.OnBoard || !c.UnderCommand)
@@ -136,10 +151,13 @@ namespace Battalion.Sim
                 }
 
                 // 横隊：縮合する条件が続いた秒数を数える（揺れ止め）。気付いている指揮下の敵が1つもいないこと（距離によらない）
+                // 会戦中に見た敵の最後の位置の全てから 1500m 以上離れ、静かな状態が 300秒（まだ敵を見ていなければ 60秒）続いたとき（P2d.1 の1）
                 bool ready = MovingByOrder(c) && c.Path != null && !c.Engaged && !shot && !PinnedDown(c)
-                             && RemainingPathLength(c) >= F.ColumnMinRouteM - 1e-9 && NearestAwareEnemy(c, double.MaxValue) == null;
+                             && RemainingPathLength(c) >= F.ColumnMinRouteM - 1e-9 && NearestAwareEnemy(c, double.MaxValue) == null
+                             && FarFromSeenEnemies(c);
                 c.ColumnReadySec = ready ? c.ColumnReadySec + dt : 0;
-                if (c.ColumnReadySec >= F.ColumnQuietSec - 1e-9)
+                double quiet = c.LastSeenEnemyAt.Count == 0 ? F.ColumnStartQuietSec : F.ColumnQuietSec;
+                if (c.ColumnReadySec >= quiet - 1e-9)
                 {
                     c.FormationChange = FormationChange.FormingColumn;
                     c.FormationChangeSec = 0;

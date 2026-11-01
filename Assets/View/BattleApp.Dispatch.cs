@@ -36,8 +36,12 @@ namespace Battalion.View
                 var kind = d.Category == DispatchCategory.Request ? EventFeed.EntryKind.Request
                     : d.Category == DispatchCategory.Declaration ? EventFeed.EntryKind.Declaration
                     : EventFeed.EntryKind.Normal;
-                _feed.Entries.Add(new EventFeed.Entry(d.ArrivedTime ?? _sim.Time,
-                    $"[{EventFeed.FormatTime(d.SentState.Time)} 発] {DispatchText(d)}　（{StateText(d.SentState)}）", false, kind));
+                // 敵の報告は、本部に届いた報告として駒の名で出す（「[T+12:30 B2 の報告] 敵A 壊走」。P2d.1 の2）
+                string line = d.Report != null
+                    ? $"[{EventFeed.FormatTime(d.Report.SeenTime)} {_sim.Companies[d.CompanyId].Name} の報告] {ReportLine(d)}"
+                    : $"[{EventFeed.FormatTime(d.SentState.Time)} 発] {DispatchText(d)}　（{StateText(d.SentState)}）";
+                bool important = d.Report != null && d.Report.State != ReportedState.Normal;
+                _feed.Entries.Add(new EventFeed.Entry(d.ArrivedTime ?? _sim.Time, line, important, kind));
                 if (d.Category == DispatchCategory.Request && _pauseOnRequest)
                     reasons.Add($"{_sim.Companies[d.CompanyId].Name} {RequestName(d.Kind)}");
             }
@@ -49,6 +53,22 @@ namespace Battalion.View
             if (d.OtherId < 0) return "?";
             var o = _sim.Companies[d.OtherId];
             return o.Side == Side.Red && Fogged ? "敵" : o.Name;
+        }
+
+        /// <summary>敵の報告の出来事の欄の文（駒の名から）：「敵A 発見（多い、止まっている）」「敵A 壊走」「敵B 動き出した（東へ）」。</summary>
+        static string ReportLine(Dispatch d)
+        {
+            var r = d.Report;
+            string name = r.PieceId >= 0 ? IntelPiece.NameOf(r.PieceId) : "敵";
+            switch (d.Kind)
+            {
+                case DispatchKind.EnemySighted: return $"{name} 発見（{ReportText(r)}）";
+                case DispatchKind.EnemyChanged:
+                    if (r.State == ReportedState.Surrendered) return $"{name} 降伏";
+                    if (r.State == ReportedState.Routed) return $"{name} 壊走";
+                    return r.Moving ? $"{name} 動いている（{ReportText(r)}）" : $"{name} 止まった（{ReportText(r)}）";
+                default: return $"{name} 続報（{ReportText(r)}）";
+            }
         }
 
         /// <summary>敵の報告の中身（P2d）：規模・動き・様子。</summary>
