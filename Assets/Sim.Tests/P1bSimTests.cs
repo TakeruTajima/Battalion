@@ -11,6 +11,7 @@ namespace Battalion.Sim.Tests
     {
         [TestCase("scenario_a1.json")]
         [TestCase("scenario_a2.json")]
+        [TestCase("tutorial_3.json")]
         public void StreamingAssetsMapsAreIdenticalToMaps(string file)
         {
             var a = File.ReadAllBytes(TestUtil.PathOf("Assets/StreamingAssets/maps/" + file));

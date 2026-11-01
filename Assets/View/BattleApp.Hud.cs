@@ -107,7 +107,7 @@ namespace Battalion.View
 
         void DrawStageSelect()
         {
-            var r = new Rect(Screen.width / 2f - 260, Screen.height / 2f - 255, 520, 510);
+            var r = new Rect(Screen.width / 2f - 260, Screen.height / 2f - 280, 520, 560);
             Fill(r, new Color(0.11f, 0.12f, 0.14f, 0.96f));
             GUILayout.BeginArea(new Rect(r.x + 20, r.y + 16, r.width - 40, r.height - 32));
             GUILayout.Label("教程", _title);
@@ -115,6 +115,8 @@ namespace Battalion.View
             if (GUILayout.Button("教程1：側面を突く（森に挟まれた塹壕を、拘束して脇から撃つ）", _button, GUILayout.Height(40))) StartBattle(11);
             GUILayout.Space(6);
             if (GUILayout.Button("教程2：抑えてから詰める（地峡の塹壕を、撃って伏せさせ、その間に詰める）", _button, GUILayout.Height(40))) StartBattle(12);
+            GUILayout.Space(6);
+            if (GUILayout.Button("教程3：砲撃に合わせて詰める（同じ地峡を、砲撃が止んだ直後の隙に詰める。野砲 40発）", _button, GUILayout.Height(40))) StartBattle(13);
             GUILayout.Space(14);
             GUILayout.Label("シナリオA：リーデル村の奪取", _title);
             GUILayout.Space(8);

@@ -232,6 +232,7 @@ namespace Battalion.Sim.Tests
         [TestCase("maps/scenario_a2.json", 2)]
         [TestCase("maps/tutorial_1.json", 2)]
         [TestCase("maps/tutorial_2.json", 1)]
+        [TestCase("maps/tutorial_3.json", 1)]
         public void MapsHaveInitialIntel(string path, int count)
         {
             var sc = MapScenario.LoadFile(TestUtil.PathOf(path));

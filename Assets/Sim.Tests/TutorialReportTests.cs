@@ -90,6 +90,20 @@ namespace Battalion.Sim.Tests
             public readonly HashSet<string> Routed = new HashSet<string>();
             /// <summary>詰める中隊が地峡に入ってから着くまで（崩した・塹壕に入った・指揮下でなくなったまで）の秒数と、その間に守り手が制圧されていた秒数（見ないときは null）。</summary>
             public double? ApproachSec, SuppressedSec;
+            /// <summary>
+            /// 教程3：青の砲撃が止んだ時刻、その時の詰める中隊と塹壕の距離、詰める中隊が接近戦の距離に入った時刻と、それまでの損害（兵）、
+            /// 詰める中隊が初めて 150m に着いた時刻（止む時刻を合わせるのに使う）。
+            /// </summary>
+            public double? FireEndSec, DistAtFireEnd, CloseSec, LossToClose, At150Sec, At420Sec;
+            /// <summary>詰める中隊の、会戦の終わり（最後に見た刻み）までの損害（兵）。</summary>
+            public double UnitLossEnd;
+        }
+
+        /// <summary>教程3：詰める中隊（<see cref="Unit"/>）と守り手（<see cref="Defender"/>）の、砲撃と接近戦の記録を取る。</summary>
+        public sealed class BarrageWatch
+        {
+            public string Unit, Defender;
+            public Vec2 Trench;
         }
 
         /// <summary>詰める中隊（<see cref="Unit"/>）が地峡（<see cref="InApproach"/>）にいる間、守り手（<see cref="Defender"/>）が制圧されていた秒数を数える。</summary>
@@ -102,12 +116,16 @@ namespace Battalion.Sim.Tests
         /// <summary>作戦を1回回す。<paramref name="timeLimitMin"/> が null なら地図ファイルの制限時間。</summary>
         /// 青の緑の信号弾を、<paramref name="greenWhen"/> を初めて満たした刻みに上げる（命令書の段の条件。プレイヤーが見て合図する）。
         /// null なら、塹壕の守り手を初めて崩した刻み（「崩れたら」）。
+        /// <paramref name="start"/> は会戦開始前に1回呼ぶ（教程3：計画射撃点の登録と砲撃の要請）。<paramref name="barrage"/> があれば、
+        /// 砲撃と接近戦の記録（<see cref="RunResult.FireEndSec"/> など）を取る。
         public static RunResult RunOne(MapScenario sc, TutorialOrder[] plan, ulong seed, SimParams p = null, double? timeLimitMin = null,
-            ApproachWatch watch = null, Func<Simulation, TrenchClearTimes, bool> greenWhen = null)
+            ApproachWatch watch = null, Func<Simulation, TrenchClearTimes, bool> greenWhen = null, Action<Simulation> start = null,
+            BarrageWatch barrage = null)
         {
             greenWhen = greenWhen ?? ((s, tt) => tt.BrokenSec.HasValue);
             p = p ?? TestUtil.Params;
             var sim = sc.Build(p, seed);
+            start?.Invoke(sim);
             var times = new TrenchClearTimes(sc);
             var result = new RunResult();
             var orders = plan.OrderBy(o => o.AtSec).ToList();
@@ -143,6 +161,7 @@ namespace Battalion.Sim.Tests
                         if (d.Suppressed) result.SuppressedSec += p.TickSec;
                     }
                 }
+                if (barrage != null) WatchBarrage(sim, barrage, result);
                 foreach (var c in sim.Companies)
                     if (c.State == CompanyState.Routed || c.State == CompanyState.Surrendered) result.Routed.Add(c.Name);
                 bool redLeft = sim.Companies.Any(c => c.Side == Side.Red && c.OnBoard);
@@ -162,6 +181,28 @@ namespace Battalion.Sim.Tests
             result.BrokenMin = times.BrokenSec / 60;
             result.SecuredMin = times.SecuredSec / 60;
             return result;
+        }
+
+        static void WatchBarrage(Simulation sim, BarrageWatch w, RunResult r)
+        {
+            var u = sim.Find(w.Unit);
+            var d = sim.Find(w.Defender);
+            double dist = Vec2.Distance(u.Position, w.Trench);
+            r.UnitLossEnd = u.InitialStrength - u.Strength;
+            if (!r.At420Sec.HasValue && u.UnderCommand && dist <= sim.Params.Fire.RangeMaxM + 20) r.At420Sec = sim.Time;
+            if (!r.At150Sec.HasValue && u.UnderCommand && dist <= 150) r.At150Sec = sim.Time;
+            if (!r.FireEndSec.HasValue)
+                foreach (var m in sim.FireMissions)
+                    if (m.Side == Side.Blue && m.State == FireMissionState.Done)
+                    {
+                        r.FireEndSec = m.EndedTime;
+                        r.DistAtFireEnd = dist;
+                    }
+            if (!r.CloseSec.HasValue && u.UnderCommand && d.OnBoard && sim.InCloseCombat(u, d))
+            {
+                r.CloseSec = sim.Time;
+                r.LossToClose = u.InitialStrength - u.Strength;
+            }
         }
 
         public sealed class PlanSummary
