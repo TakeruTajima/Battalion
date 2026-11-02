@@ -94,22 +94,35 @@ namespace Battalion.Sim
             return f * _p.Fire.AspectCasualtyMult[(int)AspectOf(d, a.Position)];
         }
 
-        /// <summary>守る力：<see cref="BaseForce"/> に陣地の守り（<see cref="DefenseFortMult"/>）。</summary>
-        public double DefendForce(Company d) => BaseForce(d) * DefenseFortMult(d);
+        /// <summary>
+        /// 守る力：<see cref="BaseForce"/> に陣地の守り（<see cref="DefenseFortMult"/>）。<paramref name="attackers"/> は押す力に数える中隊
+        /// （陣地の向きを見るのに使う。null なら向きを見ない）。
+        /// </summary>
+        public double DefendForce(Company d, IReadOnlyList<Company> attackers = null) => BaseForce(d) * DefenseFortMult(d, attackers);
 
         /// <summary>
         /// 守る力の陣地の倍率：塹壕のマス（構築した塹壕を含む）は melee.defense_mult.trench、村・森はその値、それ以外は plain。
         /// 陣地構築の途中は進捗に応じて塹壕の値へ、浅い掩体は進捗に応じて scrape の値へ近づく（大きい方）。
+        /// 向きのある陣地（塹壕・陣地構築・浅い掩体）は、押す力に数える中隊が全て陣地の向き（R2）の正面の弧にいる時だけ効く。1個でも
+        /// 弧の外（側面・背面）にいれば、その守りは効かない（R6 の報告の後に決めたこと 1）。村・森は向きを見ない。
         /// </summary>
-        public double DefenseFortMult(Company d)
+        public double DefenseFortMult(Company d, IReadOnlyList<Company> attackers = null)
         {
+            bool InArc(double? facing)
+            {
+                if (attackers == null) return true;
+                foreach (var a in attackers)
+                    if (!InFortificationArc(facing, d, a.Position)) return false;
+                return true;
+            }
             char ch = _map.TerrainAt(d.Position);
-            if (ch == TerrainMap.Trench) return M.DefenseTrench;
+            if (ch == TerrainMap.Trench) return InArc(_map.FortificationFacingAt(d.Position)) ? M.DefenseTrench : M.DefensePlain;
             double f = ch == TerrainMap.Village ? M.DefenseVillage : ch == TerrainMap.Forest ? M.DefenseForest : M.DefensePlain;
             double g = f;
-            if (d.EntrenchProgress > 0 && M.DefenseTrench > f)
+            // 陣地構築の途中は今の中隊の向き、浅い掩体は掘り始めたときの向きで見る（被弾の倍率と同じ）
+            if (d.EntrenchProgress > 0 && M.DefenseTrench > f && InArc(d.Facing))
                 g = Math.Max(g, f + (M.DefenseTrench - f) * Math.Min(1.0, d.EntrenchProgress / _p.MapRules.EntrenchSec));
-            if (d.ScrapeProgress > 0 && IsScrapeGround(ch) && M.DefenseScrape > f)
+            if (d.ScrapeProgress > 0 && IsScrapeGround(ch) && M.DefenseScrape > f && InArc(d.ScrapeFacing))
                 g = Math.Max(g, f + (M.DefenseScrape - f) * Math.Min(1.0, d.ScrapeProgress / A.ScrapeDigSec));
             return g;
         }
@@ -156,7 +169,7 @@ namespace Battalion.Sim
         {
             double push = 0;
             foreach (var a in att) push += PushForce(a, d);
-            double def = DefendForce(d);
+            double def = DefendForce(d, att);
             d.MeleePush = push;
             d.MeleeDefend = def;
             foreach (var a in att)

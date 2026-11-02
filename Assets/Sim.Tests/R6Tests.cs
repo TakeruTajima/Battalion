@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using NUnit.Framework;
 
@@ -162,6 +163,53 @@ namespace Battalion.Sim.Tests
             sim.Map.SetOverlay(i, j, TerrainMap.Plain);
             d.ScrapeProgress = sim.Params.Autonomy.ScrapeDigSec;
             Assert.That(sim.DefenseFortMult(d), Is.EqualTo(1.3).Within(1e-9));
+        }
+
+        /// <summary>
+        /// 陣地の向き（R6 の報告の後に決めたこと 1）：西向きの塹壕は、押す側が正面の弧（西）にいる時だけ ×2.0。北（側面）・東（背面）
+        /// から、または1個でも弧の外の中隊がいれば ×1.0。村は向きを見ない。浅い掩体も掘り始めたときの向きで見る。
+        /// </summary>
+        [Test]
+        public void DefenseMultiplierNeedsTheFortificationArc()
+        {
+            var (sim, r, b) = TrenchAndAssault();
+            var list = new List<Company> { b };
+            Assert.That(sim.DefenseFortMult(r, list), Is.EqualTo(2.0), "正面（西）から");
+            var n = Add(sim, "N", Side.Blue, 0, 140, -90);
+            Assert.That(sim.DefenseFortMult(r, new List<Company> { n }), Is.EqualTo(1.0), "側面（北）から");
+            Assert.That(sim.DefenseFortMult(r, new List<Company> { b, n }), Is.EqualTo(1.0), "1個でも弧の外");
+            var e = Add(sim, "E", Side.Blue, 90, 0, 180);
+            Assert.That(sim.DefenseFortMult(r, new List<Company> { e }), Is.EqualTo(1.0), "背面（東）から");
+
+            var v = Add(sim, "V", Side.Red, 600, 600, 180);
+            sim.Map.CellOf(v.Position, out int i, out int j);
+            sim.Map.SetOverlay(i, j, TerrainMap.Village);
+            var behind = Add(sim, "W", Side.Blue, 700, 600, 180);
+            Assert.That(sim.DefenseFortMult(v, new List<Company> { behind }), Is.EqualTo(2.0), "村は向きを見ない");
+
+            var sc = Add(sim, "S", Side.Red, -600, -600, 180);
+            sc.ScrapeProgress = sim.Params.Autonomy.ScrapeDigSec;
+            sc.ScrapeFacing = Math.PI;
+            var west = Add(sim, "X", Side.Blue, -700, -600, 0);
+            var east = Add(sim, "Y", Side.Blue, -500, -600, 180);
+            Assert.That(sim.DefenseFortMult(sc, new List<Company> { west }), Is.EqualTo(1.3).Within(1e-9), "浅い掩体の正面");
+            Assert.That(sim.DefenseFortMult(sc, new List<Company> { east }), Is.EqualTo(1.0), "浅い掩体の背面");
+        }
+
+        /// <summary>取った敵の塹壕（西向き）を東から逆襲されると、塹壕の守りが効かない：伏せていない守り手でも、押す力が勝てば突入される。</summary>
+        [Test]
+        public void CounterAttackFromBehindACapturedTrenchIsNotHeldByIt()
+        {
+            var sim = Flat();
+            var a = Add(sim, "A", Side.Blue, 0, 0, 0);
+            TrenchAt(sim, a.Position);
+            var e = Add(sim, "E", Side.Red, 90, 0, 180);
+            a.Morale = 70;
+            // 守る力 150×0.7×1.0＝105（塹壕なら 210）、押す力 150×1.0×1.0＝150
+            sim.Issue(Order.Advance(e.Id, a.Position, Math.PI));
+            sim.Step();
+            Assert.That(e.MeleePush, Is.GreaterThan(e.MeleeDefend));
+            Assert.That(Simulation.InMelee(a), Is.True);
         }
 
         // ---------------------------------------------------------------- 3. 突入と跳ね返し
